@@ -1,0 +1,87 @@
+
+        
+EMACS CONFIGURATION TUTORIAL
+
+
+* Windows (Buffers):
+** <f6>
+   make/unmake window sticky
+** <f5>
+   maximize current window
+** <meta>+<f5>
+   switch splitted windows
+
+* Programming:
+** <meta> + <enter>
+   automaticly complete code snippet
+** <ctrl>+c d f
+   doxygen comments to function
+** <ctrl>+c d i
+   doxygen comments to file
+** <meta>+3
+   comment/uncomment region
+** <meta>+4
+   comment box
+
+* Syntax Highlighting:
+** <ctrl>+<shift>+b
+   highlight lines with more than 80 characters 
+** <meta>+x "highline-mode"
+   highlights current line
+** <meta>+x "hl-spotlight-mode"
+   spotlight on current line
+ 
+* Navigation
+** <meta>+up/down
+   window up/down
+** <meta>+left/right
+   rotate windows 
+** <ctrl>+<meta>+o
+   switch c/c++ header/source files 
+** <shift>+<f9>
+   search all open buffers with files association  
+** <ctrl>+;
+   switch to buffer
+** <ctrl>+]
+   switch to file
+** <ctrl>+'
+   switch to symbol
+** ebrowse
+   browse c++ classes
+
+* Editing:
+** <ctrl>+w
+   backward kill word
+** <ctrl>+enter
+   Text rectangles editing 
+** <meta>+insert
+   Search kill ring
+** <meta>+delete
+   show kill ring
+** <ctrl>+o during search
+   shows all occurs of the word in the current windows
+
+* Debugging:
+** keypad-2
+   step
+** keypad-6
+   next
+** keypad-5
+   break
+** keypad-8
+   continue
+** <meta>+x "gdb-many-windows"
+   build debugging environment windows
+
+* more tips:
+** you should use http://www.randyrants.com/sharpkeys utility to map caps lock to <ctrl> key on windows
+
+* Windows:
+** <ctrl>+wheel up/down
+   zoom in/out
+
+* Macros:
+** <meta>+<f12>
+   apply last keyboard macro to region
+** <ctrl>+x =
+   evaluate mathematical expression in selected region

@@ -1,0 +1,3 @@
+#name: System.out.format();
+# --
+System.out.format($0);
