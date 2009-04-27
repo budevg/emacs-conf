@@ -16,6 +16,7 @@
  '(show-paren-match ((t (:background "#444464"))) t)
  '(show-paren-mismatch ((t (:background "#600000"))) t)
  '(region ((t (:background "#444444"))) t)
+ '(twitter-header-face ((t (:background "blue"))))
  )
 
 (eval-after-load 'magit
