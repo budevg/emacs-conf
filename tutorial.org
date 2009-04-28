@@ -85,3 +85,7 @@ EMACS CONFIGURATION TUTORIAL
    apply last keyboard macro to region
 ** <ctrl>+x =
    evaluate mathematical expression in selected region
+   
+* Emacs
+** <ctr>+q
+   like meta+x but with ido completion

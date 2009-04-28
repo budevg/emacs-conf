@@ -23,3 +23,29 @@
          (when (and bye-p (not (string-match "[/\\\\]\\.$" filename)))
            (kill-buffer orig))))
      (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)))
+
+(eval-after-load "ido"
+  '(progn
+     (defvar ido-execute-command-cache nil)
+
+     (defun ido-execute-command-refresh ()
+       (interactive)
+       (setq ido-execute-command-cache nil))
+     
+     (defun ido-execute-command ()
+       (interactive)
+       (call-interactively
+        (intern
+         (ido-completing-read
+          "M-x "
+          (progn
+            (unless ido-execute-command-cache
+              (mapatoms
+               (lambda (s)
+                 (when (commandp s)
+                   (setq ido-execute-command-cache
+                         (cons (format "%S" s) ido-execute-command-cache))))))
+            ido-execute-command-cache)))))
+     (global-set-key [(control q)] 'ido-execute-command)))
+
+     
