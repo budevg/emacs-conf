@@ -1,5 +1,5 @@
 
-(require 'macros+)
+(autoload 'apply-macro-to-region-lines "macros+" "macros+ autoload" t)
 
 (defun kbd-macro-recording-action ()
   (interactive)
@@ -21,6 +21,8 @@
 (global-set-key [(meta f12)] 'apply-macro-to-region-lines)
 (global-set-key [(control f12)] 'edit-last-kbd-macro)
 
-(require 'macro-math)
+(autoload 'macro-math-eval-and-round-region "macro-math" "macros+ autoload" t)
+(autoload 'macro-math-eval-region "macro-math" "macros+ autoload" t)
+
 (global-set-key "\C-x~" 'macro-math-eval-and-round-region)
 (global-set-key "\C-x=" 'macro-math-eval-region)
