@@ -1,9 +1,11 @@
 
-(require 'highlight-80+)
+(autoload 'highlight-80+-mode
+  "highlight-80+" "highlight-80+ autoload" t)
 
 (global-set-key [(control shift b)] 'highlight-80+-mode)
 
-(require 'highlight-parentheses)
+(autoload 'highlight-parentheses-mode
+  "highlight-parentheses" "highlight-parentheses autoload" t)
 
 (add-hook 'emacs-lisp-mode-hook
 	  (lambda ()
@@ -26,176 +28,176 @@
           (lambda ()
 	    (highlight-parentheses-mode t)))
 
-(require 'highline)
-(require 'hl-spotlight)
+(autoload 'highline-mode "highline" "highline autoload" t)
+(autoload 'hl-spotlight-mode "hl-spotlight" "hl-spotlight autoload" t)
 
 (defface hi-blue
-  '((t (:background "blue")))
+  '((t (:weight bold :foreground "blue")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-blue-b
-  '((t (:weight bold :foreground "blue")))
+(defface hi-blue-h
+  '((t (:background "blue")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-cyan
-  '((t (:background "cyan")))
+  '((t (:weight bold :foreground "cyan")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-cyan-b
-  '((t (:weight bold :foreground "cyan")))
+(defface hi-cyan-h
+  '((t (:foreground "black" :background "cyan")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-yellow
-  '((t (:background "yellow")))
+  '((t (:weight bold :foreground "yellow")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-yellow-b
-  '((t (:weight bold :foreground "yellow")))
+(defface hi-yellow-h
+  '((t (:foreground "black" :background "yellow")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-gold
-  '((t (:background "gold")))
+  '((t (:weight bold :foreground "gold")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-gold-b
-  '((t (:weight bold :foreground "gold")))
+(defface hi-gold-h
+  '((t (:foreground "black" :background "gold")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-brown
-  '((t (:background "brown")))
+  '((t (:weight bold :foreground "brown")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-brown-b
-  '((t (:weight bold :foreground "brown")))
+(defface hi-brown-h
+  '((t (:background "brown")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-orange
-  '((t (:background "orange")))
+  '((t (:weight bold :foreground "orange")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-orange-b
-  '((t (:weight bold :foreground "orange")))
+(defface hi-orange-h
+  '((t (:background "orange")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-red
-  '((t (:background "red")))
+  '((t (:weight bold :foreground "red")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-red-b
-  '((t (:weight bold :foreground "red")))
+(defface hi-red-h
+  '((t (:background "red")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-pink
-  '((t (:background "pink")))
+  '((t (:weight bold :foreground "pink")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-pink-b
-  '((t (:weight bold :foreground "pink")))
+(defface hi-pink-h
+  '((t (:foreground "black" :background "pink")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-magenta
-  '((t (:background "magenta")))
+  '((t (:weight bold :foreground "magenta")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-magenta-b
-  '((t (:weight bold :foreground "magenta")))
+(defface hi-magenta-h
+  '((t (:background "magenta")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-violet
-  '((t (:background "violet")))
+  '((t (:weight bold :foreground "violet")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-violet-b
-  '((t (:weight bold :foreground "violet")))
+(defface hi-violet-h
+  '((t (:foreground "black" :background "violet")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-purple
-  '((t (:background "purple")))
+  '((t (:weight bold :foreground "purple")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-purple-b
-  '((t (:weight bold :foreground "purple")))
+(defface hi-purple-h
+  '((t (:background "purple")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-turquoise1
-  '((t (:background "turquoise1")))
+  '((t (:weight bold :foreground "turquoise1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-turquoise1-b
-  '((t (:weight bold :foreground "turquoise1")))
+(defface hi-turquoise1-h
+  '((t (:foreground "black" :background "turquoise1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-SeaGreen1
-  '((t (:background "SeaGreen1")))
+  '((t (:weight bold :foreground "SeaGreen1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-SeaGreen1-b
-  '((t (:weight bold :foreground "SeaGreen1")))
+(defface hi-SeaGreen1-h
+  '((t (:foreground "black" :background "SeaGreen1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-green1
-  '((t (:background "green1")))
+  '((t (:weight bold :foreground "green1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-green1-b
-  '((t (:weight bold :foreground "green1")))
+(defface hi-green1-h
+  '((t (:foreground "black" :background "green1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-yellow1
-  '((t (:background "yellow1")))
+  '((t (:weight bold :foreground "yellow1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-yellow1-b
-  '((t (:weight bold :foreground "yellow1")))
+(defface hi-yellow1-h
+  '((t (:foreground "black" :background "yellow1")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-chocolate4
-  '((t (:background "chocolate4")))
+  '((t (:weight bold :foreground "chocolate4")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-chocolate4-b
-  '((t (:weight bold :foreground "chocolate4")))
+(defface hi-chocolate4-h
+  '((t (:background "chocolate4")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-firebrick3
-  '((t (:background "firebrick3")))
+  '((t (:weight bold :foreground "firebrick3")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-firebrick3-b
-  '((t (:weight bold :foreground "firebrick3")))
+(defface hi-firebrick3-h
+  '((t (:background "firebrick3")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-grey
-  '((t (:background "grey")))
+  '((t (:weight bold :foreground "grey")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-grey-b
-  '((t (:weight bold :foreground "grey")))
+(defface hi-grey-h
+  '((t (:foreground "black" :background "grey")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
 
 (defface hi-DarkSlateBlue
-  '((t (:background "DarkSlateBlue")))
+  '((t (:weight bold :foreground "DarkSlateBlue")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
-(defface hi-DarkSlateBlue-b
-  '((t (:weight bold :foreground "DarkSlateBlue")))
+(defface hi-DarkSlateBlue-h
+  '((t (:background "DarkSlateBlue")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
