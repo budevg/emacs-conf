@@ -116,6 +116,11 @@ languages = Package(name = "Languages",
                                         elements = [Module(name = "init.el",
                                                            description = "init ruby mode"),
                                                     ]),
+                                Package(name = "Erlang",
+                                        elements = [Module(name = "erlang-start.el",
+                                                           description = "init erlang mode"),
+                                                    ]),
+
                                 ])
 
 source_control = Package(name = "SourceControl",
@@ -127,8 +132,8 @@ source_control = Package(name = "SourceControl",
 applications = Package(name = "Applications",
                          elements = [Module(name = "irc.el",
                                             description = "irc configration"),
-                                     Module(name = "twitter-init.el",
-                                            description = "twitter interfaces"),
+                                     Module(name = "init.el",
+                                            description = "misc applications"),
                                      ])
 
 
