@@ -10,6 +10,8 @@ faces = Package(name = "VisualLook",
                                    description = "highlight text peaces"),
                             Module(name = "display-clock.el",
                                    description = "display clock"),
+                            Module(name = "htmlfontify-init.el",
+                                   description = "create html representation of the buffer"),
                             ])
 
 navigation = Package(name = "Navigation",
