@@ -2,3 +2,5 @@
 .svn
 /init.el
 auto-save-list
+/tramp
+/url

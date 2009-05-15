@@ -1883,27 +1883,23 @@ Lock syntax table.  The effect is that `apply' in the atom
 (or (fboundp 'eval-when-compile)
     (defmacro eval-when-compile (&rest rest) nil))
 
-;; These umm...functions are new in Emacs 20. And, yes, until version
-;; 19.27 Emacs backquotes were this ugly.
+;; These umm...functions are new in Emacs 20.
 
 (or (fboundp 'unless)
     (defmacro unless (condition &rest body)
       "(unless CONDITION BODY...): If CONDITION is false, do BODY, else return nil."
-      (` (if (, condition) 
-	     nil 
-	   (,@ body)))))
+      (cons 'if  (cons condition (cons nil body)))))
 
 (or (fboundp 'when)
     (defmacro when (condition &rest body)
       "(when CONDITION BODY...): If CONDITION is true, do BODY, else return nil."
-      (` (if (, condition)
-	     (progn (,@ body)) 
-	   nil))))
+      (list 'if condition (cons 'progn body) nil)))
+
 
 (or (fboundp 'char-before)
     (defmacro char-before (&optional pos)
       "Return the character in the current buffer just before POS."
-      (` (char-after (1- (or (, pos) (point)))))))
+      (list 'char-after (list '1- (list 'or  pos '(point))))))
 
 (eval-when-compile
   (if (or (featurep 'bytecomp)
