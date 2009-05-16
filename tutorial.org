@@ -31,6 +31,8 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+x "hl-spotlight-mode"
    spotlight on current line
  
+** <meta>+x "htmlfontify-buffer"
+   create html rpresentation of the buffer
 * Navigation
 ** <meta>+up/down
    window up/down
