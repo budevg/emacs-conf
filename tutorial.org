@@ -50,6 +50,8 @@ EMACS CONFIGURATION TUTORIAL
    switch to symbol
 ** ebrowse
    browse c++ classes
+** <meta>+o in dired mode
+   omit files
 
 * Editing:
 ** <ctrl>+w
@@ -93,3 +95,6 @@ EMACS CONFIGURATION TUTORIAL
 * Emacs
 ** <ctr>+q
    like meta+x but with ido completion
+* Info
+** <meta>+=
+   prints the number of lines and characters in the region

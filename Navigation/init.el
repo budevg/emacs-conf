@@ -22,7 +22,8 @@
          ad-do-it
          (when (and bye-p (not (string-match "[/\\\\]\\.$" filename)))
            (kill-buffer orig))))
-     (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)))
+     (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)
+     (require 'dired-x)))
 
 (eval-after-load "ido"
   '(progn
