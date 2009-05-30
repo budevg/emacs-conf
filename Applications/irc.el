@@ -17,7 +17,10 @@
                  (when (erc-filter-content s)
                    (setq erc-insert-this nil))))
 
-     (setq erc-server-history-list '("irc.oftc.net" "irc.run.net"))
+     (setq erc-server-history-list '("irc.freenode.net" "irc.oftc.net" "irc.run.net"))
+     (setq erc-autojoin-channels-alist
+          '(("freenode.net" "#emacs")
+            ("oftc.net" "#kernelnewbies")))
      (setq erc-hide-prompt t)
      (define-key erc-mode-map [(control up)] 'erc-previous-command)
      (define-key erc-mode-map [(control down)] 'erc-next-command)
