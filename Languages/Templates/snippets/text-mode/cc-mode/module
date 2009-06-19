@@ -1,0 +1,18 @@
+#name:kernel module ... 
+# --
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+
+static int __init ${1:module_name}_init(void)
+{
+  return 0;
+}
+
+static void __exit $1_exit(void)
+{
+  
+}
+
+module_init($1_init);
+module_exit($1_exit);

@@ -23,7 +23,9 @@
          (when (and bye-p (not (string-match "[/\\\\]\\.$" filename)))
            (kill-buffer orig))))
      (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)
-     (require 'dired-x)))
+     (require 'dired-x)
+     (setq dired-omit-extensions (append dired-omit-extensions
+                                         '(".ko" ".ko.cmd" ".mod.c" ".mod.o.cmd" ".o.cmd") ))))
 
 (eval-after-load "ido"
   '(progn
@@ -49,4 +51,7 @@
             ido-execute-command-cache)))))
      (global-set-key [(control q)] 'ido-execute-command)))
 
-     
+(defun rename-frame ()
+  (interactive)
+  (let ((new-name (read-from-minibuffer "Rename frame (to new name): ")))
+    (setq frame-title-format new-name)))

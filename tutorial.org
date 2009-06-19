@@ -53,6 +53,10 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+o in dired mode
    omit files
 
+** <meta>+x rename-buffer
+   change the name of buffer
+** <meta>+x rename-frame
+   change the name of frame
 * Editing:
 ** <ctrl>+w
    backward kill word
