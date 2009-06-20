@@ -201,3 +201,22 @@
   '((t (:background "DarkSlateBlue")))
   "Face for hi-lock mode."
   :group 'hi-lock-faces)
+
+(defun isearch-highlight-regexp ()
+  (interactive)
+  (let ((regexp (if isearch-regexp
+                    isearch-string
+                  (regexp-quote isearch-string)))
+        (face-name (hi-lock-read-face-name)))
+  (highlight-regexp regexp face-name)))
+
+(defun isearch-highlight-regexp-line ()
+  (interactive)
+  (let ((regexp (if isearch-regexp
+                    isearch-string
+                  (regexp-quote isearch-string)))
+        (face-name (hi-lock-read-face-name)))
+  (highlight-lines-matching-regexp regexp face-name)))
+
+(define-key isearch-mode-map (kbd "M-h") 'isearch-highlight-regexp)
+(define-key isearch-mode-map (kbd "M-l") 'isearch-highlight-regexp-line)
