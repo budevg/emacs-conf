@@ -72,6 +72,8 @@ EMACS CONFIGURATION TUTORIAL
 ** <ctrl>+o during search
    shows all occurs of the word in the current windows
 
+** In artist mode <ctrl>+c <ctrl>+a c/o
+   select drawing mode and settings using ido complete
 * Debugging:
 ** keypad-2
    step

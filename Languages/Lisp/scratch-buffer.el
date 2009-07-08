@@ -1,10 +1,4 @@
 
-(save-excursion
-  (switch-to-buffer "*scratch*")
-  (insert ";;")
-  (newline)
-  (insert ";; Welcome root !!!")
-  (newline)
-  (insert ";;")
-  (newline))
-
+(setq initial-scratch-message
+      (format ";;\n;; The time is %s\n;; Welcome root !!!\n;;\n\n"
+              (format-time-string "%Y-%m-%d, %T")))

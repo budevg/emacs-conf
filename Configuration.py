@@ -52,6 +52,8 @@ editing = Package(name = "Editing",
                                      description = "dos to unix and vice versa converions"),
                               Module(name = "rectangle.el",
                                      description = "Edit text rectangles in emacs"),
+                              Module(name = "artist-mode-init.el",
+                                     description = "artist mode initialization"),
                               ])
 documentation = Package(name = "Documentation",
                         elements = [Module(name = "man-pages.el",

@@ -43,4 +43,7 @@
      (org-defkey org-mode-map [(control shift right)] nil)
      (org-defkey org-mode-map [(control shift left)]  nil)
 
+     (setq org-blank-before-new-entry '((heading . nil)
+                                        (plain-list-item . auto)))
+
      ))
