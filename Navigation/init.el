@@ -55,3 +55,10 @@
   (interactive)
   (let ((new-name (read-from-minibuffer "Rename frame (to new name): ")))
     (setq frame-title-format new-name)))
+
+
+(autoload 'elscreen-start "elscreen" "Desktop management" t)
+
+(eval-after-load "elscreen"
+  '(progn
+     (setq elscreen-display-tab nil)))

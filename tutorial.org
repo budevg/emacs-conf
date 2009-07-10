@@ -60,6 +60,9 @@ EMACS CONFIGURATION TUTORIAL
    change the name of buffer
 ** <meta>+x rename-frame
    change the name of frame
+** <meta>+x elscreen-start
+   Allows switching between screens (desktops)
+   use <meta>+z ? to view screen comands
 * Editing:
 ** <ctrl>+w
    backward kill word
