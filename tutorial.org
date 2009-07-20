@@ -110,3 +110,5 @@ EMACS CONFIGURATION TUTORIAL
 * Info
 ** <meta>+=
    prints the number of lines and characters in the region
+* Misc
+** <meta>+x describe-face

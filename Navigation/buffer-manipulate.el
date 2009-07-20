@@ -41,3 +41,13 @@
   (set-window-dedicated-p (selected-window) (not (window-dedicated-p (selected-window)))))
 
 (global-set-key [(f6)] 'change-window-sticky)
+
+(autoload 'ibuffer-other-window "ibuffer" "buffers management" t)
+(require 'ibuffer)
+(eval-after-load "ibuffer"
+  '(progn
+     (setq ibuffer-default-sorting-mode 'major-mode)
+     (setq ibuffer-always-show-last-buffer t)
+     (setq ibuffer-view-ibuffer t)))
+
+(global-set-key (kbd "C-x C-b") 'ibuffer-other-window)
