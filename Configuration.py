@@ -31,6 +31,10 @@ navigation = Package(name = "Navigation",
                                         description = "enable show hide support"),
                                  Module(name = "symbols-navigate.el",
                                         description = "navigate symbols with ido mode"),
+                                 Package(name = "w3m",
+                                         elements = [Module(name = "w3m-init.el",
+                                                            description = "init w3m"),
+                                                     ]),
                                  ])
 
 macros = Package(name = "Macros",elements =
