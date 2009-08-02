@@ -45,5 +45,16 @@
 
      (setq org-blank-before-new-entry '((heading . nil)
                                         (plain-list-item . auto)))
-
      ))
+
+(setq org-directory "~/.org/")
+(setq org-default-notes-file "~/.org/.notes")
+(setq remember-annotation-functions '(org-remember-annotation))
+(setq remember-handler-functions '(org-remember-handler))
+(add-hook 'remember-mode-hook 'org-remember-apply-template)
+(setq org-remember-templates
+      '(("Todo" ?t "* TODO %?\n  %i\n  %a" "~/.org/TODO.org" "Tasks")
+        ("Journal" ?j "* %U %?\n\n  %i\n  %a" "~/.org/JOURNAL.org")
+        ("Idea" ?i "* %^{Title}\n  %i\n  %a" "~/.org/JOURNAL.org" "New Ideas")))
+(define-key global-map "\C-cr" 'org-remember)
+
