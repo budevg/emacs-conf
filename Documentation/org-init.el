@@ -53,8 +53,8 @@
 (setq remember-handler-functions '(org-remember-handler))
 (add-hook 'remember-mode-hook 'org-remember-apply-template)
 (setq org-remember-templates
-      '(("Todo" ?t "* TODO %?\n  %i\n  %a" "~/.org/TODO.org" "Tasks")
-        ("Journal" ?j "* %U %?\n\n  %i\n  %a" "~/.org/JOURNAL.org")
-        ("Idea" ?i "* %^{Title}\n  %i\n  %a" "~/.org/JOURNAL.org" "New Ideas")))
+      '(("Todo" ?t "* TODO %?" "~/.org/TODO.org" "Tasks")
+        ("Journal" ?j "* %U %?" "~/.org/JOURNAL.org" "Events")
+        ("Idea" ?i "* %? %U\n" "~/.org/JOURNAL.org" "Ideas")))
 (define-key global-map "\C-cr" 'org-remember)
 

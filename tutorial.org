@@ -63,6 +63,8 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+x elscreen-start
    Allows switching between screens (desktops)
    use <meta>+z ? to view screen comands
+** <meta>+`
+   navigate files
 * Editing:
 ** <ctrl>+w
    backward kill word
