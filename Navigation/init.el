@@ -62,3 +62,6 @@
 (eval-after-load "elscreen"
   '(progn
      (setq elscreen-display-tab nil)))
+
+(autoload 'nav "nav" "Files navigation" t)
+(global-set-key "\M-`" 'nav)
