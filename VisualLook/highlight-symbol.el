@@ -1,12 +1,12 @@
 ;;; highlight-symbol.el --- automatic and manual symbol highlighting
 ;;
-;; Copyright (C) 2007-2008 Nikolaj Schumacher
+;; Copyright (C) 2007-2009 Nikolaj Schumacher
 ;;
 ;; Author: Nikolaj Schumacher <bugs * nschum de>
-;; Version: 1.0.5
+;; Version: 1.1
 ;; Keywords: faces, matching
 ;; URL: http://nschum.de/src/emacs/highlight-symbol/
-;; Compatibility: GNU Emacs 22.x
+;; Compatibility: GNU Emacs 22.x, GNU Emacs 23.x
 ;;
 ;; This file is NOT part of GNU Emacs.
 ;;
@@ -31,6 +31,7 @@
 ;; (global-set-key [f3] 'highlight-symbol-next)
 ;; (global-set-key [(shift f3)] 'highlight-symbol-prev)
 ;; (global-set-key [(meta f3)] 'highlight-symbol-prev)))
+;; (global-set-key [(control meta f3)] 'highlight-symbol-query-replace)
 ;;
 ;; Use `highlight-symbol-at-point' to toggle highlighting of the symbol at
 ;; point throughout the current buffer.  Use `highlight-symbol-mode' to keep the
@@ -42,10 +43,15 @@
 ;; When `highlight-symbol-on-navigation-p' is set, highlighting is triggered
 ;; regardless of `highlight-symbol-idle-delay'.
 ;;
+;; `highlight-symbol-query-replace' can be used to replace the symbol.
+;;
 ;;; Change Log:
 ;;
-;; 2008-06-20 (1.0.5)
-;;    Fixed sticky temporary highlighting when leaving buffer.
+;; 2009-04-13 (1.1)
+;;    Added `highlight-symbol-query-replace'.
+;;
+;; 2009-03-19 (1.0.5)
+;;    Fixed `highlight-symbol-idle-delay' void variable message.
 ;;    Fixed color repetition bug.  (thanks to Hugo Schmitt)
 ;;
 ;; 2008-05-02 (1.0.4)
@@ -95,14 +101,19 @@
 
 (defvar highlight-symbol-timer nil)
 
-(defun highlight-symbol-update-timer (&optional variable value)
+(defun highlight-symbol-update-timer (value)
   (when highlight-symbol-timer
     (cancel-timer highlight-symbol-timer))
   (setq highlight-symbol-timer
-        (and highlight-symbol-idle-delay
-             (/= highlight-symbol-idle-delay 0)
-             (run-with-idle-timer highlight-symbol-idle-delay t
-                                  'highlight-symbol-temp-highlight))))
+        (and value (/= value 0)
+             (run-with-idle-timer value t 'highlight-symbol-temp-highlight))))
+
+(defvar highlight-symbol-mode nil)
+
+(defun highlight-symbol-set (symbol value)
+  (when symbol (set symbol value))
+  (when highlight-symbol-mode
+    (highlight-symbol-update-timer value)))
 
 (defcustom highlight-symbol-idle-delay 1.5
   "*Number of seconds of idle time before highlighting the current symbol.
@@ -110,7 +121,7 @@ If this variable is set to 0, no idle time is required.
 Changing this does not take effect until `highlight-symbol-mode' has been
 disabled for all buffers."
   :type 'number
-  :set 'highlight-symbol-update-timer
+  :set 'highlight-symbol-set
   :group 'highlight-symbol)
 
 (defcustom highlight-symbol-colors
@@ -148,11 +159,9 @@ Highlighting takes place after `highlight-symbol-idle-delay'."
       ;; on
       (let ((hi-lock-archaic-interface-message-used t))
         (unless hi-lock-mode (hi-lock-mode 1))
-        (highlight-symbol-update-timer)
-        (add-hook 'pre-command-hook 'highlight-symbol-mode-pre-command nil t)
+        (highlight-symbol-update-timer highlight-symbol-idle-delay)
         (add-hook 'post-command-hook 'highlight-symbol-mode-post-command nil t))
     ;; off
-    (remove-hook 'pre-command-hook 'highlight-symbol-mode-pre-command t)
     (remove-hook 'post-command-hook 'highlight-symbol-mode-post-command t)
     (highlight-symbol-mode-remove-temp)
     (kill-local-variable 'highlight-symbol)))
@@ -224,6 +233,21 @@ element in of `highlight-symbol-faces'."
     (narrow-to-defun)
     (highlight-symbol-jump -1)))
 
+;;;###autoload
+(defun highlight-symbol-query-replace (replacement)
+  "*Replace the symbol at point."
+  (interactive (let ((symbol (or (thing-at-point 'symbol)
+                                 (error "No symbol at point"))))
+                 (highlight-symbol-temp-highlight)
+                 (set query-replace-to-history-variable
+                      (cons (substring-no-properties symbol)
+                            (eval query-replace-to-history-variable)))
+                 (list
+                  (read-from-minibuffer "Replacement: " nil nil nil
+                                        query-replace-to-history-variable))))
+  (goto-char (beginning-of-thing 'symbol))
+  (query-replace-regexp (highlight-symbol-get-symbol) replacement))
+
 (defun highlight-symbol-get-symbol ()
   "Return a regular expression dandifying the symbol at point."
   (let ((symbol (thing-at-point 'symbol)))
@@ -248,10 +272,6 @@ element in of `highlight-symbol-faces'."
     (hi-lock-unface-buffer highlight-symbol)
     (setq highlight-symbol nil)))
 
-(defun highlight-symbol-mode-pre-command ()
-  "Before a command, remember the buffer."
-  (highlight-symbol-mode-remove-temp))
-
 (defun highlight-symbol-mode-post-command ()
   "After a command, change the temporary highlighting.
 Remove the temporary symbol highlighting and, unless a timeout is specified,
@@ -259,8 +279,9 @@ create the new one."
   (if (eq this-command 'highlight-symbol-jump)
       (when highlight-symbol-on-navigation-p
         (highlight-symbol-temp-highlight))
-    (when (eql highlight-symbol-idle-delay 0)
-      (highlight-symbol-temp-highlight))))
+    (if (eql highlight-symbol-idle-delay 0)
+        (highlight-symbol-temp-highlight)
+      (highlight-symbol-mode-remove-temp))))
 
 (defun highlight-symbol-jump (dir)
   "Jump to the next or previous occurence of the symbol at point.

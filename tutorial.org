@@ -36,6 +36,10 @@ EMACS CONFIGURATION TUTORIAL
    highlight regexp
 ** isearch and then <meta>+l
    highlight line
+** f7
+   highlight symbol at point
+** <ctrl>+f7
+   clear all highlighted symbols
 * Navigation
 ** <meta>+up/down
    window up/down

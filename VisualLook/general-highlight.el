@@ -220,3 +220,10 @@
 
 (define-key isearch-mode-map (kbd "M-h") 'isearch-highlight-regexp)
 (define-key isearch-mode-map (kbd "M-l") 'isearch-highlight-regexp-line)
+
+(autoload 'highlight-symbol-at-point "highlight-symbol" nil t)
+(autoload 'highlight-symbol-remove-all "highlight-symbol" nil t)
+
+
+(global-set-key [f7] 'highlight-symbol-at-point)
+(global-set-key [(control f7)] 'highlight-symbol-remove-all)
