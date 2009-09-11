@@ -59,6 +59,8 @@
                                           ("ARCHIVE" :foreground "red" :weight bold)
                                           ("CANCELED" :foreground "magenta" :weight bold))))
      (setq org-descriptive-links nil)
+     (setq org-ditaa-jar-path (expand-file-name
+                               "~/.emacs.d/Publishing/org/scripts/ditaa.jar"))
      ))
 
 (setq org-directory "~/.org/")
