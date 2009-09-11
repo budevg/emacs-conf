@@ -61,6 +61,7 @@
      (setq org-descriptive-links nil)
      (setq org-ditaa-jar-path (expand-file-name
                                "~/.emacs.d/Publishing/org/scripts/ditaa.jar"))
+     (setq org-export-htmlize-output-type 'css)
      ))
 
 (setq org-directory "~/.org/")
