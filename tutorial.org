@@ -76,7 +76,8 @@ EMACS CONFIGURATION TUTORIAL
    show kill ring
 ** <ctrl>+o during search
    shows all occurs of the word in the current windows
-
+** <ctrl>+left/right during search
+   search backward/forward
 ** In artist mode <ctrl>+c <ctrl>+a c/o
    select drawing mode and settings using ido complete
 * Debugging:

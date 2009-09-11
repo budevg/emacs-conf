@@ -9,9 +9,9 @@
 (global-set-key [(shift f9)] 'moccur)
 
 ;; cscope
-(autoload 'cscope-find-this-symbol "xcscope" "cscope-find-this-symbol autoload" t)
-(autoload 'cscope-find-global-definition "xcscope" "cscope-find-global-definition autoload" t)
-(autoload 'cscope-pop-mark "xcscope" "cscope-pop-mark autoload" t)
+(autoload 'cscope-find-this-symbol "xcscope" nil t)
+(autoload 'cscope-find-global-definition "xcscope" nil t)
+(autoload 'cscope-pop-mark "xcscope" nil t)
 
 (setq cscope-do-not-update-database t)
 (define-key global-map [(meta f9)]  'cscope-find-this-symbol)

@@ -42,7 +42,7 @@
 
 (global-set-key [(f6)] 'change-window-sticky)
 
-(autoload 'ibuffer-other-window "ibuffer" "buffers management" t)
+(autoload 'ibuffer-other-window "ibuffer" nil t)
 (require 'ibuffer)
 (eval-after-load "ibuffer"
   '(progn

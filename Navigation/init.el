@@ -1,5 +1,5 @@
 
-(require 'switch-file)
+(autoload 'switch-file-major-mode "switch-file" nil t)
 
 (eval-after-load "cc-mode"
   '(progn
@@ -57,11 +57,11 @@
     (setq frame-title-format new-name)))
 
 
-(autoload 'elscreen-start "elscreen" "Desktop management" t)
+(autoload 'elscreen-start "elscreen" nil t)
 
 (eval-after-load "elscreen"
   '(progn
      (setq elscreen-display-tab nil)))
 
-(autoload 'nav "nav" "Files navigation" t)
+(autoload 'nav "nav" nil t)
 (global-set-key "\M-`" 'nav)

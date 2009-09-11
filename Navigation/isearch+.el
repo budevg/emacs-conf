@@ -4,15 +4,15 @@
 ;; Description: Extensions to `isearch.el'.
 ;; Author: Drew Adams
 ;; Maintainer: Drew Adams
-;; Copyright (C) 1996-2008, Drew Adams, all rights reserved.
+;; Copyright (C) 1996-2009, Drew Adams, all rights reserved.
 ;; Created: Fri Dec 15 10:44:14 1995
 ;; Version: 21.0
-;; Last-Updated: Mon Nov 10 22:23:42 2008 (-0800)
+;; Last-Updated: Sat Aug  1 15:34:38 2009 (-0700)
 ;;           By: dradams
-;;     Update #: 412
+;;     Update #: 421
 ;; URL: http://www.emacswiki.org/cgi-bin/wiki/isearch+.el
 ;; Keywords: help, matching, internal, local
-;; Compatibility: GNU Emacs 20.x, GNU Emacs 21.x, GNU Emacs 22.x
+;; Compatibility: GNU Emacs: 20.x, 21.x, 22.x, 23.x
 ;;
 ;; Features that might be required by this library:
 ;;
@@ -60,6 +60,9 @@
 ;;    `M-w'        `isearch-toggle-word'
 ;;    `C-end'      `goto-longest-line' (if defined)
 ;;    `C-M-tab'    `isearch-complete' (on MS Windows)
+;;    `next'       `isearch-repeat-forward'
+;;    `prior'      `isearch-repeat-backward'
+;;
 ;;
 ;;  The following bindings are made here for incremental search edit
 ;;  mode:
@@ -76,6 +79,8 @@
 ;;
 ;;; Change log:
 ;;
+;; 2009/06/09 dadams
+;;     Bind isearch-repeat-(forward|backward) to (next|prior) in isearch-mode-map.
 ;; 2008/11/10 dadams
 ;;     Added: isearchp-goto-success-end.
 ;; 2008/05/25 dadams
@@ -174,15 +179,16 @@ You can toggle this with `isearchp-toggle-set-region', bound to
 (add-hook 'isearch-mode-hook
           (lambda ()
             (define-key isearch-mode-map [(control ? )] 'isearchp-toggle-set-region)
-            (define-key isearch-mode-map "\C-h" 'isearch-mode-help)
-            (define-key isearch-mode-map "\C-t" 'isearch-toggle-regexp)
-            (define-key isearch-mode-map "\C-c" 'isearch-toggle-case-fold)
+            (define-key isearch-mode-map "\C-h"         'isearch-mode-help)
+            (define-key isearch-mode-map "\C-t"         'isearch-toggle-regexp)
+            (define-key isearch-mode-map "\C-c"         'isearch-toggle-case-fold)
             ;; This one is needed only for Emacs 20.  It is automatic after release 20.
-            (define-key isearch-mode-map "\M-e" 'isearch-edit-string)
-            (define-key isearch-mode-map "\M-w" 'isearch-toggle-word)
+            (define-key isearch-mode-map "\M-e"         'isearch-edit-string)
+            (define-key isearch-mode-map "\M-w"         'isearch-toggle-word)
             (when (and (fboundp 'goto-longest-line) window-system) ; Defined in `misc-cmds.el'
               (define-key isearch-mode-map [(control end)] 'goto-longest-line))
-
+            (define-key isearch-mode-map [(control right)]     'isearch-repeat-forward)
+            (define-key isearch-mode-map [(control left)]      'isearch-repeat-backward)
             (define-key minibuffer-local-isearch-map "\M-e" 'isearchp-goto-success-end)
             (when (and (eq system-type 'windows-nt) ; Windows uses M-TAB for something else.
                        (not (lookup-key isearch-mode-map [C-M-tab])))
