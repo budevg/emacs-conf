@@ -1564,7 +1564,7 @@ amended version of it."
     (define-key map "v"   'git-view-file)
     (define-key map "x"   'git-remove-handled)
     (define-key map "\C-?" 'git-unmark-file-up)
-    (define-key map "\M-\C-?" 'git-unmark-all)
+    (define-key map [(control m)] 'git-unmark-all)
     ; the commit submap
     (define-key commit-map "\C-a" 'git-amend-commit)
     (define-key commit-map "\C-b" 'git-branch)
