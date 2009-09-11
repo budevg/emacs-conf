@@ -45,20 +45,18 @@
 (global-set-key [(control meta x)] 'switch-to-hexl-mode)
 
 
-(require 'browse-kill-ring)
+(autoload 'browse-kill-ring "browse-kill-ring" nil t)
 (global-set-key [(meta delete)] 'browse-kill-ring)
-(define-key browse-kill-ring-mode-map [down] 'browse-kill-ring-forward)
-(define-key browse-kill-ring-mode-map [(control down)] 'browse-kill-ring-forward)
-(define-key browse-kill-ring-mode-map [up] 'browse-kill-ring-previous)
-(define-key browse-kill-ring-mode-map [(control up)] 'browse-kill-ring-previous)
+(eval-after-load "browse-kill-ring"
+  '(progn 
+     (define-key browse-kill-ring-mode-map [down] 'browse-kill-ring-forward)
+     (define-key browse-kill-ring-mode-map [(control down)] 'browse-kill-ring-forward)
+     (define-key browse-kill-ring-mode-map [up] 'browse-kill-ring-previous)
+     (define-key browse-kill-ring-mode-map [(control up)] 'browse-kill-ring-previous)
+     (setq browse-kill-ring-display-duplicates nil)))
 
-(custom-set-variables
- '(browse-kill-ring-display-duplicates nil)
- )
 
-(autoload 'kill-ring-search "kill-ring-search"
-  "Search the kill ring in the minibuffer."
-(interactive))
+(autoload 'kill-ring-search "kill-ring-search" nil t)
 (global-set-key [(meta insert)] 'kill-ring-search)
 
 (setq make-backup-files nil)

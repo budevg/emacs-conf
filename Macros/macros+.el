@@ -7,12 +7,12 @@
 ;; Copyright (C) 1996-2009, Drew Adams, all rights reserved.
 ;; Created: Mon Apr 22 08:42:10 1996
 ;; Version: 21.0
-;; Last-Updated: Sat Dec 27 10:09:30 2008 (-0800)
+;; Last-Updated: Sat Aug  1 15:36:01 2009 (-0700)
 ;;           By: dradams
-;;     Update #: 170
+;;     Update #: 172
 ;; URL: http://www.emacswiki.org/cgi-bin/wiki/macros+.el
 ;; Keywords: abbrev, local
-;; Compatibility: GNU Emacs 20.x, GNU Emacs 21.x, GNU Emacs 22.x
+;; Compatibility: GNU Emacs: 20.x, 21.x, 22.x, 23.x
 ;;
 ;; Features that might be required by this library:
 ;;
@@ -22,14 +22,15 @@
 ;;   `easymenu', `ediff-diff', `ediff-help', `ediff-init',
 ;;   `ediff-merg', `ediff-mult', `ediff-util', `ediff-wind', `ffap',
 ;;   `ffap-', `fit-frame', `frame-cmds', `frame-fns', `help+20',
-;;   `hexrgb', `icicles', `icicles-cmd', `icicles-face',
-;;   `icicles-fn', `icicles-mac', `icicles-mcmd', `icicles-mode',
-;;   `icicles-opt', `icicles-var', `info', `info+', `kmacro',
-;;   `macros', `macros+', `menu-bar', `menu-bar+', `misc-cmds',
-;;   `misc-fns', `mkhtml', `mkhtml-htmlize', `mwheel', `pp', `pp+',
-;;   `ring', `ring+', `second-sel', `strings', `subr-21',
-;;   `thingatpt', `thingatpt+', `unaccent', `w32-browser',
-;;   `w32browser-dlgopen', `wid-edit', `wid-edit+', `widget'.
+;;   `hexrgb', `icicles', `icicles-cmd1', `icicles-cmd2',
+;;   `icicles-face', `icicles-fn', `icicles-mac', `icicles-mcmd',
+;;   `icicles-mode', `icicles-opt', `icicles-var', `info', `info+',
+;;   `kmacro', `levenshtein', `macros', `macros+', `menu-bar',
+;;   `menu-bar+', `misc-cmds', `misc-fns', `mkhtml',
+;;   `mkhtml-htmlize', `mwheel', `pp', `pp+', `ring', `ring+',
+;;   `second-sel', `strings', `thingatpt', `thingatpt+', `unaccent',
+;;   `w32-browser', `w32browser-dlgopen', `wid-edit', `wid-edit+',
+;;   `widget'.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

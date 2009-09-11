@@ -45,6 +45,20 @@
 
      (setq org-blank-before-new-entry '((heading . nil)
                                         (plain-list-item . auto)))
+     
+     (setq org-todo-keywords (quote ((sequence "TODO(t)" "STARTED(s)" "|" "DONE(d)")
+                                     (sequence "NEXT(n)" "WAITING(w)" "SOMEDAY(S)"
+                                               "ARCHIVE(a)" "|" "CANCELED(c)"))))
+
+     (setq org-todo-keyword-faces (quote (("TODO" :foreground "red" :weight bold)
+                                          ("STARTED" :foreground "orange" :weight bold)
+                                          ("DONE" :foreground "green" :weight bold)
+                                          ("WAITING" :foreground "orange" :weight bold)
+                                          ("SOMEDAY" :foreground "magenta" :weight bold)
+                                          ("NEXT" :foreground "forest green" :weight bold)
+                                          ("ARCHIVE" :foreground "red" :weight bold)
+                                          ("CANCELED" :foreground "magenta" :weight bold))))
+     (setq org-descriptive-links nil)
      ))
 
 (setq org-directory "~/.org/")

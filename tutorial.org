@@ -114,3 +114,7 @@ EMACS CONFIGURATION TUTORIAL
    prints the number of lines and characters in the region
 * Misc
 ** <meta>+x describe-face
+* Publishing
+** org-mode
+*** <control>+c <control>+t
+    change task state

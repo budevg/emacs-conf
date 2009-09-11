@@ -1,6 +1,13 @@
 from Node import Package,Module
 
 
+elisp = Package(name = "Elisp",
+                elements = [Module(name = "idle-require.el",
+                                   description  = "Instead of loading elisp packages " + 
+                                   "at start-up or on-demand, load them when Emacs is idle" +
+                                   " for a longer period of time."),
+                            ])
+
 faces = Package(name = "VisualLook",
                 elements = [Module(name = "fonts.el",
                                    description  = "configures fonts look"),
@@ -36,7 +43,7 @@ navigation = Package(name = "Navigation",
                                  ])
 
 macros = Package(name = "Macros",elements =
-                 [Module(name = "macros-init.el",
+                 [Module(name = "init.el",
                          description = "basic macros operation record/replay etc ..."),
                   ])
 
@@ -50,14 +57,12 @@ shell = Package(name = "Shell",
                             ])
 
 editing = Package(name = "Editing",
-                  elements = [Module(name = "common-settings.el",
+                  elements = [Module(name = "init.el",
                                      description = "commong editing settings"),
                               Module(name = "dos2unix.el",
                                      description = "dos to unix and vice versa converions"),
                               Module(name = "rectangle.el",
                                      description = "Edit text rectangles in emacs"),
-                              Module(name = "artist-mode-init.el",
-                                     description = "artist mode initialization"),
                               ])
 publishing = Package(name = "Publishing",
                         elements = [Module(name = "org-init.el",
@@ -66,6 +71,8 @@ publishing = Package(name = "Publishing",
                                             elements = [Module(name = "auctex-init.el",
                                                                description = "init auctex mode"),
                                                         ]),
+                                    Module(name = "artist-mode-init.el",
+                                           description = "artist mode initialization"),
                                     ])
 
 
@@ -137,15 +144,16 @@ source_control = Package(name = "SourceControl",
                                             description = "local files diff"),
                                      ])
 applications = Package(name = "Applications",
-                         elements = [Module(name = "irc.el",
-                                            description = "irc configration"),
-                                     Module(name = "init.el",
+                         elements = [Module(name = "init.el",
                                             description = "misc applications"),
+                                     Module(name = "irc.el",
+                                            description = "irc configration"),
                                      ])
 
 
 GLOBAL_PACKAGE = Package(name = ".",
-                         elements = [faces,
+                         elements = [elisp,
+                                     faces,
                                      editing,
                                      navigation,
                                      macros,
