@@ -34,5 +34,5 @@
      (define-key comint-mode-map [C-down] 'comint-next-matching-input-from-input)))
 
 
-(autoload 'multi-term "multi-term" "multi-term autoload" t)
+(autoload 'multi-term "multi-term" nil t)
 (global-set-key [f3] 'multi-term)
