@@ -1,6 +1,7 @@
 
-(require 'pc-select)
-(pc-selection-mode)
+;; TODO remove later
+;;(require 'pc-select)
+;;(pc-selection-mode)
 
 (column-number-mode t)
 (line-number-mode t)

@@ -4,8 +4,7 @@
 (setq grep-find-history '("find . -type f -print0 |xargs -0 -e grep -n"))
 (global-set-key [(control f9)] 'grep-find)
 
-(require 'color-moccur)
-(require 'moccur-edit)
+(autoload 'moccur "color-moccur" nil t)
 (global-set-key [(shift f9)] 'moccur)
 
 ;; cscope
