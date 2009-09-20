@@ -1350,7 +1350,7 @@ comint believe the user typed this string so that
 ;       (comint-scroll-to-bottom-on-output t)
         (msg (format "## working on region in file %s...\n" filename))
         ;; add some comment, so that we can filter it out of history
-        (cmd (format "execfile(r'%s') # PYTHON-MODE\n" filename)))
+        (cmd (format "exec(compile(open('%s').read(), '%s', 'exec')) # PYTHON-MODE\n" filename filename)))
     (unwind-protect
         (save-excursion
           (set-buffer procbuf)
