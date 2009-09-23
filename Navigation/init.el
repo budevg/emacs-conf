@@ -58,10 +58,43 @@
 
 
 (autoload 'elscreen-start "elscreen" nil t)
-
 (eval-after-load "elscreen"
   '(progn
-     (setq elscreen-display-tab nil)))
+     (defun elscreen-get-screen-numbers-with-emphasis ()
+       ""
+       (interactive)
+       (let ((elscreens (sort (elscreen-get-screen-list) '<))
+             (emphased ""))
+        
+         (dolist (s elscreens)
+           (setq emphased
+                 (concat emphased (if (= (elscreen-get-current-screen) s)
+                                      (propertize (number-to-string s)
+                                                  ;;'face 'custom-variable-tag) " ")
+                                                  ;;'face 'info-title-3)
+                                                  'face 'font-lock-warning-face)
+                                    ;;'face 'secondary-selection)
+                                    (number-to-string s))
+                         " ")))
+         (message "screens: %s" emphased)))
+    
+    
+     (defun elscreen-emph-prev ()
+       (interactive)
+       (elscreen-previous)
+       (elscreen-get-screen-numbers-with-emphasis))
+
+     (defun elscreen-emph-next ()
+       (interactive)
+       (elscreen-next)
+       (elscreen-get-screen-numbers-with-emphasis))
+
+     (setq elscreen-display-tab nil)
+
+     (global-set-key (kbd "M-[") 'elscreen-emph-prev)
+     (global-set-key (kbd "M-]") 'elscreen-emph-next)
+     ))
+
 
 (autoload 'nav "nav" nil t)
 (global-set-key "\M-`" 'nav)
