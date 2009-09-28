@@ -33,8 +33,7 @@
                                                                     symbol-names))
                                  symbol-names)))
              (position (cdr (assoc selected-symbol name-and-pos))))
-        (if (markerp position)
-            (goto-char position) (goto-char (overlay-start position)))))))
+        (goto-char position)))))
 
 (global-set-key [(control \')] 'ido-goto-symbol)
 
