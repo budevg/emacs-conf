@@ -70,6 +70,8 @@ EMACS CONFIGURATION TUTORIAL
    use <meta>+]/[ to navigate
 ** <meta>+`
    navigate files
+** <control>+`
+   minimap
 * Editing:
 ** <ctrl>+w
    backward kill word

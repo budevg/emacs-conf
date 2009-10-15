@@ -98,3 +98,20 @@
 
 (autoload 'nav "nav" nil t)
 (global-set-key "\M-`" 'nav)
+
+(autoload 'minimap-create "minimap" nil t)
+(autoload 'minimap-kill "minimap" nil t)
+(setq minimap-flag nil)
+(defun minimap-show ()
+  (interactive)
+  (if minimap-flag
+      (progn
+        (minimap-kill)
+        (setq minimap-flag nil))
+    (progn
+      (minimap-create)
+      (setq minimap-flag t))))
+(global-set-key [(control \`)] 'minimap-show)
+    
+
+  
