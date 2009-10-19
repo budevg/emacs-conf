@@ -1,0 +1,12 @@
+#name : beamer
+# --
+#+LaTeX_CLASS: beamer
+#+MACRO: BEAMERMODE presentation
+#+MACRO: BEAMERTHEME Antibes
+#+MACRO: BEAMERCOLORTHEME lily
+#+MACRO: BEAMERSUBJECT xxxSUBJECTxxx
+#+MACRO: BEAMERINSTITUTE xxxINSTITUTExxx
+#+TITLE: xxxTITLExxx
+#+AUTHOR: xxxAUTHORxxx
+$0
+

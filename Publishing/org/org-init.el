@@ -1,6 +1,40 @@
 
 (add-to-list 'auto-mode-alist '("\\.org$" . org-mode))
 (setq org-log-done t)
+
+(defun org-config-beamer ()
+  (require 'org-export-latex)
+  (add-to-list 'org-export-latex-classes
+               '("beamer" 
+     "\\documentclass[11pt]{beamer}\n
+      \\mode<{{{beamermode}}}>\n
+      \\usetheme{{{{beamertheme}}}}\n
+      \\usecolortheme{{{{beamercolortheme}}}}\n
+      \\beamertemplateballitem\n
+      \\setbeameroption{show notes}
+      \\usepackage[utf8]{inputenc}\n
+      \\usepackage[T1]{fontenc}\n
+      \\usepackage{hyperref}\n
+      \\usepackage{color}
+      \\usepackage{listings}
+      \\lstset{numbers=none,language=[ISO]C++,tabsize=4,
+  frame=single,
+  basicstyle=\\small,
+  showspaces=false,showstringspaces=false,
+  showtabs=false,
+  keywordstyle=\\color{blue}\\bfseries,
+  commentstyle=\\color{red},
+  }\n
+      \\usepackage{verbatim}\n
+      \\institute{{{{beamerinstitute}}}}\n          
+       \\subject{{{{beamersubject}}}}\n" 
+     ("\\section{%s}" . "\\section*{%s}")
+     
+     ("\\begin{frame}[fragile]\\frametitle{%s}" 
+       "\\end{frame}" 
+       "\\begin{frame}[fragile]\\frametitle{%s}" 
+       "\\end{frame}"))))
+
 (eval-after-load 'org
   '(progn
      (org-defkey org-mode-map "\C-m"     'org-return-indent)
@@ -62,6 +96,7 @@
      (setq org-ditaa-jar-path (expand-file-name
                                "~/.emacs.d/Publishing/org/scripts/ditaa.jar"))
      (setq org-export-htmlize-output-type 'css)
+     (org-config-beamer)
      ))
 
 (setq org-directory "~/.org/")
