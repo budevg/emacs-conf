@@ -6,7 +6,7 @@
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 6.30e
+;; Version: 6.31a
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -419,6 +419,9 @@ This may also be a function, building and inserting the postamble.")
 (defvar org-export-html-after-blockquotes-hook nil
   "Hook run during HTML export, after blockquote, verse, center are done.")
 
+(defvar org-export-html-final-hook nil
+  "Hook run during HTML export, after blockquote, verse, center are done.")
+
 ;;; HTML export
 
 (defun org-export-html-preprocess (parameters)
@@ -544,7 +547,7 @@ PUB-DIR is set, use this as the publishing directory."
 	(org-set-local 'buffer-file-name
 		       (with-current-buffer (buffer-base-buffer)
 			 buffer-file-name))
-      (error "Need a file name to be able to export.")))
+      (error "Need a file name to be able to export")))
 
   (message "Exporting...")
   (setq-default org-todo-line-regexp org-todo-line-regexp)
@@ -1461,6 +1464,7 @@ lang=\"%s\" xml:lang=\"%s\">
 	  (delete-region beg end)
 	  (insert (format "<span style=\"visibility:hidden;\">%s</span>"
 			  (make-string n ?x)))))
+      (run-hooks 'org-export-html-final-hook)
       (or to-buffer (save-buffer))
       (goto-char (point-min))
       (or (org-export-push-to-kill-ring "HTML")

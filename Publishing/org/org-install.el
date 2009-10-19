@@ -4,7 +4,7 @@
 ;;;;;;  org-map-entries org-open-link-from-string org-open-at-point-global
 ;;;;;;  org-insert-link-global org-store-link org-run-like-in-org-mode
 ;;;;;;  turn-on-orgstruct++ turn-on-orgstruct orgstruct-mode org-global-cycle
-;;;;;;  org-mode) "org" "lisp/org.el" (19104 62831))
+;;;;;;  org-mode) "org" "lisp/org.el" (19140 21121))
 ;;; Generated autoloads from lisp/org.el
 
 (autoload 'org-mode "org" "\
@@ -217,7 +217,7 @@ Call the customize function with org as argument.
 ;;;;;;  org-diary org-agenda-list-stuck-projects org-tags-view org-todo-list
 ;;;;;;  org-search-view org-agenda-list org-batch-store-agenda-views
 ;;;;;;  org-store-agenda-views org-batch-agenda-csv org-batch-agenda
-;;;;;;  org-agenda) "org-agenda" "lisp/org-agenda.el" (19105 33079))
+;;;;;;  org-agenda) "org-agenda" "lisp/org-agenda.el" (19140 21195))
 ;;; Generated autoloads from lisp/org-agenda.el
 
 (autoload 'org-agenda "org-agenda" "\
@@ -471,7 +471,7 @@ belonging to the \"Work\" category.
 
 ;;;### (autoloads (org-export-as-ascii org-export-region-as-ascii
 ;;;;;;  org-replace-region-by-ascii org-export-as-ascii-to-buffer)
-;;;;;;  "org-ascii" "lisp/org-ascii.el" (19104 53775))
+;;;;;;  "org-ascii" "lisp/org-ascii.el" (19139 25634))
 ;;; Generated autoloads from lisp/org-ascii.el
 
 (autoload 'org-export-as-ascii-to-buffer "org-ascii" "\
@@ -525,7 +525,7 @@ publishing directory.
 ;;;***
 
 ;;;### (autoloads (org-attach) "org-attach" "lisp/org-attach.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25634))
 ;;; Generated autoloads from lisp/org-attach.el
 
 (autoload 'org-attach "org-attach" "\
@@ -536,8 +536,20 @@ Shows a list of commands and prompts for another key to execute a command.
 
 ;;;***
 
+;;;### (autoloads (org-archive-subtree-default) "org-archive" "lisp/org-archive.el"
+;;;;;;  (19139 25634))
+;;; Generated autoloads from lisp/org-archive.el
+
+(autoload 'org-archive-subtree-default "org-archive" "\
+Archive the current subtree with the default command.
+This command is set with the variable `org-archive-default-command'.
+
+\(fn)" t nil)
+
+;;;***
+
 ;;;### (autoloads (org-bbdb-anniversaries) "org-bbdb" "lisp/org-bbdb.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25634))
 ;;; Generated autoloads from lisp/org-bbdb.el
 
 (autoload 'org-bbdb-anniversaries "org-bbdb" "\
@@ -548,7 +560,7 @@ Extract anniversaries from BBDB for display in the agenda.
 ;;;***
 
 ;;;### (autoloads (org-clock-persistence-insinuate org-get-clocktable)
-;;;;;;  "org-clock" "lisp/org-clock.el" (19104 53775))
+;;;;;;  "org-clock" "lisp/org-clock.el" (19139 25634))
 ;;; Generated autoloads from lisp/org-clock.el
 
 (autoload 'org-get-clocktable "org-clock" "\
@@ -567,7 +579,7 @@ Set up hooks for clock persistence
 
 ;;;### (autoloads (org-insert-export-options-template org-export-as-org
 ;;;;;;  org-export-visible org-export) "org-exp" "lisp/org-exp.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19140 21215))
 ;;; Generated autoloads from lisp/org-exp.el
 
 (autoload 'org-export "org-exp" "\
@@ -626,7 +638,7 @@ Insert into the buffer a template with information for exporting.
 ;;;### (autoloads (org-export-as-docbook org-export-as-docbook-pdf-and-open
 ;;;;;;  org-export-as-docbook-pdf org-export-region-as-docbook org-replace-region-by-docbook
 ;;;;;;  org-export-as-docbook-to-buffer org-export-as-docbook-batch)
-;;;;;;  "org-docbook" "lisp/org-docbook.el" (19104 53775))
+;;;;;;  "org-docbook" "lisp/org-docbook.el" (19139 25634))
 ;;; Generated autoloads from lisp/org-docbook.el
 
 (autoload 'org-export-as-docbook-batch "org-docbook" "\
@@ -702,8 +714,8 @@ publishing directory.
 ;;;***
 
 ;;;### (autoloads (org-feed-show-raw-feed org-feed-goto-inbox org-feed-update
-;;;;;;  org-feed-update-all) "org-feed" "lisp/org-feed.el" (19104
-;;;;;;  53775))
+;;;;;;  org-feed-update-all) "org-feed" "lisp/org-feed.el" (19139
+;;;;;;  25634))
 ;;; Generated autoloads from lisp/org-feed.el
 
 (autoload 'org-feed-update-all "org-feed" "\
@@ -731,7 +743,7 @@ Show the raw feed buffer of a feed.
 ;;;***
 
 ;;;### (autoloads (org-footnote-normalize org-footnote-action) "org-footnote"
-;;;;;;  "lisp/org-footnote.el" (19104 53775))
+;;;;;;  "lisp/org-footnote.el" (19139 25634))
 ;;; Generated autoloads from lisp/org-footnote.el
 
 (autoload 'org-footnote-action "org-footnote" "\
@@ -758,7 +770,7 @@ referenced sequence.
 ;;;### (autoloads (org-export-htmlize-generate-css org-export-as-html
 ;;;;;;  org-export-region-as-html org-replace-region-by-html org-export-as-html-to-buffer
 ;;;;;;  org-export-as-html-batch org-export-as-html-and-open) "org-html"
-;;;;;;  "lisp/org-html.el" (19104 53775))
+;;;;;;  "lisp/org-html.el" (19139 25634))
 ;;; Generated autoloads from lisp/org-html.el
 
 (put 'org-export-html-style 'safe-local-variable 'booleanp)
@@ -851,7 +863,7 @@ that uses these same face definitions.
 
 ;;;### (autoloads (org-export-icalendar-combine-agenda-files org-export-icalendar-all-agenda-files
 ;;;;;;  org-export-icalendar-this-file) "org-icalendar" "lisp/org-icalendar.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25634))
 ;;; Generated autoloads from lisp/org-icalendar.el
 
 (autoload 'org-export-icalendar-this-file "org-icalendar" "\
@@ -878,7 +890,7 @@ The file is stored under the name `org-combined-agenda-icalendar-file'.
 
 ;;;### (autoloads (org-id-find-id-file org-id-find org-id-goto org-id-get-with-outline-drilling
 ;;;;;;  org-id-get-with-outline-path-completion org-id-get org-id-copy
-;;;;;;  org-id-get-create) "org-id" "lisp/org-id.el" (19104 53775))
+;;;;;;  org-id-get-create) "org-id" "lisp/org-id.el" (19139 25634))
 ;;; Generated autoloads from lisp/org-id.el
 
 (autoload 'org-id-get-create "org-id" "\
@@ -942,7 +954,7 @@ Query the id database for the file in which this ID is located.
 ;;;***
 
 ;;;### (autoloads (org-indent-mode) "org-indent" "lisp/org-indent.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25634))
 ;;; Generated autoloads from lisp/org-indent.el
 
 (autoload 'org-indent-mode "org-indent" "\
@@ -957,7 +969,7 @@ FIXME:  How to update when broken?
 ;;;***
 
 ;;;### (autoloads (org-irc-store-link) "org-irc" "lisp/org-irc.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25635))
 ;;; Generated autoloads from lisp/org-irc.el
 
 (autoload 'org-irc-store-link "org-irc" "\
@@ -970,7 +982,7 @@ Dispatch to the appropriate function to store a link to an IRC session.
 ;;;### (autoloads (org-export-as-pdf-and-open org-export-as-pdf org-export-as-latex
 ;;;;;;  org-export-region-as-latex org-replace-region-by-latex org-export-as-latex-to-buffer
 ;;;;;;  org-export-as-latex-batch) "org-latex" "lisp/org-latex.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25635))
 ;;; Generated autoloads from lisp/org-latex.el
 
 (autoload 'org-export-as-latex-batch "org-latex" "\
@@ -1049,9 +1061,35 @@ Export as LaTeX, then process through to PDF, and open.
 
 ;;;***
 
+;;;### (autoloads (org-mobile-create-sumo-agenda org-mobile-pull
+;;;;;;  org-mobile-push) "org-mobile" "lisp/org-mobile.el" (19139
+;;;;;;  25635))
+;;; Generated autoloads from lisp/org-mobile.el
+
+(autoload 'org-mobile-push "org-mobile" "\
+Push the current state of Org affairs to the WebDAV directory.
+This will create the index file, copy all agenda files there, and also
+create all custom agenda views, for upload to the mobile phone.
+
+\(fn)" t nil)
+
+(autoload 'org-mobile-pull "org-mobile" "\
+Pull the contents of `org-mobile-capture-file' and integrate them.
+Apply all flagged actions, flag entries to be flagged and then call an
+agenda view showing the flagged items.
+
+\(fn)" t nil)
+
+(autoload 'org-mobile-create-sumo-agenda "org-mobile" "\
+Create a file that contains all custom agenda views.
+
+\(fn)" t nil)
+
+;;;***
+
 ;;;### (autoloads (org-publish-current-project org-publish-current-file
 ;;;;;;  org-publish-all org-publish) "org-publish" "lisp/org-publish.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25635))
 ;;; Generated autoloads from lisp/org-publish.el
 
 (defalias 'org-publish-project 'org-publish)
@@ -1084,7 +1122,7 @@ the project.
 ;;;***
 
 ;;;### (autoloads (org-plot/gnuplot) "org-plot" "lisp/org-plot.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25635))
 ;;; Generated autoloads from lisp/org-plot.el
 
 (autoload 'org-plot/gnuplot "org-plot" "\
@@ -1098,7 +1136,7 @@ line directly before or after the table.
 
 ;;;### (autoloads (org-remember-handler org-remember org-remember-apply-template
 ;;;;;;  org-remember-annotation org-remember-insinuate) "org-remember"
-;;;;;;  "lisp/org-remember.el" (19104 53775))
+;;;;;;  "lisp/org-remember.el" (19139 25635))
 ;;; Generated autoloads from lisp/org-remember.el
 
 (autoload 'org-remember-insinuate "org-remember" "\
@@ -1173,7 +1211,7 @@ See also the variable `org-reverse-note-order'.
 ;;;***
 
 ;;;### (autoloads (org-table-to-lisp orgtbl-mode turn-on-orgtbl)
-;;;;;;  "org-table" "lisp/org-table.el" (19104 53775))
+;;;;;;  "org-table" "lisp/org-table.el" (19139 25635))
 ;;; Generated autoloads from lisp/org-table.el
 
 (autoload 'turn-on-orgtbl "org-table" "\
@@ -1198,7 +1236,7 @@ The table is taken from the parameter TXT, or from the buffer at point.
 
 ;;;### (autoloads (org-timer-set-timer org-timer-item org-timer-change-times-in-region
 ;;;;;;  org-timer org-timer-start) "org-timer" "lisp/org-timer.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25635))
 ;;; Generated autoloads from lisp/org-timer.el
 
 (autoload 'org-timer-start "org-timer" "\
@@ -1242,7 +1280,7 @@ Set a timer.
 ;;;***
 
 ;;;### (autoloads (org-export-as-xoxo) "org-xoxo" "lisp/org-xoxo.el"
-;;;;;;  (19104 53775))
+;;;;;;  (19139 25635))
 ;;; Generated autoloads from lisp/org-xoxo.el
 
 (autoload 'org-export-as-xoxo "org-xoxo" "\

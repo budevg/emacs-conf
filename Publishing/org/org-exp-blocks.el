@@ -85,7 +85,7 @@
 (defvar asciip)
 
 (declare-function comint-send-input "comint" (&optional no-newline artificial))
-(declare-function R "ess" nil)
+(declare-function R "ext:ess" nil)
 
 (defun org-export-blocks-set (var value)
   "Set the value of `org-export-blocks' and install fontification."
@@ -436,4 +436,5 @@ export."
 
 (provide 'org-exp-blocks)
 
+;; arch-tag: 1c365fe9-8808-4f72-bb15-0b00f36d8024
 ;;; org-exp-blocks.el ends here
