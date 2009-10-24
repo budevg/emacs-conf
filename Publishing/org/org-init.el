@@ -58,6 +58,10 @@
      (org-defkey org-mode-map [(kp-6)] 'org-shiftcontrolright)
      (org-defkey org-mode-map [(kp-4)]  'org-shiftcontrolleft)
 
+     (org-defkey org-mode-map [(shift home)] 'move-beginning-of-line)
+     (org-defkey org-mode-map [(shift end)] 'move-end-of-line)
+
+
      ;; undef old org keys
      (org-defkey org-mode-map [(meta left)]  nil)
      (org-defkey org-mode-map [(meta right)] nil)

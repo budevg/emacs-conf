@@ -87,6 +87,9 @@ EMACS CONFIGURATION TUTORIAL
    search backward/forward
 ** In artist mode <ctrl>+c <ctrl>+a c/o
    select drawing mode and settings using ido complete
+** <ctrl>+x 6 2/1
+   edit/merge 2 columns
+   
 * Debugging:
 ** keypad-2
    step
