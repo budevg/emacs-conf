@@ -1,4 +1,8 @@
-(require 'hideshow)
+(autoload 'hs-show-all "hideshow" nil t)
+(autoload 'hs-hide-all "hideshow" nil t)
+(autoload 'hs-show-block "hideshow" nil t)
+(autoload 'hs-hide-block "hideshow" nil t)
+(autoload 'hs-minor-mode "hideshow" nil t)
 
 (defun hide-show-hook ()
   (hs-minor-mode 1))

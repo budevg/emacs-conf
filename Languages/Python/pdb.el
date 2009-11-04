@@ -11,5 +11,7 @@
 )
 
 (global-set-key [(control meta p)] 'py-pdb-pm)
-(autoload 'py-shell "python-mode" "py-shell autoload" t)
+(if (executable-find "ipython")
+    (autoload 'py-shell "ipython" "py-shell autoload" t)
+  (autoload 'py-shell "python-mode" "py-shell autoload" t))
 (global-set-key [(control P)] 'py-shell)
