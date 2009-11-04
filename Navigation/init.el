@@ -8,20 +8,25 @@
 
 (require 'isearch+)
 
-;; make dired reuse the current buffer instead of opening new buffer
-;; for each directory
 (eval-after-load "dired"
   '(progn
-     (defadvice dired-advertised-find-file (around dired-subst-directory activate)
-       "Replace current buffer if file is a directory."
-       (interactive)
-       (let* ((orig (current-buffer))
-              ;; (filename (dired-get-filename))
-              (filename (dired-get-filename t t))
-              (bye-p (file-directory-p filename)))
-         ad-do-it
-         (when (and bye-p (not (string-match "[/\\\\]\\.$" filename)))
-           (kill-buffer orig))))
+     (defun my-dired-init ()
+       ;; make dired reuse the current buffer instead of opening new buffer
+       ;; for each directory
+       (autoload 'dired-single-buffer "dired-single" "" t)
+       (autoload 'dired-single-buffer-mouse "dired-single" "" t)
+       (autoload 'dired-single-magic-buffer "dired-single" "" t)
+       (autoload 'dired-single-toggle-buffer-name "dired-single" "" t)
+       (define-key dired-mode-map [return] 'dired-single-buffer)
+       (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
+       (define-key dired-mode-map "^"
+         (function
+      	 (lambda nil (interactive) (dired-single-buffer "..")))))
+     
+     (if (boundp 'dired-mode-map)
+         (my-dired-init)
+       (add-hook 'dired-load-hook 'my-dired-init))
+     
      (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)
      (require 'dired-x)
      (setq dired-omit-extensions (append dired-omit-extensions
