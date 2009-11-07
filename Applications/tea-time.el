@@ -75,13 +75,8 @@ If you don't have alsa, it is better to be .wav file"
 Store current timer in a global variable."
   (interactive)
   (run-at-time sec nil (lambda (seconds)
-                         (show-notification (format "Time is up! %d minutes" (/ seconds 60)))
 			 (tea-time-play-sound)
-                         (let ((counter 5))
-                           (while (> counter 0)
-                             (ding t)
-                             (sleep-for 1)
-                             (setq counter (- counter 1))))
+			 (show-notification (format "Time is up! %d minutes" (/ seconds 60)))
 			 ) sec))
 
 (defun tea-time-play-sound ()
@@ -140,7 +135,7 @@ Cancel prevoius timer, started by this function"
   "Show notification. Use mumbles."
   (if (program-exists "mumbles-send")
       (start-process "tea-time-mumble-notification" nil "mumbles-send" notification)
-    (message notification)
+    (message-box notification)
     ))
 
 (defun program-exists (program-name)
