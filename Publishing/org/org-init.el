@@ -114,6 +114,6 @@
       '(("Todo" ?t "* TODO %?" "~/.org/TODO.org" "Tasks")
         ("Journal" ?j "* %U %?" "~/.org/JOURNAL.org" "Events")
         ("Idea" ?i "* %? %U\n" "~/.org/JOURNAL.org" "Ideas")
-        ("Pomodoro" ?p "* %U\n  - %?" "~/.org/POMODORO.org")))
+        ("Pomodoro" ?p "* %U\n** %?" "~/.org/POMODORO.org" "Tasks")))
 (define-key global-map "\C-cr" 'org-remember)
 
