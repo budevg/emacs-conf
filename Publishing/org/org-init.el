@@ -81,6 +81,8 @@
      (org-defkey org-mode-map [(control shift right)] nil)
      (org-defkey org-mode-map [(control shift left)]  nil)
 
+     (setq org-cycle-emulate-tab 'exc-hl-bol)
+
      (setq org-blank-before-new-entry '((heading . nil)
                                         (plain-list-item . auto)))
      
@@ -111,6 +113,7 @@
 (setq org-remember-templates
       '(("Todo" ?t "* TODO %?" "~/.org/TODO.org" "Tasks")
         ("Journal" ?j "* %U %?" "~/.org/JOURNAL.org" "Events")
-        ("Idea" ?i "* %? %U\n" "~/.org/JOURNAL.org" "Ideas")))
+        ("Idea" ?i "* %? %U\n" "~/.org/JOURNAL.org" "Ideas")
+        ("Pomodoro" ?p "* %U\n  - %?" "~/.org/POMODORO.org")))
 (define-key global-map "\C-cr" 'org-remember)
 

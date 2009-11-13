@@ -136,7 +136,10 @@ languages = Package(name = "Languages",
                                         elements = [Module(name = "erlang-start.el",
                                                            description = "init erlang mode"),
                                                     ]),
-
+                                Package(name = "Go",
+                                        elements = [Module(name = "go-mode-load.el",
+                                                           description = "init go mode"),
+                                                    ]),
                                 ])
 
 source_control = Package(name = "SourceControl",
