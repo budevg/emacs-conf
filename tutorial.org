@@ -10,6 +10,10 @@ EMACS CONFIGURATION TUTORIAL
    maximize current window
 ** <meta>+<f5>
    switch splitted windows
+** <meta>+<pause>
+   delete window
+** <pause>
+   kill buffer
 
 * Programming:
 ** <meta> + <enter>

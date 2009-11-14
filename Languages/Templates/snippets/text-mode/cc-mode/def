@@ -1,0 +1,3 @@
+# name: def
+# --
+#define $1 $0

@@ -28,6 +28,7 @@
 (global-set-key [(control right)] 'forward-sexp)
 (global-set-key [(control left)]  'backward-sexp)
 
+(global-set-key [(meta pause)] 'delete-window)
 (global-set-key [f5]  'delete-other-windows)
 (global-set-key [(control f5)]  'new-frame)
 (global-set-key [(meta f5)]  'transpose-buffers)
