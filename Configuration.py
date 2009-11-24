@@ -137,7 +137,7 @@ languages = Package(name = "Languages",
                                                            description = "init erlang mode"),
                                                     ]),
                                 Package(name = "Go",
-                                        elements = [Module(name = "go-mode-load.el",
+                                        elements = [Module(name = "init.el",
                                                            description = "init go mode"),
                                                     ]),
                                 ])
