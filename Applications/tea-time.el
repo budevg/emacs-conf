@@ -133,10 +133,7 @@ Cancel prevoius timer, started by this function"
 
 (defun show-notification (notification)
   "Show notification. Use mumbles."
-  (if (program-exists "mumbles-send")
-      (start-process "tea-time-mumble-notification" nil "mumbles-send" notification)
-    (message-box notification)
-    ))
+  (message-notify "Tea time" notification))
 
 (defun program-exists (program-name)
   "Checks whenever we can locate program and launch it."

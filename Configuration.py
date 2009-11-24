@@ -1,9 +1,13 @@
 from Node import Package,Module
 
 
+
+
 elisp = Package(name = "Elisp",
-                elements = [Module(name = "idle-require.el",
-                                   description  = "Instead of loading elisp packages " + 
+                elements = [Module(name = "message-notify.el",
+                                   description  = "Show alerts and notifications."),
+                            Module(name = "idle-require.el",
+                                   description  = "Instead of loading elisp packages " +
                                    "at start-up or on-demand, load them when Emacs is idle" +
                                    " for a longer period of time."),
                             ])
