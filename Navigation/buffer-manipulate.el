@@ -18,7 +18,6 @@
 (global-set-key [(pause)] 'kill-this-buffer)
 (global-set-key [(control pause)] 'delete-frame)
 
-(require 'ido)
 (ido-mode t)
 (icomplete-mode t)
 (global-set-key [(control \;)] 'ido-switch-buffer)

@@ -9,7 +9,6 @@
 (defun maximize-frame ()
   (set-frame-position (selected-frame) 0 26)
   (set-frame-size (selected-frame) 108 34))
-(maximize-frame)
 (add-hook 'window-setup-hook 'maximize-frame)
 
 ;; zoom in/out

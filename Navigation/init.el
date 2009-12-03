@@ -34,27 +34,25 @@
 
 (eval-after-load "ido"
   '(progn
-     (defvar ido-execute-command-cache nil)
-
-     (defun ido-execute-command-refresh ()
-       (interactive)
-       (setq ido-execute-command-cache nil))
-     
-     (defun ido-execute-command ()
-       (interactive)
-       (call-interactively
-        (intern
-         (ido-completing-read
-          "M-x "
-          (progn
-            (unless ido-execute-command-cache
-              (mapatoms
-               (lambda (s)
-                 (when (commandp s)
-                   (setq ido-execute-command-cache
-                         (cons (format "%S" s) ido-execute-command-cache))))))
-            ido-execute-command-cache)))))
-     (global-set-key [(control q)] 'ido-execute-command)))
+     (defadvice completing-read
+       (around foo activate)
+       (if (boundp 'ido-cur-list)
+           ad-do-it
+         (setq ad-return-value
+               (ido-completing-read
+                prompt
+                (all-completions "" collection predicate)
+                nil require-match initial-input hist def))))
+     (global-set-key
+      "\M-x"
+      (lambda ()
+        (interactive)
+        (call-interactively
+         (intern
+          (ido-completing-read
+           "M-x "
+           (all-completions "" obarray 'commandp))))))
+     ))
 
 (defun rename-frame ()
   (interactive)
