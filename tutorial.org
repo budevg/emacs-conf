@@ -121,9 +121,6 @@ EMACS CONFIGURATION TUTORIAL
 ** <ctrl>+x =
    evaluate mathematical expression in selected region
    
-* Emacs
-** <ctr>+q
-   like meta+x but with ido completion
 * Info
 ** <meta>+=
    prints the number of lines and characters in the region
