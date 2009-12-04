@@ -8,6 +8,7 @@
 (global-set-key [(shift f9)] 'moccur)
 
 ;; cscope
+(autoload 'cscope-index-files "xcscope" nil t)
 (autoload 'cscope-find-this-symbol "xcscope" nil t)
 (autoload 'cscope-find-global-definition "xcscope" nil t)
 (autoload 'cscope-pop-mark "xcscope" nil t)

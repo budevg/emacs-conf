@@ -34,17 +34,8 @@
 
 (eval-after-load "ido"
   '(progn
-     (defadvice completing-read
-       (around foo activate)
-       (if (boundp 'ido-cur-list)
-           ad-do-it
-         (setq ad-return-value
-               (ido-completing-read
-                prompt
-                (all-completions "" collection predicate)
-                nil require-match initial-input hist def))))
      (global-set-key
-      "\M-x"
+      "\C-q"
       (lambda ()
         (interactive)
         (call-interactively

@@ -7,8 +7,7 @@
   (insert-string "pdb.pm()")
   (comint-send-input)
   (insert-string "bt")
-  (comint-send-input)
-)
+  (comint-send-input))
 
 (global-set-key [(control meta p)] 'py-pdb-pm)
 (autoload 'py-shell "python-mode" "py-shell autoload" t)

@@ -1,5 +1,5 @@
 
-(require 'imenu)
+(autoload 'imenu--make-index-alist "imenu" nil t)
 (setq imenu-auto-rescan t)
 
 (defun ido-goto-symbol ()
@@ -36,5 +36,3 @@
         (goto-char position)))))
 
 (global-set-key [(control \')] 'ido-goto-symbol)
-
-(provide 'symbols-navigate)

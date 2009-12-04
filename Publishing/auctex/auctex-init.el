@@ -1,3 +1,4 @@
 
 (eval-after-load "tex-mode"
-  '(require 'tex-site))
+  (progn 
+    '(require 'tex-site)))

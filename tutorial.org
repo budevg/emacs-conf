@@ -115,6 +115,9 @@ EMACS CONFIGURATION TUTORIAL
 ** <control>+wheel up/down
    text increase/decrease
 
+* Emacs
+** <ctr>+q
+   like meta+x but with ido completion
 * Macros:
 ** <meta>+<f12>
    apply last keyboard macro to region
