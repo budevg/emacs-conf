@@ -30,7 +30,29 @@
      (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)
      (require 'dired-x)
      (setq dired-omit-extensions (append dired-omit-extensions
-                                         '(".ko" ".ko.cmd" ".mod.c" ".mod.o.cmd" ".o.cmd") ))))
+                                         '(".ko" ".ko.cmd" ".mod.c" ".mod.o.cmd" ".o.cmd") ))
+     (defun dired-sort ()
+       (interactive)
+       (let ((sort-flags-table (make-hash-table))
+             (sort-types-list '()))
+         (dolist (entry '(("normal". "")
+                          ("rtime". "t")
+                          ("time" . "rt")
+                          ("rsize" . "S")
+                          ("size" . "rS")
+                          ("rname" . "X")
+                          ("name" . "rX")
+                          ("rdir" . "U")
+                          ("dir" . "rU")))
+           (puthash (car entry) (cdr entry) sort-flags-table)
+           (setq sort-types-list (cons (car entry) sort-types-list)))
+              
+         (let ((sort-flag (ido-completing-read
+                           "Dired Sort: "
+                           sort-types-list)))
+           (setq dired-actual-switches (concat "-al" (gethash sort-flag sort-flags-table "")))
+           (revert-buffer))))
+     (define-key dired-mode-map "s" 'dired-sort)))
 
 (eval-after-load "ido"
   '(progn

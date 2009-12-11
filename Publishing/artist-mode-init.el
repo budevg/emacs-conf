@@ -31,5 +31,5 @@
      
      (add-hook 'artist-mode-init-hook 
                (lambda ()
-                 (define-key artist-mode-map (kbd "C-c C-a o") 'artist-ido-select-operation)
-                 (define-key artist-mode-map (kbd "C-c C-a c") 'artist-ido-select-settings)))))
+                 (define-key artist-mode-map (kbd "C-p") 'artist-ido-select-operation)
+                 (define-key artist-mode-map (kbd "C-l") 'artist-ido-select-settings)))))

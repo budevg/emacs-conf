@@ -89,7 +89,7 @@ EMACS CONFIGURATION TUTORIAL
    shows all occurs of the word in the current windows
 ** <ctrl>+left/right during search
    search backward/forward
-** In artist mode <ctrl>+c <ctrl>+a c/o
+** In artist mode <ctrl>+p/<ctrl>+l
    select drawing mode and settings using ido complete
 ** <ctrl>+x 6 2/1
    edit/merge 2 columns
