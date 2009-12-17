@@ -63,7 +63,8 @@ EMACS CONFIGURATION TUTORIAL
    browse c++ classes
 ** <meta>+o in dired mode
    omit files
-
+** <meta>+enter in dired mode
+   run less on file in terminal window (usefull to view large files)
 ** <meta>+x rename-buffer
    change the name of buffer
 ** <meta>+x rename-frame
