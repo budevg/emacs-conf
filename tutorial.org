@@ -77,6 +77,12 @@ EMACS CONFIGURATION TUTORIAL
    navigate files
 ** <control>+`
    minimap
+** <tab>
+   hide/show code block
+** <shift>+<tab>
+   hide/show all code block
+** <control>/<shift>+<plus>/<minus>
+   hide/show all/single #ifdef statement in c
 * Editing:
 ** <ctrl>+w
    backward kill word
