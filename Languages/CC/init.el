@@ -4,6 +4,7 @@
      (defun my-cc-mode-hook ()
        (c-set-style "linux")
        (setq c-basic-offset 2)
+       (setq tab-width 2)
        (font-lock-add-keywords nil
                  '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
 

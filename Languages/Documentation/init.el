@@ -10,4 +10,4 @@
 (add-hook 'font-lock-mode-hook 'my-doxymacs-font-lock-hook)
 
 
-(setq doxymacs-doxygen-style "C++")
+(setq doxymacs-doxygen-style "Java")
