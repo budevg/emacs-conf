@@ -164,7 +164,9 @@ You can customize the key through `hs-org/trigger-key-block'."
     (when (commandp command)
       (call-interactively command))
     (when (equal last-point (point))
-      (hs-toggle-hiding)
+      (if (hs-already-hidden-p)
+          (hs-show-block)
+        (hs-hide-block-at-point))
       ;; I was thinking about trying to do some kind of thing where
       ;; the point that you were at in the hidden block would be
       ;; saved, but I think that'd best be addressed by hideshow.el
