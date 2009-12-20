@@ -12,8 +12,8 @@
        (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
        (define-key dired-mode-map "^"
          (function
-           (lambda nil (interactive) (dired-single-buffer "..")))))
-
+          (lambda nil (interactive) (dired-single-buffer "..")))))
+     
      (defun dired-visit-file-with-less ()
        (interactive)
        (let ((file-path (dired-get-file-for-visit)))
