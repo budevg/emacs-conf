@@ -164,7 +164,7 @@ You can customize the key through `hs-org/trigger-key-block'."
     (when (commandp command)
       (call-interactively command))
     (when (equal last-point (point))
-      (if (hs-already-hidden-p)
+      (if (or (hs-already-hidden-p) (hs-overlay-at (point)))
           (hs-show-block)
         (hs-hide-block-at-point))
       ;; I was thinking about trying to do some kind of thing where

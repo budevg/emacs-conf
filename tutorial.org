@@ -27,6 +27,8 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+4
    comment box
 
+** <meta>+x align
+   aligns text in aligned columns
 * Syntax Highlighting:
 ** <ctrl>+<shift>+b
    highlight lines with more than 80 characters 
