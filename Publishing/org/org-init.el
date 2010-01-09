@@ -55,8 +55,8 @@
      (org-defkey org-mode-map [(control kp-4)]        'org-shiftleft)
      (org-defkey org-mode-map [(control kp-6)]       'org-shiftright)
 
-     (org-defkey org-mode-map [(kp-6)] 'org-shiftcontrolright)
-     (org-defkey org-mode-map [(kp-4)]  'org-shiftcontrolleft)
+     ;;(org-defkey org-mode-map [(kp-6)] 'org-shiftcontrolright)
+     ;;(org-defkey org-mode-map [(kp-4)]  'org-shiftcontrolleft)
 
      (org-defkey org-mode-map [(shift home)] 'move-beginning-of-line)
      (org-defkey org-mode-map [(shift end)] 'move-end-of-line)

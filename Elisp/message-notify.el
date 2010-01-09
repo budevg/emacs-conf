@@ -5,6 +5,6 @@
   (interactive)
    (cond ((eq window-system 'x)
           (cond ((executable-find "notify-send") (shell-command
-                                                  (format "notify-send '%s' '%s'" title message)))
+                                                  (format "notify-send '%s' '%s'" title msg)))
                 ((message-box (concat title ": " msg)))))
          (t (message (concat title ": " msg)))))
