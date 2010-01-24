@@ -103,6 +103,7 @@
                                "~/.emacs.d/Publishing/org/scripts/ditaa.jar"))
      (setq org-export-htmlize-output-type 'css)
      (org-config-beamer)
+     (setq org-export-creator-info nil)
      ))
 
 (setq org-directory "~/.org/")
