@@ -4,7 +4,7 @@
 ;;;;;;  org-map-entries org-open-link-from-string org-open-at-point-global
 ;;;;;;  org-insert-link-global org-store-link org-run-like-in-org-mode
 ;;;;;;  turn-on-orgstruct++ turn-on-orgstruct orgstruct-mode org-global-cycle
-;;;;;;  org-mode) "org" "lisp/org.el" (19140 21121))
+;;;;;;  org-mode) "org" "lisp/org.el" (19279 38149))
 ;;; Generated autoloads from lisp/org.el
 
 (autoload 'org-mode "org" "\
@@ -153,7 +153,7 @@ the scanner.  The following items can be given here:
   comment    skip trees with the COMMENT keyword
   function or Emacs Lisp form:
              will be used as value for `org-agenda-skip-function', so whenever
-             the the function returns t, FUNC will not be called for that
+             the function returns t, FUNC will not be called for that
              entry and search will continue from the point where the
              function leaves it.
 
@@ -217,7 +217,7 @@ Call the customize function with org as argument.
 ;;;;;;  org-diary org-agenda-list-stuck-projects org-tags-view org-todo-list
 ;;;;;;  org-search-view org-agenda-list org-batch-store-agenda-views
 ;;;;;;  org-store-agenda-views org-batch-agenda-csv org-batch-agenda
-;;;;;;  org-agenda) "org-agenda" "lisp/org-agenda.el" (19140 21195))
+;;;;;;  org-agenda) "org-agenda" "lisp/org-agenda.el" (19279 37969))
 ;;; Generated autoloads from lisp/org-agenda.el
 
 (autoload 'org-agenda "org-agenda" "\
@@ -235,7 +235,7 @@ M     Like `m', but select only TODO entries, no ordinary headlines.
 L     Create a timeline for the current buffer.
 e     Export views to associated files.
 s     Search entries for keywords.
-/     Multi occur accros all agenda files and also files listed
+/     Multi occur across all agenda files and also files listed
       in `org-agenda-text-search-extra-files'.
 <     Restrict agenda commands to buffer, subtree, or region.
       Press several times to get the desired effect.
@@ -333,9 +333,7 @@ given in `org-agenda-start-on-weekday'.
 \(fn &optional INCLUDE-ALL START-DAY NDAYS)" t nil)
 
 (autoload 'org-search-view "org-agenda" "\
-Show all entries that contain words or regular expressions.
-If the first character of the search string is an asterisks,
-search only the headlines.
+Show all entries that contain a phrase or words or regular expressions.
 
 With optional prefix argument TODO-ONLY, only consider entries that are
 TODO entries.  The argument STRING can be used to pass a default search
@@ -343,19 +341,37 @@ string into this function.  If EDIT-AT is non-nil, it means that the
 user should get a chance to edit this string, with cursor at position
 EDIT-AT.
 
-The search string is broken into \"words\" by splitting at whitespace.
-The individual words are then interpreted as a boolean expression with
-logical AND.  Words prefixed with a minus must not occur in the entry.
-Words without a prefix or prefixed with a plus must occur in the entry.
-Matching is case-insensitive and the words are enclosed by word delimiters.
+The search string can be viewed either as a phrase that should be found as
+is, or it can be broken into a number of snippets, each of which must match
+in a Boolean way to select an entry.  The default depends on the variable
+`org-agenda-search-view-always-boolean'.
+Even if this is turned off (the default) you can always switch to
+Boolean search dynamically by preceeding the first word with  \"+\" or \"-\".
 
-Words enclosed by curly braces are interpreted as regular expressions
-that must or must not match in the entry.
+The default is a direct search of the whole phrase, where each space in
+the search string can expand to an arbitrary amount of whitespace,
+including newlines.
 
-If the search string starts with an asterisk, search only in headlines.
-If (possibly after the leading star) the search string starts with an
-exclamation mark, this also means to look at TODO entries only, an effect
-that can also be achieved with a prefix argument.
+If using a Boolean search, the search string is split on whitespace and
+each snippet is searched separately, with logical AND to select an entry.
+Words prefixed with a minus must *not* occur in the entry.  Words without
+a prefix or prefixed with a plus must occur in the entry.  Matching is
+case-insensitive.  Words are enclosed by word delimiters (i.e. they must
+match whole words, not parts of a word) if
+`org-agenda-search-view-force-full-words' is set (default is nil).
+
+Boolean search snippets enclosed by curly braces are interpreted as
+regular expressions that must or (when preceeded with \"-\") must not
+match in the entry.  Snippets enclosed into double quotes will be taken
+as a whole, to incude whitespace.
+
+- If the search string starts with an asterisk, search only in headlines.
+- If (possibly after the leading star) the search string starts with an
+  exclamation mark, this also means to look at TODO entries only, an effect
+  that can also be achieved with a prefix argument.
+- If (possibly after star and exclamation mark) the search string starts
+  with a colon, this will mean that the (non-regexp) snippets of the
+  Boolean search must match as full words. 
 
 This command searches the agenda files, and in addition the files listed
 in `org-agenda-text-search-extra-files'.
@@ -471,7 +487,7 @@ belonging to the \"Work\" category.
 
 ;;;### (autoloads (org-export-as-ascii org-export-region-as-ascii
 ;;;;;;  org-replace-region-by-ascii org-export-as-ascii-to-buffer)
-;;;;;;  "org-ascii" "lisp/org-ascii.el" (19139 25634))
+;;;;;;  "org-ascii" "lisp/org-ascii.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-ascii.el
 
 (autoload 'org-export-as-ascii-to-buffer "org-ascii" "\
@@ -525,7 +541,7 @@ publishing directory.
 ;;;***
 
 ;;;### (autoloads (org-attach) "org-attach" "lisp/org-attach.el"
-;;;;;;  (19139 25634))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-attach.el
 
 (autoload 'org-attach "org-attach" "\
@@ -536,8 +552,9 @@ Shows a list of commands and prompts for another key to execute a command.
 
 ;;;***
 
-;;;### (autoloads (org-archive-subtree-default) "org-archive" "lisp/org-archive.el"
-;;;;;;  (19139 25634))
+;;;### (autoloads (org-archive-subtree-default-with-confirmation
+;;;;;;  org-archive-subtree-default) "org-archive" "lisp/org-archive.el"
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-archive.el
 
 (autoload 'org-archive-subtree-default "org-archive" "\
@@ -546,10 +563,16 @@ This command is set with the variable `org-archive-default-command'.
 
 \(fn)" t nil)
 
+(autoload 'org-archive-subtree-default-with-confirmation "org-archive" "\
+Archive the current subtree with the default command.
+This command is set with the variable `org-archive-default-command'.
+
+\(fn)" t nil)
+
 ;;;***
 
 ;;;### (autoloads (org-bbdb-anniversaries) "org-bbdb" "lisp/org-bbdb.el"
-;;;;;;  (19139 25634))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-bbdb.el
 
 (autoload 'org-bbdb-anniversaries "org-bbdb" "\
@@ -560,7 +583,7 @@ Extract anniversaries from BBDB for display in the agenda.
 ;;;***
 
 ;;;### (autoloads (org-clock-persistence-insinuate org-get-clocktable)
-;;;;;;  "org-clock" "lisp/org-clock.el" (19139 25634))
+;;;;;;  "org-clock" "lisp/org-clock.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-clock.el
 
 (autoload 'org-get-clocktable "org-clock" "\
@@ -579,7 +602,7 @@ Set up hooks for clock persistence
 
 ;;;### (autoloads (org-insert-export-options-template org-export-as-org
 ;;;;;;  org-export-visible org-export) "org-exp" "lisp/org-exp.el"
-;;;;;;  (19140 21215))
+;;;;;;  (19279 26016))
 ;;; Generated autoloads from lisp/org-exp.el
 
 (autoload 'org-export "org-exp" "\
@@ -638,7 +661,7 @@ Insert into the buffer a template with information for exporting.
 ;;;### (autoloads (org-export-as-docbook org-export-as-docbook-pdf-and-open
 ;;;;;;  org-export-as-docbook-pdf org-export-region-as-docbook org-replace-region-by-docbook
 ;;;;;;  org-export-as-docbook-to-buffer org-export-as-docbook-batch)
-;;;;;;  "org-docbook" "lisp/org-docbook.el" (19139 25634))
+;;;;;;  "org-docbook" "lisp/org-docbook.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-docbook.el
 
 (autoload 'org-export-as-docbook-batch "org-docbook" "\
@@ -714,8 +737,8 @@ publishing directory.
 ;;;***
 
 ;;;### (autoloads (org-feed-show-raw-feed org-feed-goto-inbox org-feed-update
-;;;;;;  org-feed-update-all) "org-feed" "lisp/org-feed.el" (19139
-;;;;;;  25634))
+;;;;;;  org-feed-update-all) "org-feed" "lisp/org-feed.el" (19279
+;;;;;;  18361))
 ;;; Generated autoloads from lisp/org-feed.el
 
 (autoload 'org-feed-update-all "org-feed" "\
@@ -743,13 +766,13 @@ Show the raw feed buffer of a feed.
 ;;;***
 
 ;;;### (autoloads (org-footnote-normalize org-footnote-action) "org-footnote"
-;;;;;;  "lisp/org-footnote.el" (19139 25634))
+;;;;;;  "lisp/org-footnote.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-footnote.el
 
 (autoload 'org-footnote-action "org-footnote" "\
 Do the right thing for footnotes.
 When at a footnote reference, jump to the definition.  When at a definition,
-jump to the refernces.  When neither at definition or reference,
+jump to the references.  When neither at definition or reference,
 create a new footnote, interactively.
 With prefix arg SPECIAL, offer additional commands in a menu.
 
@@ -767,13 +790,51 @@ referenced sequence.
 
 ;;;***
 
+;;;### (autoloads (org-freemind-to-org-mode org-freemind-from-org-sparse-tree
+;;;;;;  org-freemind-from-org-mode org-freemind-from-org-mode-node
+;;;;;;  org-freemind-show org-export-as-freemind) "org-freemind"
+;;;;;;  "lisp/org-freemind.el" (19279 18361))
+;;; Generated autoloads from lisp/org-freemind.el
+
+(autoload 'org-export-as-freemind "org-freemind" "\
+Not documented
+
+\(fn ARG &optional HIDDEN EXT-PLIST TO-BUFFER BODY-ONLY PUB-DIR)" t nil)
+
+(autoload 'org-freemind-show "org-freemind" "\
+Show file MM-FILE in Freemind.
+
+\(fn MM-FILE)" t nil)
+
+(autoload 'org-freemind-from-org-mode-node "org-freemind" "\
+Convert node at line NODE-LINE to the FreeMind file MM-FILE.
+
+\(fn NODE-LINE MM-FILE)" t nil)
+
+(autoload 'org-freemind-from-org-mode "org-freemind" "\
+Convert the `org-mode' file ORG-FILE to the FreeMind file MM-FILE.
+
+\(fn ORG-FILE MM-FILE)" t nil)
+
+(autoload 'org-freemind-from-org-sparse-tree "org-freemind" "\
+Convert visible part of buffer ORG-BUFFER to FreeMind file MM-FILE.
+
+\(fn ORG-BUFFER MM-FILE)" t nil)
+
+(autoload 'org-freemind-to-org-mode "org-freemind" "\
+Convert FreeMind file MM-FILE to `org-mode' file ORG-FILE.
+
+\(fn MM-FILE ORG-FILE)" t nil)
+
+;;;***
+
 ;;;### (autoloads (org-export-htmlize-generate-css org-export-as-html
 ;;;;;;  org-export-region-as-html org-replace-region-by-html org-export-as-html-to-buffer
 ;;;;;;  org-export-as-html-batch org-export-as-html-and-open) "org-html"
-;;;;;;  "lisp/org-html.el" (19139 25634))
+;;;;;;  "lisp/org-html.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-html.el
 
-(put 'org-export-html-style 'safe-local-variable 'booleanp)
+(put 'org-export-html-style-include-default 'safe-local-variable 'booleanp)
 
 (put 'org-export-html-style 'safe-local-variable 'stringp)
 
@@ -863,7 +924,7 @@ that uses these same face definitions.
 
 ;;;### (autoloads (org-export-icalendar-combine-agenda-files org-export-icalendar-all-agenda-files
 ;;;;;;  org-export-icalendar-this-file) "org-icalendar" "lisp/org-icalendar.el"
-;;;;;;  (19139 25634))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-icalendar.el
 
 (autoload 'org-export-icalendar-this-file "org-icalendar" "\
@@ -890,7 +951,7 @@ The file is stored under the name `org-combined-agenda-icalendar-file'.
 
 ;;;### (autoloads (org-id-find-id-file org-id-find org-id-goto org-id-get-with-outline-drilling
 ;;;;;;  org-id-get-with-outline-path-completion org-id-get org-id-copy
-;;;;;;  org-id-get-create) "org-id" "lisp/org-id.el" (19139 25634))
+;;;;;;  org-id-get-create) "org-id" "lisp/org-id.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-id.el
 
 (autoload 'org-id-get-create "org-id" "\
@@ -954,7 +1015,7 @@ Query the id database for the file in which this ID is located.
 ;;;***
 
 ;;;### (autoloads (org-indent-mode) "org-indent" "lisp/org-indent.el"
-;;;;;;  (19139 25634))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-indent.el
 
 (autoload 'org-indent-mode "org-indent" "\
@@ -969,7 +1030,7 @@ FIXME:  How to update when broken?
 ;;;***
 
 ;;;### (autoloads (org-irc-store-link) "org-irc" "lisp/org-irc.el"
-;;;;;;  (19139 25635))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-irc.el
 
 (autoload 'org-irc-store-link "org-irc" "\
@@ -982,7 +1043,7 @@ Dispatch to the appropriate function to store a link to an IRC session.
 ;;;### (autoloads (org-export-as-pdf-and-open org-export-as-pdf org-export-as-latex
 ;;;;;;  org-export-region-as-latex org-replace-region-by-latex org-export-as-latex-to-buffer
 ;;;;;;  org-export-as-latex-batch) "org-latex" "lisp/org-latex.el"
-;;;;;;  (19139 25635))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-latex.el
 
 (autoload 'org-export-as-latex-batch "org-latex" "\
@@ -1062,8 +1123,8 @@ Export as LaTeX, then process through to PDF, and open.
 ;;;***
 
 ;;;### (autoloads (org-mobile-create-sumo-agenda org-mobile-pull
-;;;;;;  org-mobile-push) "org-mobile" "lisp/org-mobile.el" (19139
-;;;;;;  25635))
+;;;;;;  org-mobile-push) "org-mobile" "lisp/org-mobile.el" (19279
+;;;;;;  18361))
 ;;; Generated autoloads from lisp/org-mobile.el
 
 (autoload 'org-mobile-push "org-mobile" "\
@@ -1089,7 +1150,7 @@ Create a file that contains all custom agenda views.
 
 ;;;### (autoloads (org-publish-current-project org-publish-current-file
 ;;;;;;  org-publish-all org-publish) "org-publish" "lisp/org-publish.el"
-;;;;;;  (19139 25635))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-publish.el
 
 (defalias 'org-publish-project 'org-publish)
@@ -1122,7 +1183,7 @@ the project.
 ;;;***
 
 ;;;### (autoloads (org-plot/gnuplot) "org-plot" "lisp/org-plot.el"
-;;;;;;  (19139 25635))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-plot.el
 
 (autoload 'org-plot/gnuplot "org-plot" "\
@@ -1136,7 +1197,7 @@ line directly before or after the table.
 
 ;;;### (autoloads (org-remember-handler org-remember org-remember-apply-template
 ;;;;;;  org-remember-annotation org-remember-insinuate) "org-remember"
-;;;;;;  "lisp/org-remember.el" (19139 25635))
+;;;;;;  "lisp/org-remember.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-remember.el
 
 (autoload 'org-remember-insinuate "org-remember" "\
@@ -1211,7 +1272,7 @@ See also the variable `org-reverse-note-order'.
 ;;;***
 
 ;;;### (autoloads (org-table-to-lisp orgtbl-mode turn-on-orgtbl)
-;;;;;;  "org-table" "lisp/org-table.el" (19139 25635))
+;;;;;;  "org-table" "lisp/org-table.el" (19279 18361))
 ;;; Generated autoloads from lisp/org-table.el
 
 (autoload 'turn-on-orgtbl "org-table" "\
@@ -1236,7 +1297,7 @@ The table is taken from the parameter TXT, or from the buffer at point.
 
 ;;;### (autoloads (org-timer-set-timer org-timer-item org-timer-change-times-in-region
 ;;;;;;  org-timer org-timer-start) "org-timer" "lisp/org-timer.el"
-;;;;;;  (19139 25635))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-timer.el
 
 (autoload 'org-timer-start "org-timer" "\
@@ -1280,7 +1341,7 @@ Set a timer.
 ;;;***
 
 ;;;### (autoloads (org-export-as-xoxo) "org-xoxo" "lisp/org-xoxo.el"
-;;;;;;  (19139 25635))
+;;;;;;  (19279 18361))
 ;;; Generated autoloads from lisp/org-xoxo.el
 
 (autoload 'org-export-as-xoxo "org-xoxo" "\
