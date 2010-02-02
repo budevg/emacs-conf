@@ -144,6 +144,10 @@ languages = Package(name = "Languages",
                                         elements = [Module(name = "init.el",
                                                            description = "init go mode"),
                                                     ]),
+                                Package(name = "Lua",
+                                        elements = [Module(name = "lua-init.el",
+                                                           description = "init lua mode"),
+                                                    ]),
                                 ])
 
 source_control = Package(name = "SourceControl",
