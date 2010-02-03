@@ -142,3 +142,7 @@ EMACS CONFIGURATION TUTORIAL
 ** org-mode
 *** <control>+c <control>+t
     change task state
+* Shell
+** <meta>+x "ssh-authorize"
+   add your public key to authorized_keys on the logged in machine
+   should be run in shell buffer
