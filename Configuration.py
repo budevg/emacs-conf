@@ -60,6 +60,8 @@ shell = Package(name = "Shell",
                                    description = "eshell configurations"),
                             Module(name = "man-pages.el",
                                    description = "man and info pages"),
+                            Module(name = "ssh-utils.el",
+                                   description = "ssh utils"),
                             ])
 
 editing = Package(name = "Editing",
