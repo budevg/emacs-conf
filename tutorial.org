@@ -102,7 +102,9 @@ EMACS CONFIGURATION TUTORIAL
    select drawing mode and settings using ido complete
 ** <ctrl>+x 6 2/1
    edit/merge 2 columns
-   
+** <ctrl>+%
+   interactive replacement
+  
 * Debugging:
 ** keypad-2
    step

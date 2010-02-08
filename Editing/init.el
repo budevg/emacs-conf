@@ -19,6 +19,8 @@
     (let ((case-fold-search isearch-case-fold-search))
       (occur (if isearch-regexp isearch-string (regexp-quote isearch-string))))))
 
+(autoload 'iedit-mode "iedit" nil t)
+(global-set-key [(control %)] 'iedit-mode)
 
 (global-set-key [(meta /)] 'hippie-expand)
 (delete 'try-expand-line hippie-expand-try-functions-list)
