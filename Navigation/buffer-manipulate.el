@@ -47,6 +47,29 @@
   '(progn
      (setq ibuffer-default-sorting-mode 'major-mode)
      (setq ibuffer-always-show-last-buffer t)
-     (setq ibuffer-view-ibuffer t)))
+     (setq ibuffer-view-ibuffer t)
+     (setq ibuffer-saved-filter-groups
+           (quote (("default"      
+                    ("Org" ;; all org-related buffers
+                     (mode . org-mode))  
+                    ("Programming" ;; prog stuff not already in MyProjectX
+                     (or
+                      (mode . c-mode)
+                      (mode . perl-mode)
+                      (mode . python-mode)
+                      (mode . emacs-lisp-mode)
+                      ;; etc
+                      )) 
+                    ("ERC"   (mode . erc-mode))
+                    ("Directories"   (mode . dired-mode))
+                    ("Shell"
+                     (or
+                      (mode . shell-mode)
+                      (mode . term-mode)))))))
+
+     (add-hook 'ibuffer-mode-hook
+               (lambda ()
+                 (ibuffer-switch-to-saved-filter-groups "default")))
+     ))
 
 (global-set-key (kbd "C-x C-b") 'ibuffer-other-window)
