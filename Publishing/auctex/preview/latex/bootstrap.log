@@ -1,4 +1,4 @@
-This is TeX, Version 3.141592 (Web2C 7.5.6) (format=tex 2009.3.4)  5 MAR 2009 17:38
+This is TeX, Version 3.141592 (Web2C 7.5.6) (format=tex 2010.2.24)  24 FEB 2010 21:32
 **\nonstopmode \input bootstrap.ins
 (./bootstrap.ins (/usr/share/texmf-texlive/tex/latex/base/docstrip.tex
 \blockLevel=\count26
@@ -65,50 +65,50 @@ Processing file preview.dtx (installer,make) -> preview-mk.ins
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% % % <*style <*!active . . . . . . . . . . . . % % % % % % % % % % % % . > %
-% % % % % % <*active . . > % % % % % % % % % % % % % % % % % % % % % % %
+% % % % % <*style <*!active . . . . . . . . . . . . % % % % % % % % % % % % .
+> % % % % % % % <*active . . > % % % % % % % % % % % % % % % % % % % % % % %
 <*!active . . . . . % % % % . . . % % % % . . . . . . % % % % % % % % % % % %
 % . . . . . % % % % % % % % . . . % % % % % % % % % % % % % % . . . . . . . %
-% % % % % . . . . . . . . . . % % % . . > % % % % % % <*active % % % % % % . .
-% % % % % % . . . % % % % % % % % % % % % % % . . % % % % % % % % . . % % % .
-. % % % % % % % % % % % % % % . . . . . . . . . . . . . . . . . % % % % % % %
-% % % % % % % % . . . . . . . . . . . . . . . . . . . . . . . . . . % % % % %
-% % % % % % % % % % % % % % % % % % % % . . . . . . . . . . . . . . . . . % %
-% % % % % % % % . . . . % % % % % % % % % % % % % % % % % % % % % % % % % % .
-. . . . . . % % % % % % % % % . . . . % % % % % % % % % % . . . . . . % % % %
-% % % % . % % % % % % . . . % % % % % % % % . . . . . . . % % % % % % % . . %
-% % % % . . . . . % % % % % % % % . . . . . % % % % % % % % . . . . . . . > %
-% % % % % % % % % % % <*!active . . . . . . . . . . . . . . . . . . . . . % %
-% % % % % % % % % % % % % % . . . . . . . . . . . . . . . . . . . > % % % % %
-<*active . > % % % % % <*!active . . . % % % % % % % . . . . . . . . . . . . .
-. . . . . . . . . . . . % % % % . . . . % % % % % % % % . . % % % % % % % . %
-% % % % % % . . . . . . . . . . % % % % % % % % % % % % . . . . . . . % % % %
-% % % . % % % % . . . . . . . . % % % % % % % . % % % % . . . . . % % % % % %
-% % % . . . . . . . . . . . . . . . . % % % % % % . . . . . > % % % % % % % %
-% % <*active . . . . . . . . . . . . > % % % % % % % % % % % % % % % % % % % %
-% % % <*!active . . % % % % % % % % % . . % % % % % % . . > % % % % <*active .
-. . . . . . % % % % % % % % % . . . . . . . % % % % % % . . . . . . . . . . .
-% % % % % . > > % % % % % % % % % % % % % % % % % % % % % <auctex . >
-<auctex . > <auctex . > % % % % % % % % <auctex . > <auctex . > <auctex . >
+% % % % % . . . . . . . . . . % % % . . % % % . . > % % % % % % <*active % % %
+% % % . . % % % % % % . . . % % % % % % % % % % % % % % . . % % % % % % % % .
+. % % % . . % % % % % % % % % % % % % % . . . . . . . . . . . . . . . . . % %
+% % % % % % % % % % % % % . . . . . . . . . . . . . . . . . . . . . . . . . .
+% % % % % % % % % % % % % % % % % % % % % % % % % % . . . . . . . . . . . . .
+. . . . . . % % % % % % % % % % . . . . % % % % % % % % % % % % % % % % % % %
+% % % % % % % . . . . . . . % % % % % % % % % . . . . % % % % % % % % % % . .
+. . . . % % % % % % % % . % % % % % % . . . % % % % % % % % . . . . . . . % %
+% % % % % . . % % % % % . . . . . % % % % % % % % . . . . . % % % % % % % % .
+. . . . . . > % % % % % % % % % % % % <*!active . . . . . . . . . . . . . . .
+. . . . . . % % % % % % % % % % % % % % % % . . . . . . . . . . . . . . . . .
+. . > % % % % % <*active . > % % % % % <*!active . . . % % % % % % % . . . . .
+. . . . . . . . . . . . . . . . . . . . % % % % . . . . % % % % % % % % . . %
+% % % % % % . % % % % % % % . . . . . . . . . . % % % % % % % % % % % % . . .
+. . . . % % % % % % % . % % % % . . . . . . . . % % % % % % % . % % % % . . .
+. . % % % % % % % % % . . . . . . . . . . . . . . . . % % % % % % . . . . . >
+% % % % % % % % % % <*active . . . . . . . . . . . . > % % % % % % % % % % % %
+% % % % % % % % % % % <*!active . . % % % % % % % % % . . % % % % % % . . > %
+% % % <*active . . . . . . . % % % % % % % % % . . . . . . . % % % % % % . . .
+. . . . . . . . . . . . . . % % % % % . > > % % % % % % % % % % % % % % % % %
+% % % % <auctex . > <auctex . > <auctex . > % % % % % % % % <auctex . >
 <auctex . > <auctex . > <auctex . > <auctex . > <auctex . > <auctex . >
 <auctex . > <auctex . > <auctex . > <auctex . > <auctex . > <auctex . >
-<auctex . > <auctex . > <auctex . > <auctex . > <auctex . > % % % % % % % % %
-% % % % % % % % % % <auctex . > <auctex . > <auctex . > <auctex . >
-<auctex . > <auctex . > <auctex . > <auctex . > <auctex . > <auctex . > % % %
-<auctex . > % % % % <auccfg . > <auccfg . > <auccfg . > <auccfg . >
+<auctex . > <auctex . > <auctex . > <auctex . > <auctex . > <auctex . >
+<auctex . > % % % % % % % % % % % % % % % % % % % <auctex . > <auctex . >
+<auctex . > <auctex . > <auctex . > <auctex . > <auctex . > <auctex . >
+<auctex . > <auctex . > % % % <auctex . > % % % % <auccfg . > <auccfg . >
 <auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . >
 <auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . >
-<auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . > % % % % % %
-<lyx . > <lyx . > <lyx . > <lyx . > <lyx . > % % % % % % % % % % <counters . >
+<auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . > <auccfg . >
+<auccfg . > % % % % % % <lyx . > <lyx . > <lyx . > <lyx . > <lyx . > % % % % %
+% % % % % <counters . > <counters . > <counters . > <counters . >
 <counters . > <counters . > <counters . > <counters . > <counters . >
-<counters . > <counters . > <counters . > <counters . > <counters . > % % % %
-% % % % % % % % % % % % % <showbox . > <showbox . > <showbox . > <showbox . >
-<showbox . > % % % % % % % % <tracingall . > <tracingall . > <tracingall . > %
-% % % % % % % % % % % % % % % % % % % % % % % % % % <tightpage . >
-<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
-<tightpage . > <tightpage . > % % % % % <tightpage . > <tightpage . >
-<tightpage . > <tightpage . > <tightpage . > <tightpage . > % % % % % % % % %
+<counters . > <counters . > % % % % % % % % % % % % % % % % % <showbox . >
+<showbox . > <showbox . > <showbox . > <showbox . > % % % % % % % %
+<tracingall . > <tracingall . > <tracingall . > % % % % % % % % % % % % % % %
+% % % % % % % % % % % % <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . > % %
 % % % <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > <tightpage . > % % % % % % % % % % % % <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
@@ -117,14 +117,20 @@ Processing file preview.dtx (installer,make) -> preview-mk.ins
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
-<tightpage . > <tightpage . > % % % % <tightpage . > <tightpage . > % % % % %
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
 <tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
-<tightpage . > <tightpage . > % % % % % <tightpage . > <tightpage . >
-<tightpage . > <tightpage . > % % % % % % <tightpage . > % % % % % % %
-<tightpage . > <tightpage . > <tightpage . > % % % % <tightpage . > % % % % %
-% <tightpage . > <tightpage . > <tightpage . > % % % % <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > % % % % <tightpage . > <tightpage . > % % % % % <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > <tightpage . > <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > % % % % % <tightpage . > <tightpage . > <tightpage . >
+<tightpage . > % % % % % % <tightpage . > % % % % % % % <tightpage . >
+<tightpage . > <tightpage . > % % % % <tightpage . > % % % % % %
+<tightpage . > <tightpage . > <tightpage . > % % % % <tightpage . >
 <tightpage . > % % % % % % % % % % % % % % % % % % % % <showlabels . >
 <showlabels . > % % % % % % % % % <showlabels . > % % % % <showlabels . >
 <showlabels . > <showlabels . > % % % % % % % % % % % % % % % % % %
@@ -143,10 +149,10 @@ Processing file preview.dtx (installer,make) -> preview-mk.ins
 <installer . > <installer . > <installer . > <installer . > <installer . >
 <installer . > % % % <driver . > <driver . > <driver . > <driver . >
 <driver . > <driver . > <driver . > % % % % % % % %
-Lines  processed: 1830
-Comments removed: 1217
+Lines  processed: 1872
+Comments removed: 1223
 Comments  passed: 2
-Codelines passed: 351
+Codelines passed: 361
 
  )
 No pages of output.

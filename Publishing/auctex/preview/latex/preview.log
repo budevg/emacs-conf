@@ -1,4 +1,4 @@
-This is pdfTeXk, Version 3.141592-1.40.3 (Web2C 7.5.6) (format=pdflatex 2009.3.4)  5 MAR 2009 17:38
+This is pdfTeXk, Version 3.141592-1.40.3 (Web2C 7.5.6) (format=pdflatex 2010.2.24)  24 FEB 2010 21:32
 entering extended mode
  %&-line parsing enabled.
 **\nonstopmode \AtBeginDocument{\OnlyDescription}\input{preview.drv}
@@ -87,7 +87,7 @@ Package: multicol 2006/05/18 v1.6g multicolumn formatting (FMi)
 \wrong@table=\toks15
 \c@CodelineNo=\count102
 )) (./preview.sty
-Package: preview 2008/02/03 11.85 (AUCTeX/preview-latex)
+Package: preview 2010/02/14 11.86 (AUCTeX/preview-latex)
 )
 (./preview.aux)
 \openout1 = `preview.aux'.
@@ -130,7 +130,7 @@ Overfull \hbox (2.944pt too wide) in paragraph at lines 42--51
 LaTeX Font Info:    Font shape `OT1/cmtt/bx/n' in size <10> not available
 (Font)              Font shape `OT1/cmtt/m/n' tried instead on input line 90.
  [2]
-Overfull \hbox (6.0296pt too wide) in paragraph at lines 150--152
+Overfull \hbox (6.0296pt too wide) in paragraph at lines 152--154
 [][]\OT1/cmtt/m/n/10 latex '\RequirePackage[active,delayed,$\OMS/cmsy/m/n/10 h$
 []\OT1/cmr/m/it/10 options$\OMS/cmsy/m/n/10 i$[][]\OT1/cmtt/m/n/10 ]{preview}
  []
@@ -141,10 +141,10 @@ LaTeX Warning: Marginpar on page 8 moved.
 
 ) [8] (./preview.aux) ) 
 Here is how much of TeX's memory you used:
- 655 strings out of 95086
- 7897 string characters out of 1183256
- 60361 words of memory out of 1500000
- 3878 multiletter control sequences out of 10000+50000
+ 656 strings out of 95086
+ 7905 string characters out of 1183255
+ 60396 words of memory out of 1500000
+ 3879 multiletter control sequences out of 10000+50000
  9748 words of font info for 36 fonts, out of 1200000 for 2000
  28 hyphenation exceptions out of 8191
  31i,9n,21p,286b,215s stack positions out of 5000i,500n,6000p,200000b,5000s
@@ -160,7 +160,7 @@ exmf-texlive/fonts/type1/bluesky/cm/cmti10.pfb></usr/share/texmf-texlive/fonts/
 type1/bluesky/cm/cmtt10.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cm
 tt12.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmtt8.pfb></usr/share
 /texmf-texlive/fonts/type1/bluesky/cm/cmtt9.pfb>
-Output written on preview.pdf (8 pages, 107467 bytes).
+Output written on preview.pdf (8 pages, 107382 bytes).
 PDF statistics:
  89 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 131072)
