@@ -29,6 +29,8 @@ EMACS CONFIGURATION TUTORIAL
 
 ** <meta>+x align
    aligns text in aligned columns
+** <ctrl>+x t
+   adjust the indent offset and tab/space configuration to much the current buffer
 * Syntax Highlighting:
 ** <ctrl>+<shift>+b
    highlight lines with more than 80 characters 
