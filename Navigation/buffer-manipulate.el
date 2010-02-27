@@ -55,6 +55,7 @@
                     ("Programming" ;; prog stuff not already in MyProjectX
                      (or
                       (mode . c-mode)
+                      (mode . c++-mode)
                       (mode . perl-mode)
                       (mode . python-mode)
                       (mode . emacs-lisp-mode)

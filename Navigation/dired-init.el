@@ -20,10 +20,9 @@
          (multi-term)
          (let ((term-proc (get-buffer-process (current-buffer))))
            (term-simple-send term-proc
-                             (format "less -j4 %s" file-path)))))
-    
+                             (format "less -j4 '%s'" file-path)))))
+   
      (define-key dired-mode-map [(meta return)] 'dired-visit-file-with-less)
-
      (defun dired-sort ()
        (interactive)
        (let ((sort-flags-table (make-hash-table))
