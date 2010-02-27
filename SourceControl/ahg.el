@@ -267,7 +267,18 @@ the current dir is not under hg."
                  (ahg-call-process "identify" args))
              (ahg-call-process "identify" args))))
       (when (= status 0)
-        (buffer-substring-no-properties (point-min) (1- (point-max)))))))
+        (concat
+         "Id: "
+         (buffer-substring-no-properties (point-min) (1- (point-max))))))))
+
+(defun ahg-summary-info (root)
+  (with-temp-buffer
+    (let ((status (let ((default-directory (file-name-as-directory root)))
+                    (ahg-call-process "summary" nil))))
+      (if (= status 0)
+          (buffer-substring-no-properties (point-min) (1- (point-max)))
+        ;; if hg summary is not available, fall back to hg identify
+        (ahg-identify root)))))
 
 ;;-----------------------------------------------------------------------------
 ;; hg status
@@ -651,7 +662,7 @@ ahg-status, and it has an ewoc associated with it."
                  (propertize root 'face ahg-header-line-root-face) "\n"))
         (footer (concat "\n"
                         (make-string (1- (window-width (selected-window))) ?-)
-                        "\nId: " (ahg-identify root))))
+                        "\n" (ahg-summary-info root))))
     (with-current-buffer buf
       (erase-buffer)
       (let ((ew (ewoc-create 'ahg-status-pp
@@ -767,7 +778,8 @@ When called interactively, REFRESH is non-nil if a prefix argument is given."
                   '("selected" "s")))
          (ahg-dynamic-completion-table ahg-complete-shell-command)))
       (mapcar 'cddr fnames)
-      current-prefix-arg)))
+      (if ahg-auto-refresh-status-buffer
+          (not current-prefix-arg) current-prefix-arg))))
   (dired-do-shell-command command nil files)
   (when refresh (ahg-status-refresh)))
 
@@ -1523,6 +1535,22 @@ Commands:
 \\{ahg-diff-mode-map}
 "
   (toggle-read-only t)
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line 1)
+    (let ((fs (or (diff-hunk-file-names) (diff-hunk-file-names t)))
+          goodpath)
+      (when fs
+        (dolist (p fs goodpath)
+          (unless goodpath
+            (when (string-match "^\\(a\\|b\\)/" p)
+              (setq goodpath (substring p (match-end 0))))))
+        (when goodpath
+          (let ((hint (concat (ahg-root) "/" goodpath)))
+            (set (make-local-variable 'diff-remembered-defdir)
+                 default-directory)
+            (diff-tell-file-name nil hint)))
+        )))
   (define-key ahg-diff-mode-map "q" 'ahg-buffer-quit)
   (easy-menu-add-item nil '("Diff") '["--" nil nil])
   (easy-menu-add-item nil '("Diff") '["Quit" ahg-buffer-quit
@@ -2194,8 +2222,10 @@ about which are currently applied."
   (unless root (setq root (ahg-root)))
   (let ((buf (ahg-mq-get-patches-buffer root))
         (msg (when (interactive-p)
-               (format "aHg: getting patch queue for %s..." root))))
+               (format "aHg: getting patch queue for %s..." root)))
+        (oldcolumns (getenv "COLUMNS")))
     (when msg (message msg))
+    (setenv "COLUMNS" "100000")
     (ahg-generic-command
      "qseries" nil
      (lexical-let ((buf buf)
@@ -2210,6 +2240,7 @@ about which are currently applied."
                     (with-current-buffer (process-buffer process)
                       (split-string (buffer-string) "\n"))))
                (kill-buffer (process-buffer process))
+               (setenv "COLUMNS" "100000")
                (ahg-generic-command
                 "qapplied" nil
                 (lexical-let ((buf buf)
@@ -2259,7 +2290,10 @@ about which are currently applied."
            ;; error in hg qseries
            (kill-buffer buf)
            (ahg-show-error process))))
-     nil nil t)))
+     nil nil t)
+    ;; restore the COLUMNS env var
+    (setenv "COLUMNS" oldcolumns)
+    ))
 
 
 (defun ahg-mq-patch-list-refresh ()
