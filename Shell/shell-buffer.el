@@ -1,4 +1,7 @@
 
+(setq kill-buffer-query-functions
+      (remq 'process-kill-buffer-query-function kill-buffer-query-functions))
+
 (defun new-shell ()
   "create new shell"
   (interactive)
