@@ -12,9 +12,23 @@
       (setq arg (if (plusp arg) (1- arg) (1+ arg))))))
 
 
+(defun windmove-ext (dir)
+  (interactive)
+  (let ((window (windmove-find-other-window dir))
+        (offset (if (eq dir 'up)
+                    -1
+                  1)))
+    (cond ((null window)
+           (other-window offset))
+          ((and (window-minibuffer-p window)
+                (not (minibuffer-window-active-p window)))
+           (other-window offset))
+          (t
+           (select-window window)))))
+
 (global-set-key [(control tab)] 'other-window)
-(global-set-key [(meta up)] 'windmove-up)
-(global-set-key [(meta down)] 'windmove-down)
+(global-set-key [(meta up)] '(lambda () (interactive) (windmove-ext 'up)))
+(global-set-key [(meta down)] '(lambda () (interactive) (windmove-ext 'down)))
 (global-set-key [(pause)] 'kill-this-buffer)
 (global-set-key [(control pause)] 'delete-frame)
 
