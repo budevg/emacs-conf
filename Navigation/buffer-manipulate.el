@@ -11,7 +11,7 @@
         (select-window (funcall selector)))
       (setq arg (if (plusp arg) (1- arg) (1+ arg))))))
 
-
+(autoload 'windmove-find-other-window "windmove" nil t)
 (defun windmove-ext (dir)
   (interactive)
   (let ((window (windmove-find-other-window dir))
