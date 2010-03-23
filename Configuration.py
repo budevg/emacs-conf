@@ -152,6 +152,12 @@ languages = Package(name = "Languages",
                                                     ]),
                                 ])
 
+build_system = Package(name = "BuildSystem",
+                       elements = [Module(name = "init.el",
+                                          description = "initialzie build system modes"),
+                                   ])
+
+
 source_control = Package(name = "SourceControl",
                          elements = [Module(name = "init.el",
                                             description = "load git/svn support"),
@@ -175,6 +181,7 @@ GLOBAL_PACKAGE = Package(name = ".",
                                      shell,
                                      publishing,
                                      languages,
+                                     build_system,
                                      source_control,
                                      applications,
                                      ])

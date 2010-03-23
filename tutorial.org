@@ -106,7 +106,9 @@ EMACS CONFIGURATION TUTORIAL
    edit/merge 2 columns
 ** <ctrl>+%
    interactive replacement
-  
+** <meta>+x align
+   aligns lines to the same column structure
+   
 * Debugging:
 ** keypad-2
    step
