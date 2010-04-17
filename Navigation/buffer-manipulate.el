@@ -74,8 +74,15 @@
                       (mode . perl-mode)
                       (mode . python-mode)
                       (mode . emacs-lisp-mode)
+                      (mode . latex-mode)
                       ;; etc
-                      )) 
+                      ))
+                    ("SourceControl"
+                     (or
+                      (mode . cvs-mode)
+                      (mode . git-blame-mode)
+                      (mode . git-status-mode)
+                      ))
                     ("ERC"   (mode . erc-mode))
                     ("Directories"   (mode . dired-mode))
                     ("Shell"
