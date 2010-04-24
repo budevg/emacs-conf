@@ -12,6 +12,9 @@
      (define-key w3m-mode-map [(kp-8)] 'w3m-previous-anchor)
 
      (define-key w3m-mode-map [down] nil)
-     (define-key w3m-mode-map [(kp-2)] ''w3m-next-anchor)))
+     (define-key w3m-mode-map [(kp-2)] ''w3m-next-anchor)
+
+     (define-key w3m-mode-map (kbd "M-[") nil)
+     (define-key w3m-mode-map (kbd "M-]") nil)))
 
      
