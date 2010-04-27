@@ -171,6 +171,11 @@ applications = Package(name = "Applications",
                                             description = "irc configration"),
                                      ])
 
+packages = Package(name = "Packages",
+                   elements = [Module(name = "init.el",
+                                      description = "load elpa packages")
+                               ])
+
 
 GLOBAL_PACKAGE = Package(name = ".",
                          elements = [elisp,
@@ -184,5 +189,6 @@ GLOBAL_PACKAGE = Package(name = ".",
                                      build_system,
                                      source_control,
                                      applications,
+                                     packages,
                                      ])
 
