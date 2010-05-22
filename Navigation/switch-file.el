@@ -143,10 +143,10 @@
 
 ;;;###autoload
 (defcustom switch-major-mode-alist
-  '((c-mode   ("c\\|cc\\|C\\|cpp" ".cc" ".C" ".cpp" ".c")
-	      ("h\\|hh\\|H\\|hpp|hxx" ".hh" ".H" ".hpp" ".h" ".hxx"))
-    (c++-mode ("c\\|cc\\|C\\|cpp" ".cc" ".C" ".cpp" ".c")
-	      ("h\\|hh\\|H\\|hpp|hxx" ".hh" ".H" ".hpp" ".h" ".hxx")))
+  '((c-mode   ("c\\|cc\\|C\\|cpp\\|cxx" ".cc" ".C" ".cpp" ".c" ".cxx")
+	      ("h\\|hh\\|H\\|hpp\\|hxx" ".hh" ".H" ".hpp" ".h" ".hxx"))
+    (c++-mode ("c\\|cc\\|C\\|cpp\\|cxx" ".cc" ".C" ".cpp" ".c" ".cxx")
+	      ("h\\|hh\\|H\\|hpp\\|hxx" ".hh" ".H" ".hpp" ".h" ".hxx")))
   "*Specify a major mode alist.
 
 The alist element has the following form:
