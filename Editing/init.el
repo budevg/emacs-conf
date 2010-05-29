@@ -87,3 +87,5 @@
     (if mark-active (list (region-beginning) (region-end))
       (list (line-beginning-position)
         (line-beginning-position 2)))))
+
+(global-set-key [(meta i)] 'align)
