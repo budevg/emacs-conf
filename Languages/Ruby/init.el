@@ -64,6 +64,8 @@ strings. Note that you must have Font Lock enabled.
   '(progn
      (define-key ruby-mode-map "\C-m" 'newline-and-indent)
      (add-hook 'ruby-mode-hook 'inf-ruby-keys)
-     (add-hook 'ruby-mode-hook (lambda () (ruby-electric-mode t)))
+     (add-hook 'ruby-mode-hook (lambda ()
+                                 (ruby-electric-mode t)
+                                 (setq ruby-electric-expand-delimiters-list nil)))
      (yas/advise-indent-function 'ruby-indent-line)
      ))
