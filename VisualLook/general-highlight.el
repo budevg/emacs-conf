@@ -75,3 +75,5 @@
 
 (global-set-key [f7] 'highlight-symbol-at-point)
 (global-set-key [(control f7)] 'highlight-symbol-remove-all)
+
+(autoload 'rainbow-mode "rainbow-mode" nil t)

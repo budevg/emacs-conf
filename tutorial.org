@@ -50,6 +50,8 @@ EMACS CONFIGURATION TUTORIAL
    highlight symbol at point
 ** <ctrl>+f7
    clear all highlighted symbols
+** <meta>+x "rainbow-mode"
+   highlight colors
 * Navigation
 ** <meta>+up/down
    window up/down

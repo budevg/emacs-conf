@@ -17,3 +17,4 @@
 (add-hook 'c++-mode-hook 'hide-show-hook-c)
 (add-hook 'cperl-mode-hook 'hide-show-hook)
 (add-hook 'java-mode-hook 'hide-show-hook)
+(add-hook 'js-mode-hook 'hide-show-hook)
