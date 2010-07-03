@@ -1,0 +1,10 @@
+#name:kernel module makefile ... 
+# --
+
+KERNELDIR := /lib/modules/\`uname -r\`/build
+
+obj-m  := ${1:test}.o
+
+all:
+	make -C $(KERNELDIR) M=\`pwd\` modules
+
