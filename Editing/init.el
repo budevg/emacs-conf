@@ -89,3 +89,5 @@
         (line-beginning-position 2)))))
 
 (global-set-key [(meta i)] 'align)
+
+(setq x-select-enable-clipboard t)
