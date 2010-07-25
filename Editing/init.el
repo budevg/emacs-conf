@@ -90,4 +90,11 @@
 
 (global-set-key [(meta i)] 'align)
 
+(defun insert-date()
+"Insert a time-stamp according to locale's date and time format."
+(interactive)
+(insert (format-time-string "%d/%m/%Y, %k:%M" (current-time))))
+
+(global-set-key "\C-cd" 'insert-date)
+
 (setq x-select-enable-clipboard t)

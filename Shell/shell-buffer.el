@@ -39,3 +39,6 @@
 
 (autoload 'multi-term "multi-term" nil t)
 (global-set-key [f3] 'multi-term)
+
+(autoload 'cssh-term-remote-open "cssh" nil t)
+(global-set-key (kbd "C-=") 'cssh-term-remote-open)

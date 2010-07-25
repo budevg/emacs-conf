@@ -112,6 +112,8 @@ EMACS CONFIGURATION TUTORIAL
    interactive replacement
 ** <meta>+x align
    aligns lines to the same column structure
+** <ctrl>+c d
+   insert date
    
 * Debugging:
 ** keypad-2
@@ -156,3 +158,6 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+x "ssh-authorize"
    add your public key to authorized_keys on the logged in machine
    should be run in shell buffer
+** <ctrl>+=
+   run ssh and connect to host. Switch to ibuffer select several
+   ssh's then press <ctrl>+= to control them in clustered way
