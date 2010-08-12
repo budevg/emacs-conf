@@ -2,9 +2,9 @@
 all: init.el
 
 init.el:
-	python PackageManager.py init
-log:
-	python PackageManager.py init true
+	python PackageManagerNG.py init_file
+profiling:
+	python PackageManager.py init_file profiling
 
 clean:
 	rm -f init.el
