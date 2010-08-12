@@ -73,6 +73,12 @@
 The face is also used in the mode line if the character count
 remaining drops to negative.")
 
+(defface twitter-new-tweets-sep-face
+  '((t (:background "black" :foreground "white")))
+  "Used when printing the separator between tweets already seen,
+and tweets newly arrived."
+  :group 'twitter-faces)
+
 (defconst twitter-friends-timeline-url
   "http://twitter.com/statuses/friends_timeline.xml"
   "URL used to receive the friends timeline")
@@ -147,6 +153,15 @@ from Twitter will be displayed directly."
   :type '(choice (const :tag "No translation" nil)
                  string
                  function)
+  :group 'twitter)
+
+(defcustom twitter-new-tweets-sep
+  (propertize
+   "----[ NEW ]--------------------------------------------------------------"
+   'face 'twitter-new-tweets-sep-face)
+  "Will be printed in between the last seen tweet, and the newly
+received tweets."
+  :type 'string
   :group 'twitter)
 
 (defconst twitter-default-status-format
@@ -249,6 +264,15 @@ This is displayed in the mode line.")
   "Frame configuration from immediately before a twitter.el
 command is called")
 
+(defvar twitter-last-id-seen nil
+  "The last twitter id that was seen while building up the status
+  list.")
+
+(defvar twitter-last-id-saved nil
+  "The last id that was saved as seen; this tweet will have a
+  line above it (or whatever twitter-new-tweets-sep is set to)
+  when shown again to demarcate old tweets from new ones.")
+
 (defun twitter-retrieve-url (url cb &optional cbargs)
   "Wrapper around url-retrieve.
 Optionally sets the username and password if twitter-username and
@@ -319,10 +343,13 @@ displayed."
             (if (plist-get status :error)
                 (twitter-show-error doc)
               ;; Otherwise process each status node
-              (while status-list
-                (twitter-format-status-node (car status-list)
-                                            compiled-format)
-                (setq status-list (cdr status-list)))))
+	      (progn
+		(setq twitter-last-id-seen 'nil)
+		(while status-list
+		  (twitter-format-status-node (car status-list)
+					      compiled-format)
+		  (setq status-list (cdr status-list)))
+		(setq twitter-last-id-saved twitter-last-id-seen))))
           (goto-char (point-min))
           (twitter-timeline-view-mode))
         (view-buffer buf 'kill-buffer)))))
@@ -541,6 +568,18 @@ and insterted into the current buffer. FORMAT should be a
 compiled format string as returned by
 twitter-compile-format-string."
   (let ((status-begin (point)))
+    (let (elem this-id)
+      (setq elem (assoc ?i twitter-status-commands))
+      (setq this-id (twitter-get-attrib-node
+		     status-node (cdr elem)))
+
+      (if (string= twitter-last-id-saved this-id)
+	  (progn (insert twitter-new-tweets-sep)
+		 (newline)))
+
+      (if (not twitter-last-id-seen)
+	  (setq twitter-last-id-seen this-id)))
+
     (while format
       (if (stringp (car format))
           (insert (car format))
