@@ -39,3 +39,11 @@ class Package(Node):
 class Module(Node):
     pass
 
+class Bunch(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        
+class Screen(Bunch):
+    def __init__(self, **kwargs):
+        super(Screen, self).__init__(**kwargs)
+        

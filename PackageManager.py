@@ -2,10 +2,21 @@ import os
 import sys
 from Node import Package, Module
 
+SCREEN_CONFIGURE_CODE = '''
+(defun maximize-frame ()
+  (set-frame-position (selected-frame) %s %s)
+  (set-frame-size (selected-frame) %s %s))
+
+(add-hook \'window-setup-hook (lambda ()
+  (set-frame-font "%s")
+  (maximize-frame)))
+'''
+        
 
 class PackageManager(object):
-    def __init__(self, root):
+    def __init__(self, root, screen):
         self.root = root
+        self.screen = screen
 
     def build_skeleton(self, root = None):
         self.apply_on_tree(self.root, self._create_node)
@@ -51,7 +62,10 @@ class PackageManager(object):
         init_fd = file(os.path.join(self.root.get_path(),"init.el"),"w")
         self._elisp_load_file(init_fd, "./package-manager.el")
         print >> init_fd, "(setq ROOT-PATH \"%s\")" % self.root.get_path()
-        
+        print >> init_fd, SCREEN_CONFIGURE_CODE % (self.screen.x, self.screen.y,
+                                                   self.screen.width, self.screen.height,
+                                                   self.screen.font)
+                          
         def f(node):
             if isinstance(node, Package):
                 self._elisp_prepend_path(init_fd, node.get_path())
@@ -91,8 +105,8 @@ def usage():
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
         usage()
-    from Configuration import GLOBAL_PACKAGE
-    pm = PackageManager(GLOBAL_PACKAGE)
+    from Configuration import PACKAGES, SCREEN
+    pm = PackageManager(PACKAGES, SCREEN)
     getattr(pm, sys.argv[1])(*sys.argv[2:])
             
 

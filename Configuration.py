@@ -1,6 +1,4 @@
-from Node import Package,Module
-
-
+from Node import Package,Module,Screen
 
 
 elisp = Package(name = "Elisp",
@@ -181,18 +179,23 @@ packages = Package(name = "Packages",
                                ])
 
 
-GLOBAL_PACKAGE = Package(name = ".",
-                         elements = [elisp,
-                                     faces,
-                                     editing,
-                                     navigation,
-                                     macros,
-                                     shell,
-                                     publishing,
-                                     languages,
-                                     build_system,
-                                     source_control,
-                                     applications,
-                                     packages,
-                                     ])
+PACKAGES = Package(name = ".",
+                   elements = [elisp,
+                               faces,
+                               editing,
+                               navigation,
+                               macros,
+                               shell,
+                               publishing,
+                               languages,
+                               build_system,
+                               source_control,
+                               applications,
+                               packages,
+                               ])
 
+SCREEN = Screen(x=0,
+                y=26,
+                height=51,
+                width =159,
+                font="-unknown-DejaVu Sans Mono-normal-normal-normal-*-14-*-*-*-m-0-iso10646-1")

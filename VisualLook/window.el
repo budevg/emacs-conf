@@ -6,10 +6,6 @@
 (setq visible-bell t)
 
 (blink-cursor-mode -1)
-(defun maximize-frame ()
-  (set-frame-position (selected-frame) 0 26)
-  (set-frame-size (selected-frame) 159 51))
-(add-hook 'window-setup-hook 'maximize-frame)
 
 ;; zoom in/out
 
