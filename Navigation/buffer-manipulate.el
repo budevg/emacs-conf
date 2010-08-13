@@ -97,3 +97,7 @@
      ))
 
 (global-set-key (kbd "C-x C-b") 'ibuffer-other-window)
+
+;; rotate buffers
+(global-set-key [(meta right)] 'previous-buffer)
+(global-set-key [(meta left)]  'next-buffer)

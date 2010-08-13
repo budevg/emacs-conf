@@ -54,11 +54,6 @@ class PackageManager(object):
         for directory in self.directories():
             lisp_writer.add_search_path(directory)
 
-        lisp_writer.set_screen_configuration(self.screen.x,
-                                             self.screen.y,
-                                             self.screen.width,
-                                             self.screen.height,
-                                             self.screen.font)
         if profiling:
             lisp_writer.lisp("(setq results-buffer (create-file-buffer \"results.txt\"))")
         for lisp_file in self.lisp_files():
@@ -71,6 +66,14 @@ class PackageManager(object):
         if profiling:
             lisp_writer.lisp("(princ (format \"%s\\n\" (package-manager-get-load-time)) results-buffer)")
             lisp_writer.lisp("(switch-to-buffer results-buffer)")
+            lisp_writer.lisp("(shell-command-on-region (point-min) (point-max) \"sort -n\" 1)")
+            
+        lisp_writer.set_screen_configuration(self.screen.x,
+                                             self.screen.y,
+                                             self.screen.width,
+                                             self.screen.height,
+                                             self.screen.font)
+
         lisp_writer.call("package-manager-show-load-time")
         lisp_writer.close()
 

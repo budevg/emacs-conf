@@ -6,8 +6,6 @@
      (define-key c-mode-map [(control meta o)] 'switch-file-major-mode)
      (define-key c++-mode-map [(control meta o)] 'switch-file-major-mode)))
 
-(require 'isearch+)
-
 (eval-after-load "ido"
   '(progn
      (global-set-key
