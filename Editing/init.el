@@ -70,30 +70,35 @@
   (interactive)
   (insert (format-time-string "%d/%m/%Y %R")))
 	
-(require 'uniquify)
-(setq uniquify-buffer-name-style 'post-forward)
 
 (setq ispell-program-name "aspell")
 
-(defadvice kill-ring-save (before slick-copy activate compile) "When called
+(run-with-idle-timer
+ 2 nil
+ (lambda ()
+   (defadvice kill-ring-save (before slick-copy activate compile) "When called
   interactively with no active region, copy a single line instead."
-  (interactive (if mark-active (list (region-beginning) (region-end)) (message
-  "Copied line") (list (line-beginning-position) (line-beginning-position
-  2)))))
-
-(defadvice kill-region (before slick-cut activate compile)
+  (interactive
+   (if mark-active
+       (list (region-beginning) (region-end))
+     (list (line-beginning-position) (line-beginning-position 2)))))
+   (defadvice kill-region (before slick-cut activate compile)
   "When called interactively with no active region, kill a single line instead."
   (interactive
-    (if mark-active (list (region-beginning) (region-end))
-      (list (line-beginning-position)
-        (line-beginning-position 2)))))
+    (if mark-active
+        (list (region-beginning) (region-end))
+      (list (line-beginning-position) (line-beginning-position 2)))))
+   
+   (require 'uniquify)
+   (setq uniquify-buffer-name-style 'post-forward)
+   ))
 
 (global-set-key [(meta i)] 'align)
 
 (defun insert-date()
-"Insert a time-stamp according to locale's date and time format."
-(interactive)
-(insert (format-time-string "%d/%m/%Y, %k:%M" (current-time))))
+  "Insert a time-stamp according to locale's date and time format."
+  (interactive)
+  (insert (format-time-string "%d/%m/%Y, %k:%M" (current-time))))
 
 (global-set-key "\C-cd" 'insert-date)
 

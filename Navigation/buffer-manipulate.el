@@ -34,6 +34,7 @@
 
 (ido-mode t)
 (icomplete-mode t)
+
 (global-set-key [(control \;)] 'ido-switch-buffer)
 (global-set-key [(control \])] 'ido-find-file)
 
