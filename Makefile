@@ -1,7 +1,7 @@
 
-all: init.el
+all: init
 
-init.el:
+init:
 	python PackageManagerNG.py init_file
 profiling:
 	python PackageManagerNG.py init_file profiling
