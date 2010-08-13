@@ -12,9 +12,12 @@
 ;;    (message "start at:%s end at:%s" old-time new-time)
     (- new-time-in-msecs old-time-in-msecs)))
 
+(defun package-manager-get-load-time ()
+  (format "EMACS LOADED at %f seconds"
+          (/ (package-manager-time-delta *emacs-load-start*) (float 1000000))))
+
 (defun package-manager-show-load-time ()
-  (message "EMACS LOADED at %f seconds"
-           (/ (package-manager-time-delta *emacs-load-start*) (float 1000000))))
+  (message (package-manager-get-load-time)))
 
 (defun package-manager-timer (start)
   (if start

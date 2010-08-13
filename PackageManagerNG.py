@@ -37,6 +37,10 @@ class LispWriter(object):
 
     def call(self, func, *args):
         self.fd.write("(%s %s)\n" % (func, " ".join(args)))
+        
+    def lisp(self, s):
+        self.fd.write("%s\n" % s)
+
                       
 class PackageManager(object):
     def __init__(self, packages, screen):
@@ -55,16 +59,18 @@ class PackageManager(object):
                                              self.screen.width,
                                              self.screen.height,
                                              self.screen.font)
+        if profiling:
+            lisp_writer.lisp("(setq results-buffer (create-file-buffer \"results.txt\"))")
         for lisp_file in self.lisp_files():
             if profiling:
-                lisp_writer.call("package-manager-timer", "t")
+                lisp_writer.lisp("(package-manager-timer t)")
             lisp_writer.load_file(lisp_file)
             if profiling:
-                lisp_writer.call("display-warning",
-                                 ":debug",
-                                 "(format \"load %s:%f\" \"" + lisp_file + "\" (/ (package-manager-timer nil) (float 1000000)))")
-
-
+                lisp_writer.lisp("(princ (format \"%f %s\\n\" (/ (package-manager-timer nil) (float 1000000)) \"" + \
+                                 lisp_file + "\" ) results-buffer)")
+        if profiling:
+            lisp_writer.lisp("(princ (format \"%s\\n\" (package-manager-get-load-time)) results-buffer)")
+            lisp_writer.lisp("(switch-to-buffer results-buffer)")
         lisp_writer.call("package-manager-show-load-time")
         lisp_writer.close()
 
