@@ -16,6 +16,8 @@ EMACS CONFIGURATION TUTORIAL
    kill buffer
 
 * Programming:
+** <meta>+x scratch
+   open scratch buffer for the current buffer mode
 ** <meta> + <enter>
    automaticly complete code snippet
 ** <ctrl>+c d f
