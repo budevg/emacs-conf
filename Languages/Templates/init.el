@@ -8,6 +8,13 @@
                             (yas/expand))
                  ad-do-it)))))
 
+(defun yasnippet-org-mode-fix ()
+  (add-hook 'org-mode-hook
+          (let ((original-command (lookup-key org-mode-map [tab])))
+            `(lambda ()
+               (setq yas/fallback-behavior
+                     '(apply ,original-command))
+               (local-set-key [tab] 'yas/expand)))))
 (defun load-yasnippet ()
   (require 'yasnippet)
   (yas/initialize)
@@ -15,6 +22,9 @@
                                yas/dropdown-prompt
                                yas/completing-prompt))
   (setq yas/use-menu 'abbreviate)
-  (yas/load-directory "~/.emacs.d/Languages/Templates/snippets"))
+  (yas/load-directory "~/.emacs.d/Languages/Templates/snippets")
+  (eval-after-load 'org
+    '(progn
+       (yasnippet-org-mode-fix))))
 
 (run-with-idle-timer 5 nil 'load-yasnippet)
