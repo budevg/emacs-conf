@@ -12,13 +12,14 @@
 (eval-after-load "cc-mode"
   '(progn 
      (defun my-c-mode-hook ()
-       (c-set-style "linux")
        (if (not kernel-coding-style)
            (progn
              (setq c-basic-offset 2)
-             (setq tab-width 2)))
-       (if kernel-coding-style
-           (setq indent-tabs-mode t))
+             (setq tab-width 2)
+             (c-set-style "linux"))
+         (progn
+           (setq indent-tabs-mode t)
+           (c-set-style "linux-tabs-only")))
        (font-lock-add-keywords nil
                  '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
      
@@ -28,6 +29,25 @@
        (setq tab-width 2)
        (font-lock-add-keywords nil
                                '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
+
+     (defun c-lineup-arglist-tabs-only (ignored)
+       "Line up argument lists by tabs, not spaces"
+       (let* ((anchor (c-langelem-pos c-syntactic-element))
+              (column (c-langelem-2nd-pos c-syntactic-element))
+              (offset (- (1+ column) anchor))
+              (steps (floor offset c-basic-offset)))
+         (* (max steps 1)
+            c-basic-offset)))
+
+     (add-hook 'c-mode-common-hook
+               (lambda ()
+                 ;; Add kernel style
+                 (c-add-style
+                  "linux-tabs-only"
+                  '("linux" (c-offsets-alist
+                             (arglist-cont-nonempty
+                              c-lineup-gcc-asm-reg
+                              c-lineup-arglist-tabs-only))))))
 
      (add-hook 'c-mode-hook 'my-c-mode-hook)
      (add-hook 'c++-mode-hook 'my-c++-mode-hook)
