@@ -14,12 +14,12 @@
      (defun my-c-mode-hook ()
        (if (not kernel-coding-style)
            (progn
+             (c-set-style "linux")
              (setq c-basic-offset 2)
-             (setq tab-width 2)
-             (c-set-style "linux"))
+             (setq tab-width 2))
          (progn
-           (setq indent-tabs-mode t)
-           (c-set-style "linux-tabs-only")))
+           (c-set-style "linux-tabs-only")
+           (setq indent-tabs-mode t)))
        (font-lock-add-keywords nil
                  '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
      
