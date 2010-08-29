@@ -48,7 +48,7 @@ macros = [Bunch(path = "Macros/init.el",
           ]
 
 shell = [Bunch(path = "Shell/shell-buffer.el",
-                msg = "basic commands on shell buffer"),
+               msg = "basic commands on shell buffer"),
          Bunch(path = "Shell/eshell-conf.el",
                msg = "eshell configurations"),
          Bunch(path = "Shell/man-pages.el",
@@ -89,33 +89,33 @@ languages = [Bunch(path = "Languages/comments.el",
              Bunch(path = "Languages/scratch.el",
                    msg = "scratch buffer for each mode"),
              Bunch(path = "Languages/Documentation/init.el",
-                     msg = "initialize documentation modules"),
+                   msg = "initialize documentation modules"),
              Bunch(path = "Languages/Templates/init.el",
-                     msg = "initialize templates"),
+                   msg = "initialize templates"),
              Bunch(path = "Languages/CC/init.el",
-                     msg = "init c/c++ mode"),
+                   msg = "init c/c++ mode"),
              Bunch(path = "Languages/Java/init.el",
-                     msg = "init java mode"),
+                   msg = "init java mode"),
              Bunch(path = "Languages/JavaScript/init.el",
-                     msg = "init java script mode"),
+                   msg = "init java script mode"),
              Bunch(path = "Languages/Lisp/init.el",
                    msg = "init lisp mode"),
              Bunch(path = "Languages/Perl/perl.el",
-                     msg = "perl mode"),
+                   msg = "perl mode"),
              Bunch(path = "Languages/Clojure/init.el",
-                     msg = "clojure mode mode"),
+                   msg = "clojure mode mode"),
              Bunch(path = "Languages/Python/pdb.el",
-                     msg = "use pdb for python debugging"),
+                   msg = "use pdb for python debugging"),
              Bunch(path = "Languages/Python/init.el",
                    msg = "init python mode"),
              Bunch(path = "Languages/Ruby/init.el",
-                     msg = "init ruby mode"),
+                   msg = "init ruby mode"),
              Bunch(path = "Languages/Erlang/init.el",
-                     msg = "init erlang mode"),
+                   msg = "init erlang mode"),
              Bunch(path = "Languages/Go/init.el",
-                     msg = "init go mode"),
+                   msg = "init go mode"),
              Bunch(path = "Languages/Lua/lua-init.el",
-                     msg = "init lua mode"),
+                   msg = "init lua mode"),
              ]
 
 build_system = [Bunch(path = "BuildSystem/init.el",
@@ -124,19 +124,19 @@ build_system = [Bunch(path = "BuildSystem/init.el",
 
 
 source_control = [Bunch(path = "SourceControl/init.el",
-                          msg = "load git/svn support"),
+                        msg = "load git/svn support"),
                   Bunch(path = "SourceControl/local.el",
                         msg = "local files diff"),
                   ]
 
 applications = [Bunch(path = "Applications/init.el",
-                        msg = "misc applications"),
+                      msg = "misc applications"),
                 Bunch(path = "Applications/irc.el",
                       msg = "irc configration"),
                 ]
 
 packages = [Bunch(path = "Packages/init.el",
-                    msg = "load elpa packages")
+                  msg = "load elpa packages")
             ]
 
 
