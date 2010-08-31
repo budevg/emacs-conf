@@ -136,7 +136,9 @@ applications = [Bunch(path = "Applications/init.el",
                 ]
 
 packages = [Bunch(path = "Packages/init.el",
-                  msg = "load elpa packages")
+                  msg = "load elpa packages"),
+            Bunch(path = "Packages/el-get-sources.el",
+                  msg = "load el-get packages")
             ]
 
 
