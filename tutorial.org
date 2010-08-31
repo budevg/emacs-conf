@@ -163,3 +163,6 @@ EMACS CONFIGURATION TUTORIAL
 ** <ctrl>+=
    run ssh and connect to host. Switch to ibuffer select several
    ssh's then press <ctrl>+= to control them in clustered way
+* Packages
+** <meta>+x el-get-install
+   Upgrade some of the modules with the latest source version
