@@ -66,7 +66,9 @@
      (setq ibuffer-saved-filter-groups
            (quote (("default"      
                     ("Org" ;; all org-related buffers
-                     (mode . org-mode))  
+                     (mode . org-mode))
+                    ("Text" 
+                     (mode . text-mode))
                     ("Programming" ;; prog stuff not already in MyProjectX
                      (or
                       (mode . c-mode)

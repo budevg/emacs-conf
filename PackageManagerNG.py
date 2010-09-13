@@ -4,13 +4,14 @@ import sys
 
 class LispWriter(object):
     SCREEN_CONFIGURE_CODE = '''
-(defun maximize-frame ()
-  (set-frame-position (selected-frame) %s %s)
-  (set-frame-size (selected-frame) %s %s))
+; (defun maximize-frame ()
+;   (set-frame-position (selected-frame) %s %s)
+;   (set-frame-size (selected-frame) %s %s))
 
 (add-hook \'window-setup-hook (lambda ()
   (set-frame-font "%s")
-  (maximize-frame)))
+; (maximize-frame)
+  ))
 '''
 
     def __init__(self, path):
