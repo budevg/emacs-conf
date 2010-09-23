@@ -116,6 +116,8 @@ languages = [Bunch(path = "Languages/comments.el",
                    msg = "init go mode"),
              Bunch(path = "Languages/Lua/lua-init.el",
                    msg = "init lua mode"),
+             Bunch(path = "Languages/HTML/init.el",
+                   msg = "init html mode"),
              ]
 
 build_system = [Bunch(path = "BuildSystem/init.el",
