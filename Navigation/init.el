@@ -82,4 +82,11 @@
 (global-set-key [(control \`)] 'minimap-show)
     
 
-  
+(autoload 'ffap-file-at-point "ffap" nil t)  
+(defun jump-to-file-at-point ()
+  (interactive)
+  (let ((file-path (ffap-file-at-point)))
+    (if file-path
+        (find-file file-path))))
+
+(define-key ctl-x-map "f" 'jump-to-file-at-point)
