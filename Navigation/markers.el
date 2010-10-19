@@ -61,6 +61,8 @@
 (global-set-key [(control meta right)] 'markers-switch-right)
 (global-set-key [(control meta left)] 'markers-switch-left)
 
-(global-set-key [(control meta kp-3)] 'markers-switch-right)
-(global-set-key [(control meta kp-1)] 'markers-switch-left)
+(global-set-key [(control next)] 'markers-add-head)
+(global-set-key [(control prior)] 'markers-remove-head)
+(global-set-key [(meta prior)] 'markers-switch-right)
+(global-set-key [(meta next)] 'markers-switch-left)
 
