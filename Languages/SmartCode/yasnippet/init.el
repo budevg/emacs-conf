@@ -22,7 +22,7 @@
                                yas/dropdown-prompt
                                yas/completing-prompt))
   (setq yas/use-menu 'abbreviate)
-  (yas/load-directory "~/.emacs.d/Languages/Templates/snippets")
+  (yas/load-directory "~/.emacs.d/Languages/SmartCode/yasnippet/snippets")
   (eval-after-load 'org
     '(progn
        (yasnippet-org-mode-fix))))

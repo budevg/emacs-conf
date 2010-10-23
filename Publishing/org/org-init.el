@@ -84,4 +84,5 @@
         ("Idea" ?i "* %? %U\n" "~/.org/JOURNAL.org" "Ideas")
         ("Pomodoro" ?p "* %U\n** %?" "~/.org/POMODORO.org" "Tasks")))
 (define-key global-map "\C-cr" 'org-remember)
-
+(setq org-display-custom-times t)
+(setq org-time-stamp-custom-formats '("<%d/%m/%Y>" . "<%d/%m/%Y %H:%M>"))

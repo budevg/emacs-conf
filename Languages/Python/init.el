@@ -4,7 +4,11 @@
 (eval-after-load "python-mode"
   '(progn
      (if (executable-find "ipython")
-         (require 'ipython))))
+         (require 'ipython))
+     (add-hook 'python-mode-hook
+               (lambda ()
+                 (setq py-indent-offset 2)
+                 (setq py-smart-indentation nil)))))
 
 (autoload 'pymacs-apply "pymacs")
 (autoload 'pymacs-call "pymacs")

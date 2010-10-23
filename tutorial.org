@@ -119,6 +119,8 @@ EMACS CONFIGURATION TUTORIAL
 ** <ctrl>+c d
    insert date
    
+** <meta>+kp-8/2
+   swap line up or down
 * Debugging:
 ** keypad-2
    step
