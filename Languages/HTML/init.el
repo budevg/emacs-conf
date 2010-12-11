@@ -11,6 +11,3 @@ This works on the current region."
     (goto-char (point-min))
     (while (search-forward "&gt;" nil t) (replace-match ">" nil t))
     ))
-
-(autoload 'yaml-mode "yaml-mode" nil t)
-(add-to-list 'auto-mode-alist '("\\.yml$" . yaml-mode))
