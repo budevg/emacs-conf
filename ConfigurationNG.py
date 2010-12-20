@@ -120,6 +120,8 @@ languages = [Bunch(path = "Languages/comments.el",
                    msg = "init lua mode"),
              Bunch(path = "Languages/HTML/init.el",
                    msg = "init html mode"),
+             Bunch(path = "Languages/Matlab/init.el",
+                   msg = "init matlab mode"),
              ]
 
 build_system = [Bunch(path = "BuildSystem/init.el",
@@ -127,7 +129,9 @@ build_system = [Bunch(path = "BuildSystem/init.el",
                 ]
 
 
-source_control = [Bunch(path = "SourceControl/init.el",
+source_control = [Bunch(path = "SourceControl/magit",
+                        msg = "magit path"),
+                  Bunch(path = "SourceControl/init.el",
                         msg = "load git/svn support"),
                   Bunch(path = "SourceControl/local.el",
                         msg = "local files diff"),
