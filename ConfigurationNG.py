@@ -129,8 +129,8 @@ build_system = [Bunch(path = "BuildSystem/init.el",
                 ]
 
 
-source_control = [Bunch(path = "SourceControl/magit",
-                        msg = "magit path"),
+source_control = [Bunch(path = "SourceControl/magit/50magit.el",
+                        msg = "load magit"),
                   Bunch(path = "SourceControl/init.el",
                         msg = "load git/svn support"),
                   Bunch(path = "SourceControl/local.el",

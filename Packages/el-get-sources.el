@@ -15,7 +15,7 @@
         (:name magit
                :type git
                :url "http://github.com/philjackson/magit.git"
-               :build ("cp magit.el ~/.emacs.d/SourceControl")
+               :build ("cp *.el ~/.emacs.d/SourceControl/magit")
                :after (lambda () (el-get-remove "magit")))
         (:name el-get
                :type git
