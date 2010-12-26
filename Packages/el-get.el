@@ -4,9 +4,10 @@
 ;;
 ;; Author: Dimitri Fontaine <dim@tapoueh.org>
 ;; URL: http://www.emacswiki.org/emacs/el-get.el
-;; Version: 1.0
+;; Version: 1.1
 ;; Created: 2010-06-17
-;; Keywords: emacs package elisp install elpa git git-svn bzr cvs apt-get fink http http-tar emacswiki
+;; Keywords: emacs package elisp install elpa git git-svn bzr cvs svn darcs hg
+;;           apt-get fink pacman http http-tar emacswiki
 ;; Licence: WTFPL, grab your copy here: http://sam.zoy.org/wtfpl/
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -16,11 +17,25 @@
 ;;
 ;; Changelog
 ;;
-;;  1.1 - <WIP> - Nobody's testing until the release
+;;  1.1 - 2010-12-20 - Nobody's testing until the release
 ;;
 ;;   - Adapt to package.el from Emacs24 by using relative symlinks to ELPA
 ;;     packages ((package-user-dir) is "~/.emacs.d/elpa" now, so needs to
 ;;     get expanded at least)
+;;   - Allow to bypass byte compiling entirely with a single global var
+;;   - Have http local file default to something sane, not package.el
+;;   - Implement support for svn and darcs too
+;;   - Still more recipes
+;;   - Add support for the `pacman' package manager (ARCH Linux)
+;;   - Add support for mercurial
+;;   - (el-get 'sync) now really means synchronous, and serialized too
+;;   - el-get-start-process-list implements :sync, defaults to nil (async)
+;;   - Implement a :localname package property to help with some kind of URLs
+;;   - Add el-get-post-init-hooks
+;;   - Allow build commands to be evaluated, hence using some emacs variables
+;;   - Finaly walk the extra mile and remove "required" packages at install
+;;   - Implement support for the "Do you want to continue" apt-get prompt
+;;   - implement :before user defined function to run before init
 ;;
 ;;  1.0 - 2010-10-07 - Can I haz your recipes?
 ;;
@@ -88,7 +103,13 @@
 (defgroup el-get nil "el-get customization group"
   :group 'convenience)
 
-(defconst el-get-version "1.0" "el-get version number")
+(defconst el-get-version "1.1~dev" "el-get version number")
+
+(defcustom el-get-post-init-hooks nil
+  "Hooks to run after a package init.
+It will get called with the package as first argument."
+  :group 'el-get
+  :type 'hook)
 
 (defcustom el-get-post-install-hooks nil
   "Hooks to run after installing a package.
@@ -102,10 +123,18 @@ It will get called with the package as first argument."
   :group 'el-get
   :type 'hook)
 
+(defcustom el-get-byte-compile t
+  "Whether or not to byte-compile packages. Can be used to
+disable byte-compilation globally."
+  :group 'el-get
+  :type 'boolean)
+
 (defvar el-get-git-clone-hook        nil "Hook run after git clone.")
 (defvar el-get-git-svn-clone-hook    nil "Hook run after git svn clone.")
 (defvar el-get-bzr-branch-hook       nil "Hook run after bzr branch.")
 (defvar el-get-cvs-checkout-hook     nil "Hook run after cvs checkout.")
+(defvar el-get-svn-checkout-hook     nil "Hook run after svn checkout.")
+(defvar el-get-darcs-get-hook        nil "Hook run after darcs get.")
 (defvar el-get-apt-get-install-hook  nil "Hook run after apt-get install.")
 (defvar el-get-apt-get-remove-hook   nil "Hook run after apt-get remove.")
 (defvar el-get-fink-install-hook     nil "Hook run after fink install.")
@@ -114,6 +143,9 @@ It will get called with the package as first argument."
 (defvar el-get-elpa-remove-hook      nil "Hook run after ELPA package remove.")
 (defvar el-get-http-install-hook     nil "Hook run after http retrieve.")
 (defvar el-get-http-tar-install-hook nil "Hook run after http-tar package install.")
+(defvar el-get-pacman-install-hook   nil "Hook run after pacman install.")
+(defvar el-get-pacman-remove-hook    nil "Hook run after pacman remove.")
+(defvar el-get-hg-clone-hook         nil "Hook run after hg clone.")
 
 (defcustom el-get-methods
   '(:git     (:install el-get-git-clone
@@ -128,9 +160,17 @@ It will get called with the package as first argument."
 		       :install-hook el-get-bzr-branch-hook
 		       :update el-get-bzr-pull
 		       :remove el-get-rmdir)
+    :svn     (:install el-get-svn-checkout
+		       :install-hook el-get-svn-checkout-hook
+		       :update el-get-svn-update
+		       :remove el-get-rmdir)
     :cvs     (:install el-get-cvs-checkout
 		       :install-hook el-get-cvs-checkout-hook
 		       :update el-get-cvs-update
+		       :remove el-get-rmdir)
+    :darcs   (:install el-get-darcs-get
+		       :install-hook el-get-darcs-get-hook
+		       :update el-get-darcs-pull
 		       :remove el-get-rmdir)
     :apt-get (:install el-get-apt-get-install
 		       :install-hook el-get-apt-get-install-hook
@@ -151,6 +191,10 @@ It will get called with the package as first argument."
 		       :install-hook el-get-http-install-hook
 		       :update el-get-http-install
 		       :remove el-get-rmdir)
+    :ftp     (:install el-get-http-install
+		       :install-hook el-get-http-install-hook
+		       :update el-get-http-install
+		       :remove el-get-rmdir)
     :emacswiki (:install el-get-emacswiki-install
 		       :install-hook el-get-http-install-hook
 		       :update el-get-emacswiki-install
@@ -158,7 +202,16 @@ It will get called with the package as first argument."
     :http-tar (:install el-get-http-tar-install
 		       :install-hook el-get-http-tar-install-hook
 		       :update el-get-http-tar-install
-		       :remove el-get-rmdir))
+		       :remove el-get-rmdir)
+    :pacman   (:install el-get-pacman-install
+                        :install-hook el-get-pacman-install-hook
+                        :update el-get-pacman-install
+                        :remove el-get-pacman-remove
+                        :remove-hook el-get-pacman-remove-hook)
+    :hg       (:install el-get-hg-clone
+                        :install-hook el-get-hg-clone-hook
+                        :update el-get-hg-pull
+                        :remove el-get-rmdir))
   "Register methods that el-get can use to fetch and update a given package.
 
 The methods list is a PLIST, each entry has a method name
@@ -179,6 +232,9 @@ the named package action in the given method."
   (concat (file-name-as-directory el-get-dir) ".status.el")
   "Define where to store and read the package statuses")
 
+(defvar el-get-emacs (concat invocation-directory invocation-name)
+  "Where to find the currently running emacs, a facility for :build commands")
+
 (defvar el-get-apt-get (executable-find "apt-get")
   "The apt-get executable.")
 
@@ -188,12 +244,18 @@ the named package action in the given method."
 (defvar el-get-fink (executable-find "fink")
   "The fink executable.")
 
+(defvar el-get-svn (executable-find "svn")
+  "The svn executable.")
+
 (defvar el-get-fink-base "/sw/share/doc"
   "Where to link the el-get symlink to, /<package> will get appended.")
 
 (defvar el-get-emacswiki-base-url
   "http://www.emacswiki.org/emacs/download/%s.el"
   "The base URL where to fetch :emacswiki packages")
+
+(defvar el-get-pacman-base "/usr/share/emacs/site-lisp"
+  "Where to link the el-get symlink to, /<package> will get appended.")
 
 ;; debian uses ginstall-info and it's compatible to fink's install-info on
 ;; MacOSX, so:
@@ -221,6 +283,12 @@ definition provided by `el-get' recipes locally.
     the directory where the package is stored (after a `git
     clone' for example, in which case a symlink will be created.
 
+:pkgname
+
+    The name of the package for the underlying package management
+    system (`apt-get', `fink' or `pacman'), which can be
+    different from the Emacs package name.
+
 :type
 
     The type of the package, currently el-get offers support for
@@ -233,7 +301,10 @@ definition provided by `el-get' recipes locally.
 
 :build
 
-    Your build recipe gets there, often it looks like (\"./configure\" \"make\")
+    Your build recipe gets there, often it looks
+    like (\"./configure\" \"make\").  The list will be evaluated
+    so that you can build it at run time too, using things such
+    as `(,(concat \"make EMACS=\" el-get-emacs \"all\")) for example.
 
 :build/system-type
 
@@ -243,7 +314,8 @@ definition provided by `el-get' recipes locally.
 :load-path
 
     This should be a list of directories you want `el-get' to add
-    to your `load-path'.
+    to your `load-path'. Those directories are relative to where
+    the package gets installed.
 
 :compile
 
@@ -292,10 +364,29 @@ definition provided by `el-get' recipes locally.
     Currently only used by the `csv' support, allow you to
     configure the module you want to checkout in the given URL.
 
+:before
+
+    A pre-init function to run once before `el-get-init' calls
+    `load' and `require'.
+
 :after
 
     A function to run once `el-get' is done with `el-get-init',
     can be a lambda.
+
+:localname
+
+    Currently only used by both `http' and `ftp' supports, allows
+    to specify the target name of the downloaded file.
+
+    This option is useful if the package sould be retrived using
+    a presentation insterface (such as as web SCM tool).
+
+    For example, destination should be set to \"package.el\" if
+    the package url has the following scheme:
+
+   \"http://www.example.com/show-as-text?file=path/package.el\"
+
 ")
 
 
@@ -361,6 +452,11 @@ directory or a symlink in el-get-dir."
 	(when (functionp final-f)
 	  (funcall final-f package))))))
 
+(defvar el-get-default-process-sync nil
+  "Non-nil value asks `el-get-start-process-list' to run current
+process syncronously. Can be overriden by :sync property in
+commands argument of `el-get-start-process-list'")
+
 (defun el-get-start-process-list (package commands final-func)
   "Run each command one after the other, in order, stopping at
 first error.
@@ -405,6 +501,10 @@ properties:
 
    The error to send upon failure
 
+:sync
+
+   When set to non-nil value, run synchronously.
+
 Any other property will get put into the process object.
 "
   (when commands
@@ -417,22 +517,40 @@ Any other property will get put into the process object.
 	   (program (plist-get c :program))
 	   (args    (plist-get c :args))
 	   (shell   (plist-get c :shell))
-	   (startf  (if shell #'start-process-shell-command #'start-process))
+	   (sync    (if (plist-member c :sync) (plist-get c :sync)
+                      el-get-default-process-sync))
 	   (default-directory (if cdir
 				  (file-name-as-directory
 				   (expand-file-name cdir))
-				default-directory))
-	   (process-connection-type nil) ; pipe, don't pretend we're a pty
-	   (proc    (apply startf cname cbuf program args)))
-
-      ;; add the properties to the process, then set the sentinel
-      (mapc (lambda (x) (process-put proc x (plist-get c x))) c)
-      (process-put proc :el-get-sources el-get-sources)
-      (process-put proc :el-get-package package)
-      (process-put proc :el-get-final-func final-func)
-      (process-put proc :el-get-start-process-list (cdr commands))
-      (set-process-sentinel proc 'el-get-start-process-list-sentinel)
-      (when filter (set-process-filter proc filter))))
+				default-directory)))
+      (if sync
+          (let* ((startf (if shell #'call-process-shell-command #'call-process))
+                 (dummy  (message "el-get is waiting for %S to complete" cname))
+                 (status (apply startf program nil cbuf t args))
+                 (message (plist-get c :message))
+                 (errorm  (plist-get c :error))
+                 (next    (cdr commands)))
+            (if (eq 0 status)
+		(message "el-get: %s" message)
+              (set-window-buffer (selected-window) cbuf)
+              (error "el-get: %s %s" cname errorm))
+            (when cbuf (kill-buffer cbuf))
+            (if next
+		(el-get-start-process-list package next final-func)
+              (when (functionp final-func)
+                (funcall final-func package))))
+	;; async case
+        (let* ((startf (if shell #'start-process-shell-command #'start-process))
+               (process-connection-type nil) ; pipe, don't pretend we're a pty
+               (proc (apply startf cname cbuf program args)))
+          ;; add the properties to the process, then set the sentinel
+          (mapc (lambda (x) (process-put proc x (plist-get c x))) c)
+          (process-put proc :el-get-sources el-get-sources)
+          (process-put proc :el-get-package package)
+          (process-put proc :el-get-final-func final-func)
+          (process-put proc :el-get-start-process-list (cdr commands))
+          (set-process-sentinel proc 'el-get-start-process-list-sentinel)
+          (when filter (set-process-filter proc filter))))))
   ;; no commands, still run the final-func
   (unless commands
     (when (functionp final-func)
@@ -449,7 +567,7 @@ found."
 				 (file-executable-p magit-git-executable))
 			    magit-git-executable
 			  (executable-find "git"))))
-    (unless (file-executable-p git-executable)
+    (unless (and git-executable (file-executable-p git-executable))
       (error
        (concat "el-get-git-clone requires `magit-git-executable' to be set, "
 	       "or the binary `git' to be found in your PATH")))
@@ -601,6 +719,48 @@ found."
 
 
 ;;
+;; svn support
+;;
+(defun el-get-svn-checkout (package url post-install-fun)
+  "svn checkout the package."
+  (let* ((svn-executable el-get-svn)
+	 (source  (el-get-package-def package))
+	 (name    (format "*svn checkout %s*" package))
+	 (ok      (format "Checked out package %s." package))
+	 (ko      (format "Could not checkout package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :default-directory ,el-get-dir
+		      :program ,svn-executable
+		      :args ("checkout" ,url ,package)
+		      :message ,ok
+		      :error ,ko))
+     post-install-fun)))
+
+(defun el-get-svn-update (package url post-update-fun)
+  "update the package using svn."
+  (let* ((svn-executable el-get-svn)
+	 (pdir (el-get-package-directory package))
+	 (name (format "*svn update %s*" package))
+	 (ok   (format "Updated package %s." package))
+	 (ko   (format "Could not update package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :default-directory ,pdir
+		      :program ,svn-executable
+		      :args ("update")
+		      :message ,ok
+		      :error ,ko))
+     post-update-fun)))
+
+
+;;
 ;; CVS support
 ;;
 (defun el-get-cvs-checkout (package url post-install-fun)
@@ -658,6 +818,54 @@ found."
 
 
 ;;
+;; darcs support
+;;
+(defun el-get-darcs-executable ()
+  "Return darcs executable to use, or signal an error when not
+found."
+  (let ((darcs-executable (executable-find "darcs")))
+    (unless (and darcs-executable (file-executable-p darcs-executable))
+      (error "The  `darcs' binary can not be found in your PATH"))
+    darcs-executable))
+
+(defun el-get-darcs-get (package url post-install-fun)
+  "Get a given PACKAGE following the URL using darcs."
+  (let* ((darcs-executable (el-get-darcs-executable))
+	 (name (format "*darcs get %s*" package))
+	 (ok   (format "Package %s installed" package))
+	 (ko   (format "Could not install package %s." package)))
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :default-directory ,el-get-dir
+		      :program ,darcs-executable
+		      :args ("get" "--lazy" ,url ,package)
+		      :message ,ok
+		      :error ,ko))
+     post-install-fun)))
+
+(defun el-get-darcs-pull (package url post-update-fun)
+  "darcs pull the package."
+  (let* ((darcs-executable (el-get-darcs-executable))
+	 (pdir (el-get-package-directory package))
+	 (name (format "*darcs pull %s*" package))
+	 (ok   (format "Pulled package %s." package))
+	 (ko   (format "Could not update package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :default-directory ,pdir
+		      :program ,darcs-executable
+		      :args ( "pull" )
+		      :message ,ok
+		      :error ,ko))
+     post-update-fun)))
+
+
+;;
 ;; utilities for both apt-get and fink support (dpkg based)
 ;;
 (defun el-get-dpkg-package-status (package)
@@ -677,7 +885,8 @@ found."
   (let* ((pdir    (el-get-package-directory package))
 	 (method  (plist-get (el-get-package-def package) :type))
 	 (basedir (cond ((eq method 'apt-get) el-get-apt-get-base)
-			((eq method 'fink)    el-get-fink-base)))
+			((eq method 'fink)    el-get-fink-base)
+			((eq method 'pacman)  el-get-pacman-base)))
 	 (debdir  (concat (file-name-as-directory basedir) package)))
     (unless (file-directory-p pdir)
       (shell-command
@@ -686,7 +895,6 @@ found."
 (defun el-get-dpkg-remove-symlink (package)
   "rm -f ~/.emacs.d/el-get/package"
   (let* ((pdir    (el-get-package-directory package)))
-    (message "PHOQUE %S" pdir)
     (when (file-symlink-p pdir)
       (message (concat "cd " el-get-dir " && rm -f " package))
       (shell-command
@@ -710,6 +918,7 @@ password prompt."
 	(make-local-variable 'el-get-sudo-password-process-filter-pos)
 	(setq el-get-sudo-password-process-filter-pos (point-min)))
 
+      ;; first, check about passwords
       (save-excursion
 	(goto-char (point-max))
 	(insert string)
@@ -718,12 +927,23 @@ password prompt."
 	(while (re-search-forward "password" nil t)
 	  (let* ((prompt (thing-at-point 'line))
 		 (pass   (read-passwd prompt)))
-	    (process-send-string proc (concat pass "\n"))))
-	(setq el-get-sudo-password-process-filter-pos (point-max))))))
+	    (process-send-string proc (concat pass "\n")))))
+
+      ;; second, check about "Do you want to continue [Y/n]?" prompts
+      (save-excursion
+	(while (re-search-forward "Do you want to continue" nil t)
+	  (set-window-buffer (selected-window) (process-buffer proc))
+	  (let* ((prompt (thing-at-point 'line))
+		 (cont   (yes-or-no-p (concat prompt " "))))
+	    (process-send-string proc (concat (if cont "y" "n") "\n")))))
+
+      (setq el-get-sudo-password-process-filter-pos (point-max)))))
 
 (defun el-get-apt-get-install (package url post-install-fun)
   "echo $pass | sudo -S apt-get install PACKAGE"
-  (let* ((name (format "*apt-get install %s*" package))
+  (let* ((source  (el-get-package-def package))
+         (pkgname (or (plist-get source :pkgname) package))
+         (name (format "*apt-get install %s*" package))
 	 (ok   (format "Package %s installed." package))
 	 (ko   (format "Could not install package %s." package)))
 
@@ -733,14 +953,16 @@ password prompt."
 		      :buffer-name ,name
 		      :process-filter ,(function el-get-sudo-password-process-filter)
 		      :program ,(executable-find "sudo")
-		      :args ("-S" ,(executable-find "apt-get") "install" ,package)
+		      :args ("-S" ,(executable-find "apt-get") "install" ,pkgname)
 		      :message ,ok
 		      :error ,ko))
      post-install-fun)))
 
 (defun el-get-apt-get-remove (package url post-remove-fun)
   "apt-get remove PACKAGE, URL is there for API compliance"
-  (let* ((name (format "*apt-get remove %s*" package))
+  (let* ((source  (el-get-package-def package))
+         (pkgname (or (plist-get source :pkgname) package))
+         (name (format "*apt-get remove %s*" package))
 	 (ok   (format "Package %s removed." package))
 	 (ko   (format "Could not remove package %s." package)))
 
@@ -750,7 +972,7 @@ password prompt."
 		      :buffer-name ,name
 		      :process-filter ,(function el-get-sudo-password-process-filter)
 		      :program ,(executable-find "sudo")
-		      :args ("-S" ,(executable-find "apt-get") "remove" "-y" ,package)
+		      :args ("-S" ,(executable-find "apt-get") "remove" "-y" ,pkgname)
 		      :message ,ok
 		      :error ,ko))
      post-remove-fun)))
@@ -764,6 +986,7 @@ password prompt."
 (defun el-get-fink-install (package url post-install-fun)
   "sudo -S fink install PACKAGE"
   (let* ((name (format "*fink install %s*" package))
+         (pkgname (or (plist-get source :pkgname) package))
 	 (ok   (format "Package %s installed." package))
 	 (ko   (format "Could not install package %s." package)))
 
@@ -773,7 +996,7 @@ password prompt."
 		      :buffer-name ,name
 		      :process-filter ,(function el-get-sudo-password-process-filter)
 		      :program ,(executable-find "sudo")
-		      :args ("-S" ,(executable-find "fink") "install" ,package)
+		      :args ("-S" ,(executable-find "fink") "install" ,pkgname)
 		      :message ,ok
 		      :error ,ko))
      post-install-fun)))
@@ -783,6 +1006,7 @@ password prompt."
 (defun el-get-fink-remove (package url post-remove-fun)
   "apt-get remove PACKAGE. URL is there for API compliance."
   (let* ((name (format "*fink remove %s*" package))
+         (pkgname (or (plist-get source :pkgname) package))
 	 (ok   (format "Package %s removed." package))
 	 (ko   (format "Could not remove package %s." package)))
 
@@ -792,7 +1016,7 @@ password prompt."
 		      :buffer-name ,name
 		      :process-filter ,(function el-get-sudo-password-process-filter)
 		      :program ,(executable-find "sudo")
-		      :args ("-S" ,(executable-find "fink") "-y" "remove" ,package)
+		      :args ("-S" ,(executable-find "fink") "-y" "remove" ,pkgname)
 		      :message ,ok
 		      :error ,ko))
      post-remove-fun)))
@@ -869,11 +1093,8 @@ PACKAGE isn't currently installed by ELPA."
 ;;
 ;; http support
 ;;
-(defun el-get-http-retrieve-callback (url-arg package post-install-fun &optional dest sources)
-  "Callback function for `url-retrieve', store the emacs lisp file for the package.
-
-URL-ARG is nil in my tests but `url-retrieve' seems to insist on
-passing it the the callback function nonetheless."
+(defun el-get-http-retrieve-callback (status package post-install-fun &optional dest sources)
+  "Callback function for `url-retrieve', store the emacs lisp file for the package."
   (let* ((pdir   (el-get-package-directory package))
 	 (dest   (or dest (concat (file-name-as-directory pdir) package ".el")))
 	 (part   (concat dest ".part"))
@@ -893,8 +1114,15 @@ passing it the the callback function nonetheless."
   (funcall post-install-fun package))
 
 (defun el-get-http-install (package url post-install-fun &optional dest)
-  "Dowload a single-file PACKAGE over HTTP and store it in DEST, or in PACKAGE.el"
-  (let ((pdir   (el-get-package-directory package)))
+  "Dowload a single-file PACKAGE over HTTP and store it in DEST.
+
+Should dest be omited (nil), the url content will get written
+into the package :localname option or its `file-name-nondirectory' part."
+  (let* ((pdir   (el-get-package-directory package))
+	 (fname  (or (plist-get (el-get-package-def package) :localname)
+		     (file-name-nondirectory url)))
+	 (dest   (or dest
+		     (concat (file-name-as-directory pdir) fname))))
     (unless (file-directory-p pdir)
       (make-directory pdir))
     (url-retrieve
@@ -959,6 +1187,96 @@ the files up."
 
 
 ;;
+;; pacman support
+;;
+(add-hook 'el-get-pacman-install-hook 'el-get-dpkg-symlink)
+
+(defun el-get-pacman-install (package url post-install-fun)
+  "echo $pass | sudo -S pacman install PACKAGE"
+  (let* ((source  (el-get-package-def package))
+         (pkgname (or (plist-get source :pkgname) package))
+         (name    (format "*pacman install %s*" package))
+	 (ok      (format "Package %s installed." package))
+	 (ko      (format "Could not install package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :process-filter ,(function el-get-sudo-password-process-filter)
+		      :program ,(executable-find "sudo")
+		      :args ("-S" ,(executable-find "pacman") "--sync" "--noconfirm" "--needed" ,pkgname)
+		      :message ,ok
+		      :error ,ko
+		      :sync t))
+     post-install-fun)))
+
+(defun el-get-pacman-remove (package url post-remove-fun)
+  "pacman remove PACKAGE, URL is there for API compliance"
+  (let* ((source  (el-get-package-def package))
+         (pkgname (or (plist-get source :pkgname) package))
+         (name    (format "*pacman remove %s*" package))
+	 (ok      (format "Package %s removed." package))
+	 (ko      (format "Could not remove package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :process-filter ,(function el-get-sudo-password-process-filter)
+		      :program ,(executable-find "sudo")
+		      :args ("-S" ,(executable-find "pacman") "--remove" "--noconfirm" ,pkgname)
+		      :message ,ok
+		      :error ,ko
+		      :sync t))
+     post-remove-fun)))
+
+(add-hook 'el-get-pacman-remove-hook 'el-get-dpkg-remove-symlink)
+
+
+;;
+;; mercurial (hg) support
+;;
+(defun el-get-hg-clone (package url post-install-fun)
+  "Clone the given package following the URL."
+  (let* ((hg-executable "hg")
+	 (pdir (el-get-package-directory package))
+	 (name (format "*hg clone %s*" package))
+	 (ok   (format "Package %s installed." package))
+	 (ko   (format "Could not install package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :default-directory ,el-get-dir
+		      :program ,hg-executable
+		      :args ("clone" ,url ,package)
+		      :message ,ok
+		      :error ,ko))
+     post-install-fun)))
+
+(defun el-get-hg-pull (package url post-update-fun)
+  "hg pull the package."
+  (let* ((hg-executable "hg")
+	 (pdir (el-get-package-directory package))
+	 (name (format "*hg pull %s*" package))
+	 (ok   (format "Pulled package %s." package))
+	 (ko   (format "Could not update package %s." package)))
+
+    (el-get-start-process-list
+     package
+     `((:command-name ,name
+		      :buffer-name ,name
+		      :default-directory ,pdir
+		      :program ,hg-executable
+		      :args ("pull" "--update")
+		      :message ,ok
+		      :error ,ko))
+     post-update-fun)))
+
+
+;;
 ;; Common support bits
 ;;
 (defun el-get-rmdir (package url post-remove-fun)
@@ -971,10 +1289,12 @@ the files up."
 
 (defun el-get-build-commands (package)
   "Given a PACKAGE, returns its building commands."
-  (let* ((source     (el-get-package-def package))
-	 (build-type (intern (format ":build/%s" system-type))))
-    (or (plist-get source build-type)
-	(plist-get source :build))))
+  (let ((build-commands
+	 (let* ((source     (el-get-package-def package))
+		(build-type (intern (format ":build/%s" system-type))))
+	   (or (plist-get source build-type)
+	       (plist-get source :build)))))
+    (or (ignore-errors (eval build-commands)) build-commands)))
 
 
 (defun el-get-build-command-program (name)
@@ -1172,7 +1492,13 @@ entry."
   "Raise en error if PACKAGE is not a valid package according to
 `el-get-package-p'."
   (unless (el-get-package-p package)
-    (error "el-get: can not find package name `%s' in `el-get-sources'" package)))
+    (error "el-get: can not find package name `%s' in `el-get-sources'" package))
+  ;; check for recipe too
+  (let ((recipe (el-get-package-def package)))
+    (unless recipe
+      (error "el-get: package `%s' has no recipe" package))
+    (unless (plist-member recipe :type)
+      (error "el-get: package `%s' has incomplete recipe (no :type)" package))))
 
 (defun el-get-read-package-name (action &optional merge-recipes)
   "Ask user for a package name in minibuffer, with completion."
@@ -1187,6 +1513,11 @@ entry."
 	      (file-newer-than-file-p el elc))
       (byte-compile-file el))))
 
+(defun el-get-set-info-path (package infodir-rel)
+  (require 'info)
+  (info-initialize)
+  (el-get-add-path-to-list package 'Info-directory-list infodir-rel))
+
 (defun el-get-init (package)
   "Care about `load-path', `Info-directory-list', and (require 'features)."
   (interactive (list (el-get-read-package-name "Init")))
@@ -1200,10 +1531,11 @@ entry."
 	 (nocomp   (and (plist-member source :compile) (not compile)))
 	 (infodir  (plist-get source :info))
 	 (after    (plist-get source :after))
+	 (before   (plist-get source :before))
 	 (pdir     (el-get-package-directory package)))
 
-    ;; apt-get and ELPA will take care of load-path, Info-directory-list
-    (unless (member method '(elpa apt-get fink))
+    ;; apt-get, pacman and ELPA will take care of load-path, Info-directory-list
+    (unless (member method '(elpa apt-get fink pacman))
       ;; append entries to load-path and Info-directory-list
       (mapc (lambda (path)
 	      (el-get-add-path-to-list package 'load-path path))
@@ -1221,35 +1553,47 @@ entry."
 				(not (file-directory-p infodir-abs-conf)))
 			   infodir-abs-conf
 			 (concat (file-name-as-directory infodir-abs) package))))
+        (if (file-exists-p info-dir)
+            (el-get-set-info-path package infodir-rel)
+          (when (and infodir
+                     (file-directory-p infodir-abs)
+                     (not (file-exists-p info-dir)))
+            (el-get-set-info-path package infodir-rel)
+            (el-get-build
+             package
+             `(,(format "%s %s dir"
+			el-get-install-info
+			(if (string= (substring infofile -5) ".info")
+			    infofile
+			  (concat infofile ".info")))) infodir-rel t)))))
 
-	(when (and infodir
-		   (file-directory-p infodir-abs)
-		   (not (file-exists-p info-dir)))
-	  (require 'info)
-	  (info-initialize)
-	  ;; add to Info-directory-list
-	  (el-get-add-path-to-list package 'Info-directory-list infodir-rel)
-	  ;; build the infodir entry, too
-	  (el-get-build
-	   package
-	   `(,(format "%s %s.info dir" el-get-install-info infofile)) infodir-rel t))))
+    (when el-get-byte-compile
+      ;; byte-compile either :compile entries or anything in load-path
+      (let ((byte-compile-warnings nil))
+        (if compile
+	    ;; only byte-compile what's in the :compile property of the recipe
+            (dolist (path (if (listp compile) compile (list compile)))
+              (let ((fp (concat (file-name-as-directory pdir) path)))
+                ;; we accept directories, files and file name regexp
+                (cond ((file-directory-p fp) (byte-recompile-directory fp 0))
+                      ((file-exists-p fp)    (el-get-byte-compile-file pdir path))
+                      (t ; regexp case
+                       (dolist (file (directory-files pdir nil path))
+                         (el-get-byte-compile-file pdir file))))))
+          ;; Compile that directory, unless users asked not to (:compile nil)
+	  ;; or unless we have build instructions (then they should care)
+          ;; or unless we have installed pre-compiled package
+          (unless (or nocomp
+                      (el-get-build-commands package)
+                      (member method '(apt-get fink pacman)))
+            (dolist (dir el-path)
+              (byte-recompile-directory
+               (expand-file-name (concat (file-name-as-directory pdir) dir)) 0))))))
 
-    ;; byte-compile either :compile entries or anything in load-path
-    (let ((byte-compile-warnings nil))
-      (if compile
-	  (dolist (path (if (listp compile) compile (list compile)))
-	    (let ((fp (concat (file-name-as-directory pdir) path)))
-	      ;; we accept directories, files and file name regexp
-	      (cond ((file-directory-p fp) (byte-recompile-directory fp 0))
-		    ((file-exists-p fp)    (el-get-byte-compile-file pdir path))
-		    (t ; regexp case
-		     (dolist (file (directory-files pdir nil path))
-		       (el-get-byte-compile-file pdir file))))))
-	;; Compile .el files in that directory --- unless we have build instructions
-	(unless (or nocomp (el-get-build-commands package))
-	  (dolist (dir el-path)
-	    (byte-recompile-directory
-	     (expand-file-name (concat (file-name-as-directory pdir) dir)) 0)))))
+    ;; call the "before" user function
+    (when (and before (functionp before))
+      (message "el-get: Calling :before function for package %s" package)
+      (funcall before))
 
     ;; loads
     (when loads
@@ -1274,8 +1618,11 @@ entry."
 
     ;; call the "after" user function
     (when (and after (functionp after))
-      (message "el-get: Calling init user function for package %s" package)
+      (message "el-get: Calling :after function for package %s" package)
       (funcall after))
+
+    ;; and call the global init hooks
+    (run-hook-with-args 'el-get-post-init-hooks package)
 
     ;; return the package
     package))
@@ -1313,16 +1660,18 @@ from `el-get-sources'.
 			  el-get-sources)))
     (el-get-error-unless-package-p package)
 
-    (let ((status (el-get-read-package-status package)))
-      (when (string= "installed" status)
-	(error "Package %s is already installed." package))
-      (when (string= "required" status)
-	(error "Package %s failed to install, remove it first." package)))
-
-    (let* ((source   (el-get-package-def package))
+    (let* ((status   (el-get-read-package-status package))
+	   (source   (el-get-package-def package))
 	   (method   (plist-get source :type))
 	   (install  (el-get-method method :install))
 	   (url      (plist-get source :url)))
+
+      (when (string= "installed" status)
+	(error "Package %s is already installed." package))
+
+      (when (string= "required" status)
+	(message "Package %s failed to install, removing it first." package)
+	(el-get-remove package))
 
       ;; check we can install the package and save to "required" status
       (el-get-check-init)
@@ -1404,19 +1753,29 @@ from `el-get-sources'."
       (process-send-string proc (concat message "\n"))
       (process-send-eof proc))))
 
+;;
+;; Notification support is either the internal one provided by Emacs 24, or
+;; the external growl one as defined above, or the one provided by the
+;; add-on found on http://www.emacswiki.org/emacs/notify.el (there's a
+;; recipe) for older Emacs versions users
+;;
 (defun el-get-notify (title message)
   "Notify the user using either the dbus based API or the `growl' one"
-  (when (fboundp 'dbus-register-signal)
-    ;; avoid a bug in Emacs 24.0 under darwin
-    (require 'notifications nil t))
+  (if (fboundp 'dbus-register-signal)
+      ;; avoid a bug in Emacs 24.0 under darwin
+      (require 'notifications nil t)
+    ;; else try notify.el, there's a recipe for it
+    (unless (fboundp 'notify)
+      (when (featurep 'notify)
+	(require 'notify))))
 
-  ;; we use cond for potential adding of notification methods
-  (cond ((fboundp 'notifications-notify) (notifications-notify
-                                          :title title :body message))
+  (cond ((fboundp 'notifications-notify) (notifications-notify :title title
+							       :body message))
+	((fboundp 'notify)               (notify title message))
 	((fboundp 'growl)                (growl title message))
 	(t                               (message "%s: %s" title message))))
 
-(when (or (fboundp 'notifications-notify) (fboundp 'growl))
+(when (or (fboundp 'notifications-notify) (fboundp 'notify) (fboundp 'growl))
   (defun el-get-post-install-notification (package)
     "Notify the PACKAGE has been installed."
     (el-get-notify (format "%s installed" package)
@@ -1428,6 +1787,12 @@ from `el-get-sources'."
     (el-get-notify (format "%s updated" package)
 		   "This package has been updated successfully by el-get."))
   (add-hook 'el-get-post-update-hooks 'el-get-post-update-notification))
+
+(defun el-get-post-init-message (package)
+  "After PACKAGE init is done, just message about it"
+  (message "el-get initialized package %s" package))
+
+(add-hook 'el-get-post-init-hooks 'el-get-post-init-message)
 
 
 ;;
@@ -1447,51 +1812,55 @@ suitable for use in your emacs init script.
 
 By default (SYNC is nil), `el-get' will run all the installs
 concurrently so that you can still use Emacs to do your normal
-work. When SYNC is non-nil (any value will do, 'sync for
-example), then `el-get' will enter a wait-loop and only let you
-use Emacs once it has finished with its job. That's useful an
-option to use in your `user-init-file'.
+work.
+
+When SYNC is 'sync, each package will get installed one after the
+other, and any error will stop it all.
+
+When SYNC is 'wait, then `el-get' will enter a wait-loop and only
+let you use Emacs once it has finished with its job. That's
+useful an option to use in your `user-init-file'. Note that each
+package in the list gets installed in parallel with this option.
 
 Please note that the `el-get-init' part of `el-get' is always
 done synchronously, so you will have to wait here. There's
 `byte-compile' support though, and the packages you use are
 welcome to use `autoload' too."
+  (unless (or (null sync)
+	      (member sync '(sync wait)))
+    (error "el-get sync parameter should be either nil, sync or wait"))
   (let* ((p-status    (el-get-read-all-packages-status))
          (total       (length (el-get-package-name-list)))
          (installed   (el-get-count-package-with-status "installed"))
-         progress ret)
-    (when sync
-      (setq progress
-	    (make-progress-reporter
-	     "Waiting for `el-get' to complete… " 0 (- total installed) 0)))
-    ;; keep the result of mapcar to return it even in the 'sync case
-    (setq
-     ret
-     (mapcar
-      (lambda (source)
-	(let* ((package (el-get-source-name source))
-	       (status  (el-get-package-status package p-status)))
-	  ;; check if the package needs to be fetched (and built)
-	  (if (el-get-package-exists-p package)
-	      (if (and status (string= "installed" status))
-		  (condition-case err
-		      (el-get-init package)
-		    ((debug error) ;; catch-all, allow for debugging
-		     (message "%S" (error-message-string err))))
-		(message "Package %s failed to install, remove it first." package))
-	    (el-get-install package))))
-      el-get-sources))
+         (progress (and (eq sync 'wait)
+                        (make-progress-reporter
+			 "Waiting for `el-get' to complete… "
+			 0 (- total installed) 0)))
+         (el-get-default-process-sync (eq sync 'sync)))
+    ;; keep the result of mapcar to return it even in the 'wait case
+    (prog1
+        (mapcar
+         (lambda (source)
+           (let* ((package (el-get-source-name source))
+                  (status  (el-get-package-status package p-status)))
+             ;; check if the package needs to be fetched (and built)
+             (if (el-get-package-exists-p package)
+                 (if (and status (string= "installed" status))
+                     (condition-case err
+                         (el-get-init package)
+                       ((debug error) ;; catch-all, allow for debugging
+                        (message "%S" (error-message-string err))))
+                   (message "Package %s failed to install, remove it first." package))
+               (el-get-install package))))
+         el-get-sources)
 
-    ;; el-get-install is async, that's now ongoing.
-    (when sync
-      (while (> (- total installed) 0)
-	(sleep-for 0.2)
-	;; don't forget to account for installation failure
-	(setq installed (el-get-count-package-with-status "installed" "required"))
-	(progress-reporter-update progress (- total installed)))
-      (progress-reporter-done progress))
-
-    ;; return the list of packages
-    ret))
+      ;; el-get-install is async, that's now ongoing.
+      (when progress
+        (while (> (- total installed) 0)
+          (sleep-for 0.2)
+          ;; don't forget to account for installation failure
+          (setq installed (el-get-count-package-with-status "installed" "required"))
+          (progress-reporter-update progress (- total installed)))
+        (progress-reporter-done progress)))))
 
 (provide 'el-get)

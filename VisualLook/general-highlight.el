@@ -77,3 +77,9 @@
 (global-set-key [(control f7)] 'highlight-symbol-remove-all)
 
 (autoload 'rainbow-mode "rainbow-mode" nil t)
+
+;; allow persistent highlighting in every mode
+(defadvice hi-lock-set-pattern (around hi-lock-add-keyword-advice (regexp face))
+  (let ((font-lock-fontified t))
+    ad-do-it))
+(ad-activate 'hi-lock-set-pattern)

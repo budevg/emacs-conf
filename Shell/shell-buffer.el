@@ -38,14 +38,21 @@
 
 
 (autoload 'multi-term "multi-term" nil t)
-(eval-after-load "term"
-  '(progn
-     (add-hook 'term-mode-hook
-               (lambda ()
-                 ;; used to allow persisten highlighting in term mode
-                 ;; not sure if this is bug in emacs-23.2.91 pretest
-                 (set (make-local-variable 'font-lock-fontified) t)))))
 (global-set-key [f3] 'multi-term)
+(eval-after-load "multi-term"
+  '(progn
+     (setq term-bind-key-alist
+           (append term-bind-key-alist
+                   '(("C-<up>" . term-send-up)
+                     ("<up>" . previous-line)
+                     ("C-<down>" . term-send-down)
+                     ("<down>" . next-line)
+                     ("<right>" . forward-char)
+                     ("<left>" . backward-char)
+                     ("<home>" . move-beginning-of-line)
+                     ("<end>" . move-end-of-line)
+                     )))
+       (add-hook 'term-mode-hook (lambda () (cua-mode t)))))
 
 (autoload 'cssh-term-remote-open "cssh" nil t)
 (global-set-key (kbd "C-=") 'cssh-term-remote-open)
