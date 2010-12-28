@@ -175,7 +175,7 @@ export that region, otherwise export the entire body."
                        (point-max)))
          (raw-body (buffer-substring html-start html-end))
          (tmp-file (make-temp-name (expand-file-name "mail" temporary-file-directory)))
-         (body (org-mime-org-export "org" raw-body tmp-file))
+         (body (org-export-string raw-body "org" (file-name-directory tmp-file)))
          ;; because we probably don't want to skip part of our mail
          (org-export-skip-text-before-1st-heading nil)
          ;; because we probably don't want to export a huge style file
@@ -185,7 +185,7 @@ export that region, otherwise export the entire body."
          ;; to hold attachments for inline html images
          (html-and-images
           (org-mime-replace-images
-           (org-mime-org-export "html" raw-body tmp-file)
+           (org-export-string raw-body "html" (file-name-directory tmp-file))
            tmp-file))
          (html-images (unless arg (cdr html-and-images)))
          (html (org-mime-apply-html-hook
@@ -197,24 +197,6 @@ export that region, otherwise export the entire body."
       (goto-char html-start)
       (insert (org-mime-multipart body html)
               (mapconcat 'identity html-images "\n")))))
-
-(defun org-mime-org-export (fmt body tmp-file)
-  "Org-Export BODY to format FMT with the file name set to
-TMP-FILE during export."
-  (save-excursion
-    (with-temp-buffer
-      (insert org-mime-default-header)
-      (insert body)
-      (write-file tmp-file)
-      (org-load-modules-maybe)
-      (unless org-local-vars
-        (setq org-local-vars (org-get-local-variables)))
-      (substring
-       (eval ;; convert to fmt -- mimicing `org-run-like-in-org-mode'
-        (list 'let org-local-vars 
-              (list (intern (concat "org-export-as-" fmt))
-                    nil nil nil ''string t)))
-       (if (string= fmt "org") (length org-mime-default-header) 0)))))
 
 (defun org-mime-apply-html-hook (html)
   (if org-mime-html-hook
@@ -238,7 +220,12 @@ handling with appropriate MIME encoding."
                            (goto-char (point-min)))))
          (html-end (or (and region-p (region-end))
                        (point-max)))
-         (body (org-export-as-org nil nil nil 'string t))
+	 (temp-body-file (make-temp-file "org-mime-export"))
+	 (raw-body (buffer-substring html-start html-end))
+         (body (with-temp-buffer
+		 (insert raw-body)
+		 (write-file temp-body-file)
+		 (org-export-as-org nil nil nil 'string t)))
          (org-link-file-path-type 'absolute)
          ;; because we probably don't want to export a huge style file
          (org-export-htmlize-output-type 'inline-css)
@@ -251,7 +238,8 @@ handling with appropriate MIME encoding."
     ;; dump the exported html into a fresh message buffer
     (reporter-compose-outgoing)
     (goto-char (point-max))
-    (insert (org-mime-multipart body html)
-            (mapconcat 'identity html-images "\n"))))
+    (prog1 (insert (org-mime-multipart body html)
+		   (mapconcat 'identity html-images "\n"))
+      (delete-file temp-body-file))))
 
 (provide 'org-mime)

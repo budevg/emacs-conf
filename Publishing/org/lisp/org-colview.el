@@ -6,7 +6,7 @@
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.01e
+;; Version: 7.4
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -228,7 +228,9 @@ This is the compiled version of the format.")
        (overlay-put ov 'org-columns-value (cdr ass))
        (overlay-put ov 'org-columns-value-modified modval)
        (overlay-put ov 'org-columns-pom pom)
-       (overlay-put ov 'org-columns-format f))
+       (overlay-put ov 'org-columns-format f)
+       (overlay-put ov 'line-prefix "")
+       (overlay-put ov 'wrap-prefix ""))
       (if (or (not (char-after beg))
 	      (equal (char-after beg) ?\n))
 	  (let ((inhibit-read-only t))
@@ -241,6 +243,8 @@ This is the compiled version of the format.")
        (overlay-put ov 'invisible t)
        (overlay-put ov 'keymap org-columns-map)
        (overlay-put ov 'intangible t)
+       (overlay-put ov 'line-prefix "")
+       (overlay-put ov 'wrap-prefix "")
        (push ov org-columns-overlays)
        (setq ov (make-overlay (1- (point-at-eol)) (1+ (point-at-eol))))
        (overlay-put ov 'keymap org-columns-map)
@@ -464,7 +468,7 @@ Where possible, use the standard interface for changing this line."
 		    (call-interactively 'org-schedule))))
      ((equal key "BEAMER_env")
       (setq eval '(org-with-point-at pom
-		    (call-interactively 'org-beamer-set-environment-tag))))
+		    (call-interactively 'org-beamer-select-environment))))
      (t
       (setq allowed (org-property-get-allowed-values pom key 'table))
       (if allowed
@@ -515,7 +519,7 @@ Where possible, use the standard interface for changing this line."
 	  (txt (match-string 3))
 	  (post "")
 	  txt2)
-      (if (string-match (org-re "[ \t]+:[[:alnum:]:_@]+:[ \t]*$") txt)
+      (if (string-match (org-re "[ \t]+:[[:alnum:]:_@#%]+:[ \t]*$") txt)
 	  (setq post (match-string 0 txt)
 		txt (substring txt 0 (match-beginning 0))))
       (setq txt2 (read-string "Edit: " txt))

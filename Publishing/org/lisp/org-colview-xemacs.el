@@ -6,7 +6,7 @@
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.01e
+;; Version: 7.4
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -685,7 +685,7 @@ Where possible, use the standard interface for changing this line."
 	  (txt (match-string 3))
 	  (post "")
 	  txt2)
-      (if (string-match (org-re "[ \t]+:[[:alnum:]:_@]+:[ \t]*$") txt)
+      (if (string-match (org-re "[ \t]+:[[:alnum:]:_@#%]+:[ \t]*$") txt)
 	  (setq post (match-string 0 txt)
 		txt (substring txt 0 (match-beginning 0))))
       (setq txt2 (read-string "Edit: " txt))
