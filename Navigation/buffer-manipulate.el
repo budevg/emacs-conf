@@ -33,6 +33,7 @@
 (global-set-key [(control pause)] 'delete-frame)
 
 (ido-mode t)
+(setq ido-enable-flex-matching t) ; fuzzy matching is a must have
 (icomplete-mode t)
 
 (global-set-key [(control \;)] 'ido-switch-buffer)
