@@ -46,7 +46,9 @@
     (running
      (actions
       ("!" "Command from root" magit-shell-command)
-      (":" "Git command" magit-git-command)))
+      (":" "Git command" magit-git-command)
+      ("g" "git gui" magit-run-git-gui)
+      ("k" "gitk" magit-run-gitk)))
 
     (fetching
      (man-page "git-fetch")
@@ -58,7 +60,7 @@
     (pushing
      (man-page "git-push")
      (actions
-      ("p" "Push" magit-push)
+      ("P" "Push" magit-push)
       ("t" "Push tags" magit-push-tags))
      (switches
       ("-f" "Force" "--force")
@@ -67,32 +69,32 @@
     (pulling
      (man-page "git-pull")
      (actions
-      ("p" "Pull" magit-pull))
+      ("F" "Pull" magit-pull))
      (switches
       ("-r" "Rebase" "--rebase")))
 
     (branching
      (man-page "git-branch")
      (actions
-      ("V" "Branch manager" magit-show-branches)
-      ("B" "Create" magit-create-branch)
+      ("v" "Branch manager" magit-show-branches)
+      ("n" "New" magit-create-branch)
       ("m" "Move" magit-move-branch)
       ("d" "Delete" magit-delete-branch)
-      ("c" "Checkout" magit-checkout)))
+      ("b" "Checkout" magit-checkout)))
 
     (tagging
      (man-page "git-tag")
      (actions
       ("t" "Lightweight" magit-tag)
-      ("T" "Annotated" magit-annotated-tag))
+      ("a" "Annotated" magit-annotated-tag))
      (switches
       ("-f" "Force" "-f")))
 
     (stashing
      (man-page "git-stash")
      (actions
-      ("s" "Save" magit-stash)
-      ("S" "Snapshot" magit-stash-snapshot))
+      ("z" "Save" magit-stash)
+      ("s" "Snapshot" magit-stash-snapshot))
      (switches
       ("-k" "Keep index" "--keep-index")))
 
@@ -326,10 +328,8 @@ highlighed before the description."
     (magit-key-mode-redraw for-group))
   (message
    (concat
-    "Type a switch or argument's prefix keys ("
-    (propertize "highlighed" 'face 'font-lock-builtin-face)
-    ") to toggle it. Run 'actions' with their prefixes. "
-    "'?' for more help on specific options.")))
+    "Type a prefix key to toggle it. Run 'actions' with their prefixes. "
+    "'?' for more help.")))
 
 (defun magit-key-mode-get-key-map (for-group)
   "Get or build the keymap for FOR-GROUP."
