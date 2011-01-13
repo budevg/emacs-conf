@@ -1,16 +1,4 @@
 
-(defun transpose-buffers (arg)
-  "Transpose the buffers shown in two windows."
-  (interactive "p")
-  (let ((selector (if (>= arg 0) 'next-window 'previous-window)))
-    (while (/= arg 0)
-      (let ((this-win (window-buffer))
-            (next-win (window-buffer (funcall selector))))
-        (set-window-buffer (selected-window) next-win)
-        (set-window-buffer (funcall selector) this-win)
-        (select-window (funcall selector)))
-      (setq arg (if (plusp arg) (1- arg) (1+ arg))))))
-
 (autoload 'windmove-find-other-window "windmove" nil t)
 (defun windmove-ext (dir)
   (interactive)
@@ -46,9 +34,17 @@
 (global-set-key [(meta pause)] 'delete-window)
 (global-set-key [f5]  'delete-other-windows)
 (global-set-key [(control f5)]  'new-frame)
-(global-set-key [(meta f5)]  'transpose-buffers)
 
 (fset 'yes-or-no-p 'y-or-n-p)
+
+(autoload 'buf-move-up "buffer-move" nil t)
+(autoload 'buf-move-down "buffer-move" nil t)
+(autoload 'buf-move-lef "buffer-move" nil t)
+(autoload 'buf-move-right "buffer-move" nil t)
+(global-set-key [(control kp-8)] 'buf-move-up)
+(global-set-key [(control kp-2)] 'buf-move-down)
+(global-set-key [(control kp-4)] 'buf-move-left)
+(global-set-key [(control kp-6)] 'buf-move-right)
 
 
 ;; sticky windows

@@ -62,9 +62,6 @@
      (setq browse-kill-ring-display-duplicates nil)))
 
 
-(autoload 'kill-ring-search "kill-ring-search" nil t)
-(global-set-key [(meta insert)] 'kill-ring-search)
-
 (setq make-backup-files nil)
 
 ;; disable autoencoding on <?xml version="1.0" encoding="UTF-16" ?> line
@@ -72,11 +69,6 @@
 
 ;; ignore logging warnings when copy too much to the buffer
 (setq warning-suppress-log-types '((undo discard-info)))
-
-(defun insert-timestamp ()
-  (interactive)
-  (insert (format-time-string "%d/%m/%Y %R")))
-	
 
 (setq ispell-program-name "aspell")
 
@@ -140,3 +132,8 @@
 (global-set-key [(meta kp-8)] 'swap-line-up)
 (global-set-key [(meta kp-2)] 'swap-line-down)
 
+
+;; don't use lame windows key bindings
+(setq cua-enable-cua-keys nil)
+;; Edit text rectangles in emacs
+(cua-mode)

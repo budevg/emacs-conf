@@ -8,7 +8,7 @@ EMACS CONFIGURATION TUTORIAL
    make/unmake window sticky
 ** <f5>
    maximize current window
-** <meta>+<f5>
+** <control>+<kp-2/4/6/8>
    switch splitted windows
 ** <meta>+<pause>
    delete window

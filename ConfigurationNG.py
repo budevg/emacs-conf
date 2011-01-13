@@ -61,8 +61,6 @@ editing = [Bunch(path = "Editing/init.el",
                  msg = "commong editing settings"),
            Bunch(path = "Editing/dos2unix.el",
                  msg = "dos to unix and vice versa converions"),
-           Bunch(path = "Editing/rectangle.el",
-                 msg = "Edit text rectangles in emacs"),
            ]
 
 publishing = [Bunch(path = "Publishing/org/org-init.el",

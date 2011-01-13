@@ -2,14 +2,14 @@
 
 ;; Copyright (C) 1992,1993,1994  Tim Peters
 
-;; Author: 2003-2009 https://launchpad.net/python-mode
+;; Author: 2003-2011 https://launchpad.net/python-mode
 ;;         1995-2002 Barry A. Warsaw
 ;;         1992-1994 Tim Peters
 ;; Maintainer: python-mode@python.org
 ;; Created:    Feb 1992
 ;; Keywords:   python languages oop
 
-(defconst py-version "5.1.0+"
+(defconst py-version "5.2.0"
   "`python-mode' version number.")
 
 ;; This file is part of python-mode.el.
@@ -412,17 +412,16 @@ set in py-execute-region and used in py-jump-to-exception.")
 ;; from python.el, version "22.1"
 
 (defconst python-font-lock-syntactic-keywords
-  
-'(("[^\\]\\\\\\(?:\\\\\\\\\\)*\\(\\s\"\\)\\1\\(\\1\\)"
-  (2
-   (7)))
- ("\\([RUru]?\\)[Rr]?\\(\\s\"\\)\\2\\(\\2\\)"
-  (1
-   (python-quote-syntax 1))
-  (2
-   (python-quote-syntax 2))
-  (3
-   (python-quote-syntax 3)))))
+  '(("[^\\]\\\\\\(?:\\\\\\\\\\)*\\(\\s\"\\)\\1\\(\\1\\)"
+     (2
+      (7)))
+    ("\\([RUBrub]?\\)[Rr]?\\(\\s\"\\)\\2\\(\\2\\)"
+     (1
+      (python-quote-syntax 1))
+     (2
+      (python-quote-syntax 2))
+     (3
+      (python-quote-syntax 3)))))
 
 (defun python-quote-syntax (n)
   "Put `syntax-table' property correctly on triple quote.
@@ -446,25 +445,25 @@ Used for syntactic keywords.  N is the match number (1, 2 or 3)."
      ((= n 3)
       (let* ((font-lock-syntactic-keywords nil)
              (syntax (syntax-ppss)))
-        (when (eq t (nth 3 syntax))	; after unclosed fence
-          (goto-char (nth 8 syntax))	; fence position
-          (skip-chars-forward "uUrR")	; skip any prefix
+        (when (eq t (nth 3 syntax))     ; after unclosed fence
+          (goto-char (nth 8 syntax))    ; fence position
+          (skip-chars-forward "uUrRbB") ; skip any prefix
           ;; Is it a matching sequence?
           (if (eq (char-after) (char-after (match-beginning 2)))
               (if (featurep 'xemacs)
-                '(15)
-            (eval-when-compile (string-to-syntax "|")))
+                  '(15)
+                (eval-when-compile (string-to-syntax "|")))
             ))))
      ;; Consider property for initial char, accounting for prefixes.
-     ((or (and (= n 2)			; leading quote (not prefix)
+     ((or (and (= n 2)                  ; leading quote (not prefix)
                (= (match-beginning 1) (match-end 1))) ; prefix is null
-          (and (= n 1)			; prefix
+          (and (= n 1)                  ; prefix
                (/= (match-beginning 1) (match-end 1)))) ; non-empty
       (let ((font-lock-syntactic-keywords nil))
         (unless (eq 'string (syntax-ppss-context (syntax-ppss)))
           ;; (eval-when-compile (string-to-syntax "|"))
           (if (featurep 'xemacs)
-            '(15)
+              '(15)
             (eval-when-compile (string-to-syntax "|")))
           )))
      ;; Otherwise (we're in a non-matching string) the property is
@@ -474,12 +473,12 @@ Used for syntactic keywords.  N is the match number (1, 2 or 3)."
 (setq py-mode-syntax-table
       (let ((table (make-syntax-table))
             (tablelookup (if (featurep 'xemacs)
-                                     'get-char-table
-                                   'aref)))
+                             'get-char-table
+                           'aref)))
         ;; Give punctuation syntax to ASCII that normally has symbol
         ;; syntax or has word syntax and isn't a letter.
         (if (featurep 'xemacs)
-            (setq table (standard-syntax-table)) 
+            (setq table (standard-syntax-table))
           (let ((symbol (if (featurep 'xemacs) '(3)(string-to-syntax "_")))
                 ;; (symbol (string-to-syntax "_"))
                 (sst (standard-syntax-table)))
@@ -502,11 +501,11 @@ Used for syntactic keywords.  N is the match number (1, 2 or 3)."
     ;; We don't need to save the match data.
     (nth 8 (syntax-ppss)))
 
-  (defconst python-space-backslash-table
-    (let ((table (copy-syntax-table py-mode-syntax-table)))
-      (modify-syntax-entry ?\\ " " table)
-      table)
-    "`python-mode-syntax-table' with backslash given whitespace syntax.")
+(defconst python-space-backslash-table
+  (let ((table (copy-syntax-table py-mode-syntax-table)))
+    (modify-syntax-entry ?\\ " " table)
+    table)
+  "`python-mode-syntax-table' with backslash given whitespace syntax.")
 
 ;; 2009-09-10 a.roehler@web.de changed section end
 
@@ -537,6 +536,16 @@ support for features needed by `python-mode'.")
   "Face for XXX, TODO, and FIXME tags")
 (make-face 'py-XXX-tag-face)
 
+;; Face for class names
+(defvar py-class-name-face 'py-class-name-face
+  "Face for Python class names.")
+(make-face 'py-class-name-face)
+
+;; Face for exception names
+(defvar py-exception-name-face 'py-exception-name-face
+  "Face for exception names like TypeError.")
+(make-face 'py-exception-name-face)
+
 (defun py-font-lock-mode-hook ()
   (or (face-differs-from-default-p 'py-pseudo-keyword-face)
       (copy-face 'font-lock-keyword-face 'py-pseudo-keyword-face))
@@ -546,6 +555,10 @@ support for features needed by `python-mode'.")
       (copy-face 'py-pseudo-keyword-face 'py-decorators-face))
   (or (face-differs-from-default-p 'py-XXX-tag-face)
       (copy-face 'font-lock-comment-face 'py-XXX-tag-face))
+  (or (face-differs-from-default-p 'py-class-name-face)
+      (copy-face 'font-lock-type-face 'py-class-name-face))
+  (or (face-differs-from-default-p 'py-exception-name-face)
+      (copy-face 'font-lock-builtin-face 'py-exception-name-face))
   )
 
 (add-hook 'font-lock-mode-hook 'py-font-lock-mode-hook)
@@ -608,7 +621,8 @@ support for features needed by `python-mode'.")
                         "\\|"))
         )
     (list
-     '("^[ \t]*\\(@.+\\)" 1 'py-decorators-face)
+     ;; decorators
+     '("^[ \t]*\\(@[a-zA-Z_][a-zA-Z_0-9]+\\)\\((.+)\\)?" 1 'py-decorators-face)
      ;; keywords
      (cons (concat "\\<\\(" kw1 "\\)\\>[ \n\t(]") 1)
      ;; builtins when they don't appear as object attributes
@@ -618,9 +632,13 @@ support for features needed by `python-mode'.")
      ;; Yes "except" is in both lists.
      (cons (concat "\\<\\(" kw2 "\\)[ \n\t(]") 1)
      ;; Exceptions
-     (list (concat "\\<\\(" kw4 "\\)[ \n\t:,(]") 1 'py-builtins-face)
+     (list (concat "\\<\\(" kw4 "\\)[ \n\t:,()]") 1 'py-exception-name-face)
+     ;; raise stmts
+     '("\\<raise[ \t]+\\([a-zA-Z_]+[a-zA-Z0-9_.]*\\)" 1 py-exception-name-face)
+     ;; except clauses
+     '("\\<except[ \t]+\\([a-zA-Z_]+[a-zA-Z0-9_.]*\\)" 1 py-exception-name-face)
      ;; classes
-     '("\\<class[ \t]+\\([a-zA-Z_]+[a-zA-Z0-9_]*\\)" 1 font-lock-type-face)
+     '("\\<class[ \t]+\\([a-zA-Z_]+[a-zA-Z0-9_]*\\)" 1 py-class-name-face)
      ;; functions
      '("\\<def[ \t]+\\([a-zA-Z_]+[a-zA-Z0-9_]*\\)"
        1 font-lock-function-name-face)
@@ -629,6 +647,27 @@ support for features needed by `python-mode'.")
        1 py-pseudo-keyword-face)
      ;; XXX, TODO, and FIXME tags
      '("XXX\\|TODO\\|FIXME" 0 py-XXX-tag-face t)
+     ;; special marking for string escapes and percent substitutes;
+     ;; loops adapted from lisp-mode in font-lock.el
+     ;; '((lambda (bound)
+     ;;     (catch 'found
+     ;;       (while (re-search-forward
+     ;;               (concat
+     ;;                "\\(\\\\\\\\\\|\\\\x..\\|\\\\u....\\|\\\\U........\\|"
+     ;;                "\\\\[0-9][0-9]*\\|\\\\[abfnrtv\"']\\)") bound t)
+     ;;         (let ((face (get-text-property (1- (point)) 'face)))
+     ;;           (when (or (and (listp face) (memq 'font-lock-string-face face))
+     ;;                     (eq 'font-lock-string-face face))
+     ;;             (throw 'found t))))))
+     ;;   (1 'font-lock-regexp-grouping-backslash prepend))
+     ;; '((lambda (bound)
+     ;;     (catch 'found
+     ;;       (while (re-search-forward "\\(%[^(]\\|%([^)]*).\\)" bound t)
+     ;;         (let ((face (get-text-property (1- (point)) 'face)))
+     ;;           (when (or (and (listp face) (memq 'font-lock-string-face face))
+     ;;                     (eq 'font-lock-string-face face))
+     ;;             (throw 'found t))))))
+     ;;   (1 'font-lock-regexp-grouping-construct prepend))
      ))
   "Additional expressions to highlight in Python mode.")
 
@@ -653,15 +692,15 @@ Currently-active file is at the head of the list.")
    ;;
    ;; (maybe raw), long single quoted triple quoted strings (SQTQ),
    ;; with potential embedded single quotes
-   "[rR]?'''[^']*\\(\\('[^']\\|''[^']\\)[^']*\\)*'''"
+   "[rRuUbB]?'''[^']*\\(\\('[^']\\|''[^']\\)[^']*\\)*'''"
    "\\|"
    ;; (maybe raw), long double quoted triple quoted strings (DQTQ),
    ;; with potential embedded double quotes
-   "[rR]?\"\"\"[^\"]*\\(\\(\"[^\"]\\|\"\"[^\"]\\)[^\"]*\\)*\"\"\""
+   "[rRuUbB]?\"\"\"[^\"]*\\(\\(\"[^\"]\\|\"\"[^\"]\\)[^\"]*\\)*\"\"\""
    "\\|"
-   "[rR]?'\\([^'\n\\]\\|\\\\.\\)*'"     ; single-quoted
-   "\\|"                                ; or
-   "[rR]?\"\\([^\"\n\\]\\|\\\\.\\)*\""  ; double-quoted
+   "[rRuUbB]?'\\([^'\n\\]\\|\\\\.\\)*'"     ; single-quoted
+   "\\|"                                    ; or
+   "[rRuUbB]?\"\\([^\"\n\\]\\|\\\\.\\)*\""  ; double-quoted
    )
   "Regular expression matching a Python string literal.")
 
@@ -713,7 +752,7 @@ Currently-active file is at the head of the list.")
 ;; pdbtrack constants
 (defconst py-pdbtrack-stack-entry-regexp
 ;  "^> \\([^(]+\\)(\\([0-9]+\\))\\([?a-zA-Z0-9_]+\\)()"
-  "^> \\(.*\\)(\\([0-9]+\\))\\([?a-zA-Z0-9_]+\\)()"
+  "^> \\(.*\\)(\\([0-9]+\\))\\([?a-zA-Z0-9_<>]+\\)()"
   "Regular expression pdbtrack uses to find a stack trace entry.")
 
 (defconst py-pdbtrack-input-prompt "\n[(<]*[Pp]db[>)]+ "
@@ -1319,9 +1358,9 @@ py-beep-if-tab-change\t\tring the bell if `tab-width' is changed"
   ;; from python.el, version "22.1"
     (set (make-local-variable 'font-lock-defaults)
        '(python-font-lock-keywords nil nil nil nil
-				   (font-lock-syntactic-keywords
-				    . python-font-lock-syntactic-keywords)))
-  ;; 2009-09-10 a.roehler@web.de changed section end 
+                                   (font-lock-syntactic-keywords
+                                    . python-font-lock-syntactic-keywords)))
+  ;; 2009-09-10 a.roehler@web.de changed section end
   (setq major-mode              'python-mode
         mode-name               "Python"
         local-abbrev-table      python-mode-abbrev-table
@@ -1356,13 +1395,26 @@ py-beep-if-tab-change\t\tring the bell if `tab-width' is changed"
     )
 
   ;; Add support for HideShow
-  (add-to-list 'hs-special-modes-alist (list
-               'python-mode (concat (if py-hide-show-hide-docstrings "^\\s-*\"\"\"\\|" "") (mapconcat 'identity (mapcar #'(lambda (x) (concat "^\\s-*" x "\\>")) py-hide-show-keywords ) "\\|")) nil "#"
-               (lambda (arg)
-                 (py-goto-beyond-block)
-                 (skip-chars-backward " \t\n"))
-               nil))
-  
+  (add-to-list 'hs-special-modes-alist
+               (list
+                'python-mode
+                ;; start regex
+                (concat (if py-hide-show-hide-docstrings
+                            "^\\s-*\"\"\"\\|" "")
+                        (mapconcat 'identity
+                                   (mapcar #'(lambda (x) (concat "^\\s-*" x "\\>"))
+                                           py-hide-show-keywords)
+                                   "\\|"))
+                ;; end regex
+                nil
+                ;; comment-start regex
+                "#"
+                ;; forward-sexp function
+                (lambda (arg)
+                  (py-goto-beyond-block)
+                  (skip-chars-backward " \t\n"))
+                nil))
+
   ;; Run the mode hook.  Note that py-mode-hook is deprecated.
   (if python-mode-hook
       (run-hooks 'python-mode-hook)
@@ -1539,7 +1591,7 @@ If the traceback target file path is invalid, we look for the most
 recently visited python-mode buffer which either has the name of the
 current function \(or class) or which defines the function \(or
 class).  This is to provide for remote scripts, eg, Zope's 'Script
-(Python)' - put a _copy_ of the script in a buffer named for the
+\(Python)' - put a _copy_ of the script in a buffer named for the
 script, and set to python-mode, and pdbtrack will find it.)"
   ;; Instead of trying to piece things together from partial text
   ;; (which can be almost useless depending on Emacs version), we
@@ -2221,7 +2273,7 @@ number of characters to delete (default is 1)."
   "Fix the indentation of the current line according to Python rules.
 With \\[universal-argument] (programmatically, the optional argument
 ARG non-nil), ignore dedenting rules for block closing statements
-(e.g. return, raise, break, continue, pass)
+\(e.g. return, raise, break, continue, pass)
 
 This function is normally bound to `indent-line-function' so
 \\[indent-for-tab-command] will call it."
@@ -2835,7 +2887,7 @@ To mark the current `def', see `\\[py-mark-def-or-class]'."
       (if (< 0 count)
           (unless (looking-at start-re) (end-of-line))
         (end-of-line))
-      (if 
+      (if
           (re-search-backward start-re nil 'move (- step))
           (unless
               ;; if inside a string
@@ -3025,7 +3077,10 @@ moves to the end of the block (& does not set mark or display a msg)."
       (push-mark (point) 'no-msg)
       (forward-line -1)
       (message "Mark set after: %s" (py-suck-up-leading-text))
-      (goto-char initial-pos))))
+      (goto-char initial-pos)
+      (exchange-point-and-mark)
+      (py-keep-region-active)
+      )))
 
 (defun py-mark-def-or-class (&optional class)
   "Set region to body of def (or class, with prefix arg) enclosing point.
@@ -3642,7 +3697,7 @@ for."
 If inside a compound statement, go to the line that introduces
 the suite, i.e. the clause header.
 
-The Python language reference: 
+The Python language reference:
 
     \"Compound statements consist of one or more ‘clauses.’ A clause consists
     of a header and a ‘suite.’ The clause headers of a particular compound
@@ -4032,7 +4087,7 @@ These are Python temporary files awaiting execution."
 
     (save-excursion
       (goto-char start)
-      (if (looking-at "\\('''\\|\"\"\"\\|'\\|\"\\)\\\\?\n?")
+      (if (looking-at "\\([urbURB]*\\(?:'''\\|\"\"\"\\|'\\|\"\\)\\)\\\\?\n?")
           (setq string-start (match-end 0)
                 delim-length (- (match-end 1) (match-beginning 1))
                 delim (buffer-substring-no-properties (match-beginning 1)
@@ -4048,14 +4103,10 @@ These are Python temporary files awaiting execution."
              (looking-at (concat "[ \t]*" delim))
              (setq string-start (point))))
 
-      (forward-sexp (if (= delim-length 3) 2 1))
-
-      ;; with both triple quoted strings and single/double quoted strings
-      ;; we're now directly behind the first char of the end delimiter
-      ;; (this doesn't work correctly when the triple quoted string
-      ;; contains the quote mark itself). The end of the string's contents
-      ;; is one less than point
-      (setq string-end (1- (point))))
+      ;; move until after end of string, then the end of the string's contents
+      ;; is delim-length characters before that
+      (forward-sexp)
+      (setq string-end (- (point) delim-length)))
 
     ;; Narrow to the string's contents and fill the current paragraph
     (save-restriction
@@ -4107,9 +4158,8 @@ If point is inside a string, narrow to that string and fill.
           (eq (py-in-literal) 'string))
         (save-excursion
           (py-fill-string (py-point 'boi))))
-       ;; otherwise use the default
-       (t
-        (fill-paragraph justify))))))
+       ;; otherwise: do not ever fill code
+       (t nil)))))
 
 
 
