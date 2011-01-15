@@ -170,3 +170,6 @@ EMACS CONFIGURATION TUTORIAL
 * Packages
 ** <meta>+x el-get-install
    Upgrade some of the modules with the latest source version
+* SourceControl
+** meta+m
+   start magit to view git repository
