@@ -1531,7 +1531,7 @@ amended version of it."
     (define-key map "c"   'git-commit-file)
     (define-key map "\C-c" commit-map)
     (define-key map "d"    diff-map)
-    (define-key map "="   'git-diff-file)
+    (define-key map (kbd "TAB")   'git-diff-file)
     (define-key map "f"   'git-find-file)
     (define-key map "\r"  'git-find-file)
     (define-key map "g"   'git-refresh-status)
@@ -1554,7 +1554,7 @@ amended version of it."
     (define-key map "v"   'git-view-file)
     (define-key map "x"   'git-remove-handled)
     (define-key map "\C-?" 'git-unmark-file-up)
-    (define-key map [(meta m)] 'git-unmark-all)
+    (define-key map [(meta u)] 'git-unmark-all)
     ; the commit submap
     (define-key commit-map "\C-a" 'git-amend-commit)
     (define-key commit-map "\C-b" 'git-branch)

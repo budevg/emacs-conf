@@ -173,3 +173,5 @@ EMACS CONFIGURATION TUTORIAL
 * SourceControl
 ** meta+m
    start magit to view git repository
+** meta+M
+   start git-mode to view git repository
