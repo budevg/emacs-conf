@@ -16,4 +16,6 @@
   '(progn
      (autoload 'git-setup-diff-buffer "git" nil t)
      (autoload 'git-run-command-buffer "git" nil t)
-     (define-key magit-mode-map (kbd "TAB") 'magit-toggle-section-new)))
+     (define-key magit-mode-map (kbd "TAB") 'magit-toggle-section-new)
+     (define-key magit-mode-map (kbd "<M-left>") nil)
+     ))
