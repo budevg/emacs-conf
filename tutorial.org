@@ -175,3 +175,5 @@ EMACS CONFIGURATION TUTORIAL
    start magit to view git repository
 ** meta+M
    start git-mode to view git repository
+* Encryption
+** just edit filename.gpg instead of filename and it will be encrypted  
