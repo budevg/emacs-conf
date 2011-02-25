@@ -23,10 +23,7 @@
     (insert-string "\"" )
     (comint-send-input)))
 
-
-
 (global-set-key [(f2)] 'shell)
-(global-set-key [(meta \\)] 'shell-change-to-current-dir)
 (global-set-key [(control f2)] 'new-shell)
 (global-set-key [(meta f2)] 'shell-command-on-region-inplace)
 

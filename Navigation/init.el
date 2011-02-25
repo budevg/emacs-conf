@@ -89,4 +89,12 @@
     (if file-path
         (find-file file-path))))
 
+(defun app-open-file-at-point ()
+  (interactive)
+  (let ((file-path (ffap-file-at-point)))
+    (if file-path
+        (shell-command-to-string (format "gnome-open %s" file-path))
+      (shell-command-to-string (format "nautilus %s" (expand-file-name default-directory))))))
+
+(define-key ctl-x-map "a" 'app-open-file-at-point)
 (define-key ctl-x-map "f" 'jump-to-file-at-point)

@@ -95,6 +95,8 @@ EMACS CONFIGURATION TUTORIAL
    hide/show all/single #ifdef statement in c
 ** <control>x f
    find file at point
+** <control>x a
+   open app at point
 * Editing:
 ** <ctrl>+w
    backward kill word
