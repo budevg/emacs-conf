@@ -2,6 +2,12 @@
 (require 'org-install)
 (add-to-list 'auto-mode-alist '("\\.org$" . org-mode))
 (setq org-log-done t)
+(setq org-confirm-babel-evaluate nil)
+(setq org-babel-load-languages '((perl . t)         
+                                 (ruby . t)
+                                 (sh . t)
+                                 (python . t)
+                                 (emacs-lisp . t)))
 
 (eval-after-load 'org
   '(progn
