@@ -414,6 +414,7 @@ Many Magit faces inherit from this one by default."
     (define-key map (kbd "?") 'magit-describe-item)
     (define-key map (kbd "!") 'magit-key-mode-popup-running)
     (define-key map (kbd ":") 'magit-git-command)
+    (define-key map (kbd "C-x 4 a") 'magit-add-change-log-entry-other-window)
     (define-key map (kbd "RET") 'magit-visit-item)
     (define-key map (kbd "SPC") 'magit-show-item-or-scroll-up)
     (define-key map (kbd "DEL") 'magit-show-item-or-scroll-down)
@@ -1631,6 +1632,15 @@ FUNC should leave point at the end of the modified region"
               (funcall func))))
 
 (defmacro magit-define-command (sym arglist &rest body)
+  "Macro to define a magit command.
+It will define the magit-SYM function having ARGLIST as argument.
+It will also define the magit-SYM-command-hook variable.
+
+The defined function will call the function in the hook in
+order until one return non nil. If they all return nil then body will be called.
+
+It used to define hookable magit command: command defined by this
+function can be enriched by magit extension like magit-topgit and magit-svn"
   (declare (indent defun))
   (let ((fun (intern (format "magit-%s" sym)))
         (hook (intern (format "magit-%s-command-hook" sym)))
@@ -2503,35 +2513,40 @@ must return a string which will represent the log line.")
 (defun magit-present-log-line (graph sha1 refs message)
   "The default log line generator."
   (let* ((ref-re "\\(?:tag: \\)?refs/\\(bisect\\|tags\\|remotes\\|patches/[^/]*\\|heads\\)/\\(.+\\)")
-	 (string-refs
-	  (when refs
-	    (concat (mapconcat
-		     (lambda (r)
-		       (propertize
-			(if (string-match ref-re r)
-			    (match-string 2 r)
-			  r)
-			'face (cond
-			       ((string= r "refs/stash")
-				'magit-log-head-label-local)
-			       ((string= (match-string 1 r) "remotes")
-				'magit-log-head-label-remote)
-			       ((string-match "^patches/[^/]*$" (match-string 1 r)) ; Stacked Git
-				'magit-log-head-label-patches)
-			       ((string= (match-string 1 r) "bisect")
-				(if (string= (match-string 2 r) "bad")
-				    'magit-log-head-label-bisect-bad
-				  'magit-log-head-label-bisect-good))
-			       ((string= (match-string 1 r) "tags")
-				'magit-log-head-label-tags)
-			       ((string= (match-string 1 r) "heads")
-				'magit-log-head-label-local))))
-		     refs
-		     " ")
-		    " "))))
+         (string-refs
+          (when refs
+            (concat (mapconcat
+                     (lambda (r)
+                       (propertize
+                        (if (string-match ref-re r)
+                            (match-string 2 r)
+                          r)
+                        'face (cond
+                               ((string= r "refs/stash")
+                                'magit-log-head-label-local)
+                               ((not (match-string 1 r))
+                                nil)
+                               ((string= (match-string 1 r) "remotes")
+                                'magit-log-head-label-remote)
+                               ((and (not (null (match-string 1 r))) 
+                                     (string-match "^patches/[^/]*$" (match-string 1 r))) ; Stacked Git
+                                'magit-log-head-label-patches)
+                               ((string= (match-string 1 r) "bisect")
+                                (if (string= (match-string 2 r) "bad")
+                                    'magit-log-head-label-bisect-bad
+                                  'magit-log-head-label-bisect-good))
+                               ((string= (match-string 1 r) "tags")
+                                'magit-log-head-label-tags)
+                               ((string= (match-string 1 r) "heads")
+                                'magit-log-head-label-local)
+                               (t
+                                'magit-log-head-label-local))))
+                     refs
+                     " ")
+                    " "))))
     (concat
      (if sha1
-	 (propertize (substring sha1 0 8) 'face 'magit-log-sha1)
+         (propertize (substring sha1 0 8) 'face 'magit-log-sha1)
        (insert-char ? 8))
      " "
      (when graph
@@ -3074,7 +3089,21 @@ if any."
             (loop for i in todo-lines-with-comments
                   until (string= "" i)
                   count i))))
-	(t nil)))
+        ((and (file-exists-p ".git/rebase-apply")
+              (file-exists-p ".git/rebase-apply/onto"))
+         ;; we might be here because a non-interactive rebase failed: the
+         ;; patches didn't apply cleanly
+         (list
+          ;; The commit we're rebasing onto, i.e. git rebase -i <onto>
+          (magit-name-rev (car (magit-file-lines ".git/rebase-apply/onto")))
+
+          ;; How many commits we've gone through
+          (- (string-to-number (car (magit-file-lines ".git/rebase-apply/next"))) 1)
+
+          ;; How many commits we have in total
+          (string-to-number (car (magit-file-lines ".git/rebase-apply/last")))
+          ))
+        (t nil)))
 
 (defun magit-rebase-step ()
   (interactive)
@@ -3102,11 +3131,11 @@ if any."
         (let ((reply (read-event)))
           (case reply
             ((?A ?a)
-             (magit-run-git "rebase" "--abort"))
+             (magit-run-git-async "rebase" "--abort"))
             ((?S ?s)
-             (magit-run-git "rebase" "--skip"))
+             (magit-run-git-async "rebase" "--skip"))
             ((?C ?c)
-             (magit-run-git "rebase" "--continue"))))))))
+             (magit-run-git-async "rebase" "--continue"))))))))
 
 ;;; Resetting
 
@@ -3842,21 +3871,30 @@ With prefix argument, changes in staging area are kept.
     ((stash)
      (magit-run-git "stash" "pop" info))))
 
+(defmacro magit-with-revert-confirmation (&rest body)
+  `(when (or (not magit-revert-item-confirm)
+             (yes-or-no-p "Really revert this item? "))
+     ,@body))
+
 (defun magit-revert-item ()
   (interactive)
-  (when (or (not magit-revert-item-confirm)
-	    (yes-or-no-p
-	     "Really revert this item (cannot be undone)? "))
-    (magit-section-action (item info "revert")
-      ((pending commit)
-       (magit-apply-commit info nil nil t)
-       (magit-rewrite-set-commit-property info 'used nil))
-      ((commit)
-       (magit-apply-commit info nil nil t))
-      ((hunk)
-       (magit-apply-hunk-item-reverse item))
-      ((diff)
-       (magit-apply-diff-item item "--reverse")))))
+  (magit-section-action (item info "revert")
+    ((pending commit)
+     (magit-with-revert-confirmation
+      (magit-apply-commit info nil nil t)
+      (magit-rewrite-set-commit-property info 'used nil)))
+    ((commit)
+     (magit-with-revert-confirmation
+      (magit-apply-commit info nil nil t)))
+    ;; Reverting unstaged changes cannot be undone
+    ((unstaged *)
+     (magit-discard-item))
+    ((hunk)
+     (magit-with-revert-confirmation
+      (magit-apply-hunk-item-reverse item)))
+    ((diff)
+     (magit-with-revert-confirmation
+      (magit-apply-diff-item item "--reverse")))))
 
 (defvar magit-have-graph 'unset)
 (defvar magit-have-decorate 'unset)
@@ -4214,17 +4252,47 @@ This is only meaningful in wazzup buffers.")
      (when (yes-or-no-p "Discard stash? ")
        (magit-run-git "stash" "drop" info)))))
 
-(defun magit-visit-item ()
-  (interactive)
+(defun magit-add-change-log-entry (&optional whoami file-name other-window
+                                             new-entry put-new-entry-on-new-line)
+  "Add a change log entry for current change."
+  (interactive (list current-prefix-arg
+		     (prompt-for-change-log-name)))
+  (let ((marker
+         (save-window-excursion
+           (magit-visit-item)
+           (set-marker (make-marker) (point)))))
+    (save-excursion
+      (with-current-buffer (marker-buffer marker)
+        (goto-char marker)
+        (add-change-log-entry whoami file-name other-window
+                              new-entry put-new-entry-on-new-line)))))
+
+(defun magit-add-change-log-entry-other-window (&optional whoami file-name)
+  "Add a change log entry for current change in other window."
+  (interactive (if current-prefix-arg
+		   (list current-prefix-arg
+			 (prompt-for-change-log-name))))
+  (magit-add-change-log-entry whoami file-name t))
+
+(defun magit-visit-item (&optional other-window)
+  "Visit current item.
+With a prefix argument, visit in other window."
+  (interactive (list current-prefix-arg))
   (magit-section-action (item info "visit")
     ((untracked file)
-     (find-file info))
+     (funcall
+      (if other-window 'find-file-other-window 'find-file)
+      info))
     ((diff)
-     (find-file (magit-diff-item-file item)))
+     (funcall
+      (if other-window 'find-file-other-window 'find-file)
+      (magit-diff-item-file item)))
     ((hunk)
      (let ((file (magit-diff-item-file (magit-hunk-item-diff item)))
 	   (line (magit-hunk-item-target-line item)))
-       (find-file file)
+       (funcall
+        (if other-window 'find-file-other-window 'find-file)
+        file)
        (goto-char (point-min))
        (forward-line (1- line))))
     ((commit)
@@ -4627,6 +4695,7 @@ With a prefix arg, do a submodule update --init"
 
 (defun magit-submodule-update-init ()
   "Update and init the submodule of the current git repository."
+  (interactive)
   (magit-submodule-update t))
 
 (defun magit-submodule-init ()
