@@ -22,11 +22,15 @@
                :url "git://github.com/dimitri/el-get.git"
                :build ("cp el-get.el ~/.emacs.d/Packages")
                :after (lambda () (el-get-remove "el-get")))
-
         (:name cssh
                :type git
                :url "git://github.com/dimitri/cssh.git"
                :build ("cp cssh.el ~/.emacs.d/Shell")
                :after (lambda () (el-get-remove "cssh")))
-
+        (:name auto-complete
+               :type git
+               :url "git://github.com/m2ym/auto-complete.git"
+               :build ("cp *.el ~/.emacs.d/Languages/SmartCode/auto-complete"
+                       "cp -r dict ~/.emacs.d/Languages/SmartCode/auto-complete")
+               :after (lambda () (el-get-remove "auto-complete")))
 	))
