@@ -40,7 +40,7 @@
 
 ;; Original Author: Marius Vollmer <marius.vollmer@nokia.com>
 ;; Lead developer: Phil Jackson <phil@shellarchive.co.uk>
-;; Version: 0.8.2
+;; Version: 1.0.0
 ;; Keywords: tools
 
 ;;
@@ -80,6 +80,10 @@
 (require 'log-edit)
 (require 'easymenu)
 (require 'diff-mode)
+
+;; Silences byte-compiler warnings
+(eval-when-compile  (require 'view))
+(eval-when-compile (require 'iswitchb))
 
 ;;; Code:
 (defgroup magit nil
@@ -206,33 +210,38 @@ t mean pty, it enable magit to prompt for passphrase when needed."
 		(function-item magit-builtin-completing-read)
 		(function :tag "Other")))
 
+(defgroup magit-faces nil
+  "Customize the appearance of Magit"
+  :prefix "magit-"
+  :group 'faces
+  :group 'magit)
 
 (defface magit-header
   '((t))
   "Face for generic header lines.
 
 Many Magit faces inherit from this one by default."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-section-title
   '((t :weight bold :inherit magit-header))
   "Face for section titles."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-branch
   '((t :weight bold :inherit magit-header))
   "Face for the current branch."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-diff-file-header
   '((t :inherit magit-header))
   "Face for diff file header lines."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-diff-hunk-header
   '((t :slant italic :inherit magit-header))
   "Face for diff hunk header lines."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-diff-add
   '((((class color) (background light))
@@ -240,12 +249,12 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :foreground "white"))
   "Face for lines in a diff that have been added."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-diff-none
   '((t))
   "Face for lines in a diff that are unchanged."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-diff-del
   '((((class color) (background light))
@@ -253,7 +262,7 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :foreground "OrangeRed"))
   "Face for lines in a diff that have been deleted."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-graph
   '((((class color) (background light))
@@ -261,7 +270,7 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :foreground "grey80"))
   "Face for the graph element of the log output."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-sha1
   '((((class color) (background light))
@@ -269,12 +278,12 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :foreground "tomato"))
   "Face for the sha1 element of the log output."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-message
   '((t))
   "Face for the message element of the log output."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-item-highlight
   '((((class color) (background light))
@@ -282,7 +291,7 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :background "dim gray"))
   "Face for highlighting the current item."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-item-mark
   '((((class color) (background light))
@@ -290,7 +299,7 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :foreground "orange"))
   "Face for highlighting marked item."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-tag-label
   '((((class color) (background light))
@@ -298,7 +307,7 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :background "DarkGoldenRod"))
   "Face for git tag labels shown in log buffer."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-head-label-bisect-good
   '((((class color) (background light))
@@ -310,7 +319,7 @@ Many Magit faces inherit from this one by default."
      :background "light green"
      :foreground "dark olive green"))
   "Face for good bisect refs"
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-head-label-bisect-bad
   '((((class color) (background light))
@@ -322,7 +331,7 @@ Many Magit faces inherit from this one by default."
      :background "IndianRed1"
      :foreground "IndianRed4"))
   "Face for bad bisect refs"
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-head-label-remote
   '((((class color) (background light))
@@ -334,7 +343,7 @@ Many Magit faces inherit from this one by default."
      :background "Grey11"
      :foreground "DarkSeaGreen2"))
   "Face for remote branch head labels shown in log buffer."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-head-label-tags
   '((((class color) (background light))
@@ -346,7 +355,7 @@ Many Magit faces inherit from this one by default."
      :background "LemonChiffon1"
      :foreground "goldenrod4"))
   "Face for tag labels shown in log buffer."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-log-head-label-patches
   '((((class color) (background light))
@@ -358,7 +367,7 @@ Many Magit faces inherit from this one by default."
      :background "IndianRed1"
      :foreground "IndianRed4"))
   "Face for Stacked Git patches"
-  :group 'magit)
+  :group 'magit-faces)
 
 (defvar magit-custom-options '()
   "List of custom options to pass git. Do not customise this.")
@@ -379,7 +388,7 @@ Many Magit faces inherit from this one by default."
      :background "Grey13"
      :foreground "LightSkyBlue1"))
   "Face for local branch head labels shown in log buffer."
-  :group 'magit)
+  :group 'magit-faces)
 
 (defface magit-menu-selected-option
   '((((class color) (background light))
@@ -387,7 +396,7 @@ Many Magit faces inherit from this one by default."
     (((class color) (background dark))
      :foreground "orange"))
   "Face for selected options on magit's menu"
-  :group 'magit)
+  :group 'magit-faces)
 
 (defvar magit-mode-map
   (let ((map (make-keymap)))
