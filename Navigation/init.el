@@ -98,3 +98,7 @@
 
 (define-key ctl-x-map "a" 'app-open-file-at-point)
 (define-key ctl-x-map "f" 'jump-to-file-at-point)
+
+(defun pycscope-index-files (top-directory)
+  (interactive "DIndex files in directory: ")
+  (call-process "~/.emacs.d/Navigation/pycscope.py" nil nil nil "-R"))
