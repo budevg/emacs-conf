@@ -123,6 +123,8 @@ EMACS CONFIGURATION TUTORIAL
    
 ** <meta>+kp-8/2
    swap line up or down
+** create .dir-locals.el or use add-dir-local-variable
+   to save dir specific configuration
 * Debugging:
 ** keypad-2
    step
