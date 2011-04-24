@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -63,13 +63,12 @@ This function is called by `org-babel-execute-src-block'."
 		     body params (org-babel-variable-assignments:ruby params)))
          (result (org-babel-ruby-evaluate
 		  session full-body result-type result-params)))
-    (or (cdr (assoc :file params))
-        (org-babel-reassemble-table
-         result
-         (org-babel-pick-name (cdr (assoc :colname-names params))
-			      (cdr (assoc :colnames params)))
-         (org-babel-pick-name (cdr (assoc :rowname-names params))
-			      (cdr (assoc :rownames params)))))))
+    (org-babel-reassemble-table
+     result
+     (org-babel-pick-name (cdr (assoc :colname-names params))
+			  (cdr (assoc :colnames params)))
+     (org-babel-pick-name (cdr (assoc :rowname-names params))
+			  (cdr (assoc :rownames params))))))
 
 (defun org-babel-prep-session:ruby (session params)
   "Prepare SESSION according to the header arguments specified in PARAMS."

@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -157,7 +157,7 @@ This function is called by `org-babel-execute-src-block'."
           (gnuplot-send-buffer-to-gnuplot)))
       (if (member "output" (split-string result-type))
           output
-        out-file))))
+	nil)))) ;; signal that output has already been written to file
 
 (defun org-babel-prep-session:gnuplot (session params)
   "Prepare SESSION according to the header arguments in PARAMS."

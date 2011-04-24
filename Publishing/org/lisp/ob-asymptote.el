@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -80,7 +80,7 @@ This function is called by `org-babel-execute-src-block'."
 	       body params
 	       (org-babel-variable-assignments:asymptote params))))
     (message cmd) (shell-command cmd)
-    out-file))
+    nil)) ;; signal that output has already been written to file
 
 (defun org-babel-prep-session:asymptote (session params)
   "Return an error if the :session header argument is set.

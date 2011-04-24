@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -44,6 +44,12 @@
 (defvar org-babel-sh-command "sh"
   "Command used to invoke a shell.
 This will be passed to  `shell-command-on-region'")
+
+(defcustom org-babel-sh-var-quote-fmt
+  "$(cat <<'BABEL_TABLE'\n%s\nBABEL_TABLE\n)"
+  "Format string used to escape variables when passed to shell scripts."
+  :group 'org-babel
+  :type 'string)
 
 (defun org-babel-execute:sh (body params)
   "Execute a block of Shell commands with Babel.
@@ -100,13 +106,13 @@ var of the same value."
                           (if (listp el)
                               (mapcar #'deep-string el)
 			    (org-babel-sh-var-to-sh el sep))))
-	(format "$(cat <<'BABEL_TABLE'\n%s\nBABEL_TABLE\n)"
+	(format org-babel-sh-var-quote-fmt
 		(orgtbl-to-generic
 		 (deep-string (if (listp (car var)) var (list var)))
 		 (list :sep (or sep "\t")))))
     (if (stringp var)
-	(if (string-match "[\n\r]" var)
-	    (format "$(cat <<BABEL_STRING\n%s\nBABEL_STRING\n)" var)
+	(if (string-match "[ \t\n\r]" var)
+	    (format org-babel-sh-var-quote-fmt var)
 	  (format "%s" var))
       (format "%S" var))))
 

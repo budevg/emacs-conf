@@ -4,7 +4,7 @@
 ;;
 ;; Emacs Lisp Archive Entry
 ;; Filename: org-taskjuggler.el
-;; Version: 7.4
+;; Version: 7.5
 ;; Author: Christian Egli
 ;; Maintainer: Christian Egli
 ;; Keywords: org, taskjuggler, project planning
@@ -144,7 +144,7 @@
 ;;   - Look at org-file-properties, org-global-properties and
 ;;     org-global-properties-fixed
 ;;   - What about property inheritance and org-property-inherit-p?
-;;   - Use TYPE_TODO as an way to assign resources
+;;   - Use TYP_TODO as an way to assign resources
 ;;   - Make sure multiple dependency definitions (i.e. BLOCKER on
 ;;     previous-sibling and on a specific task_id) in multiple
 ;;     attributes are properly exported.

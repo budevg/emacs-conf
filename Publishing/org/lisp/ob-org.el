@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -46,7 +46,8 @@ This function is called by `org-babel-execute-src-block'."
   (let ((result-params (split-string (or (cdr (assoc :results params)) "")))
 	(body (replace-regexp-in-string "^," "" body)))
     (cond
-     ((member "latex" result-params) (org-export-string body "latex"))
+     ((member "latex" result-params) (org-export-string
+				      (concat "#+Title: \n" body) "latex"))
      ((member "html" result-params)  (org-export-string body "html"))
      ((member "ascii" result-params) (org-export-string body "ascii"))
      (t body))))

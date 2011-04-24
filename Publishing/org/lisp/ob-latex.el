@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -122,7 +122,7 @@ This function is called by `org-babel-execute-src-block'."
          ((string-match "\\.\\([^\\.]+\\)$" out-file)
           (error "can not create %s files, please specify a .png or .pdf file"
 		 (match-string 1 out-file))))
-        out-file)
+        nil) ;; signal that output has already been written to file
     body))
 
 (defun org-babel-latex-tex-to-pdf (file)

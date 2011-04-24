@@ -5,7 +5,7 @@
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.4
+;; Version: 7.5
 
 ;; This file is part of GNU Emacs.
 
@@ -37,6 +37,7 @@
 (declare-function org-back-to-heading "org" (invisible-ok))
 (declare-function org-fill-template "org" (template alist))
 (declare-function org-babel-update-block-body "org" (new-body))
+(declare-function make-directory "files" (dir &optional parents))
 
 ;;;###autoload
 (defcustom org-babel-tangle-lang-exts
@@ -210,6 +211,10 @@ exported source code blocks by language."
                                     (if (and ext (string= "yes" tangle))
                                         (concat base-name "." ext) base-name))))
                   (when file-name
+		    ;; possibly create the parent directories for file
+		    (when ((lambda (m) (and m (not (string= m "no"))))
+			   (get-spec :mkdirp))
+		      (make-directory (file-name-directory file-name) 'parents))
                     ;; delete any old versions of file
                     (when (and (file-exists-p file-name)
                                (not (member file-name path-collector)))
@@ -364,7 +369,7 @@ form
 	 (comment (nth 6 spec))
 	 (comments (cdr (assoc :comments (nth 4 spec))))
 	 (link-p (or (string= comments "both") (string= comments "link")
-		     (string= comments "yes")))
+		     (string= comments "yes") (string= comments "noweb")))
 	 (link-data (mapcar (lambda (el)
 			      (cons (symbol-name el)
 				    ((lambda (le)
@@ -393,7 +398,24 @@ form
 	(insert-comment
 	 (org-fill-template org-babel-tangle-comment-format-end link-data))))))
 
-;; detangling functions
+(defun org-babel-tangle-comment-links ( &optional info)
+  "Return a list of begin and end link comments for the code block at point."
+  (let* ((start-line (org-babel-where-is-src-block-head))
+	 (file (buffer-file-name))
+	 (link (org-link-escape (progn (call-interactively 'org-store-link)
+				       (org-babel-clean-text-properties
+					(car (pop org-stored-links))))))
+	 (source-name (nth 4 (or info (org-babel-get-src-block-info 'light))))
+	 (link-data (mapcar (lambda (el)
+			      (cons (symbol-name el)
+				    ((lambda (le)
+				       (if (stringp le) le (format "%S" le)))
+				     (eval el))))
+			    '(start-line file link source-name))))
+    (list (org-fill-template org-babel-tangle-comment-format-beg link-data)
+	  (org-fill-template org-babel-tangle-comment-format-end link-data))))
+
+;; de-tangling functions
 (defvar org-bracket-link-analytic-regexp)
 (defun org-babel-detangle (&optional source-code-file)
   "Propagate changes in source file back original to Org-mode file.
@@ -420,20 +442,24 @@ which enable the original code blocks to be found."
   "Jump from a tangled code file to the related Org-mode file."
   (interactive)
   (let ((mid (point))
-        target-buffer target-char
-        start end link path block-name body)
+	start end done
+        target-buffer target-char link path block-name body)
     (save-window-excursion
       (save-excursion
-        (unless (and (re-search-backward org-bracket-link-analytic-regexp nil t)
-                     (setq start (point-at-eol))
-                     (setq link (match-string 0))
-                     (setq path (match-string 3))
-                     (setq block-name (match-string 5))
-                     (re-search-forward
-                      (concat " " (regexp-quote block-name) " ends here") nil t)
-                     (setq end (point-at-bol))
-                     (< start mid) (< mid end))
-          (error "not in tangled code"))
+	(while (and (re-search-backward org-bracket-link-analytic-regexp nil t)
+		    (not ; ever wider searches until matching block comments
+		     (and (setq start (point-at-eol))
+			  (setq link (match-string 0))
+			  (setq path (match-string 3))
+			  (setq block-name (match-string 5))
+			  (save-excursion
+			    (save-match-data
+			      (re-search-forward
+			       (concat " " (regexp-quote block-name)
+				       " ends here") nil t)
+			      (setq end (point-at-bol))))))))
+	(unless (and start (< start mid) (< mid end))
+	  (error "not in tangled code"))
         (setq body (org-babel-trim (buffer-substring start end))))
       (when (string-match "::" path)
         (setq path (substring path 0 (match-beginning 0))))
