@@ -56,10 +56,10 @@
 
 
 
-(global-set-key [(control meta down)] 'markers-add-head)
-(global-set-key [(control meta up)] 'markers-remove-head)
-(global-set-key [(control meta right)] 'markers-switch-right)
-(global-set-key [(control meta left)] 'markers-switch-left)
+(global-set-key [(super down)] 'markers-add-head)
+(global-set-key [(super up)] 'markers-remove-head)
+(global-set-key [(super right)] 'markers-switch-right)
+(global-set-key [(super left)] 'markers-switch-left)
 
 (global-set-key [(control next)] 'markers-add-head)
 (global-set-key [(control prior)] 'markers-remove-head)
