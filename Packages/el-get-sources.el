@@ -29,7 +29,7 @@
                :after (lambda () (el-get-remove "cssh")))
         (:name auto-complete
                :type git
-               :url "git://github.com/m2ym/auto-complete.git"
+               :url "http://github.com/m2ym/auto-complete.git"
                :build ("cp *.el ~/.emacs.d/Languages/SmartCode/auto-complete"
                        "cp -r dict ~/.emacs.d/Languages/SmartCode/auto-complete")
                :after (lambda () (el-get-remove "auto-complete")))
