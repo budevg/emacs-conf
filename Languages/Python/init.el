@@ -16,7 +16,7 @@
 (autoload 'pymacs-exec "pymacs" nil t)
 (autoload 'pymacs-load "pymacs" nil t)
 (eval-after-load "pymacs"
-  '(add-to-list 'pymacs-load-path "~/.emacs.d/Languages/Python/pymacs-modules"))
+  '(add-to-list 'pymacs-load-path (concat EMACS-CONFIG-PATH "/Languages/Python/pymacs-modules")))
 
 
 (add-to-list 'auto-mode-alist '("\\.py\\'" . python-mode))

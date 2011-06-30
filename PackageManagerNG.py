@@ -21,7 +21,7 @@ class LispWriter(object):
         self.fd.close()
 
     def set_root(self, path):
-        self._setq("ROOT-PATH", path)
+        self._setq("EMACS-CONFIG-PATH", path)
 
     def load_file(self, path):
         self.fd.write("(load-file \"%s\")\n" % path)
@@ -30,7 +30,7 @@ class LispWriter(object):
         self.fd.write("(setq load-path (append (list \"%s\") load-path))\n" % path)
 
     def _setq(self, name, value):
-        self.fd.write('(setq \"%s\")\n' % (name, value))
+        self.fd.write('(setq %s \"%s\")\n' % (name, value))
         
     def set_screen_configuration(self, x, y, width, height, font):
         data = self.SCREEN_CONFIGURE_CODE % (x, y, width, height, font)
@@ -50,6 +50,7 @@ class PackageManager(object):
         
     def write_init_file(self, verbose = False, profiling = False):
         lisp_writer = LispWriter("init.el")
+        lisp_writer.set_root(self.root_directory())
         lisp_writer.load_file(os.path.join(self.root_directory(),
                                            "package-manager.el"))
         for directory in self.directories():

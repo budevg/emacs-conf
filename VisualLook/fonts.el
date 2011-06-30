@@ -1,4 +1,4 @@
-(setq color-theme-directory "~/.emacs.d/VisualLook/themes")
+(setq color-theme-directory (concat EMACS-CONFIG-PATH "/VisualLook/themes"))
 (setq color-theme-load-all-themes nil)
 (require 'color-theme)
 (color-theme-initialize)

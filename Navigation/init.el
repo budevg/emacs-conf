@@ -101,4 +101,4 @@
 
 (defun pycscope-index-files (top-directory)
   (interactive "DIndex files in directory: ")
-  (call-process "~/.emacs.d/Navigation/pycscope.py" nil nil nil "-R"))
+  (call-process (concat EMACS-CONFIG-PATH "Navigation/pycscope.py") nil nil nil "-R"))
