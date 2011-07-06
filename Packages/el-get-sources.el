@@ -33,4 +33,9 @@
                :build ("cp *.el ~/.emacs.d/Languages/SmartCode/auto-complete"
                        "cp -r dict ~/.emacs.d/Languages/SmartCode/auto-complete")
                :after (lambda () (el-get-remove "auto-complete")))
+        (:name judge-indent
+               :type git
+               :url "http://github.com/yascentur/judge-indent-el.git"
+               :build ("cp *.el ~/.emacs.d/Languages/")
+               :after (lambda () (el-get-remove "judge-indent")))
 	))
