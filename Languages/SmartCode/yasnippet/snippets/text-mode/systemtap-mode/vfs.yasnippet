@@ -1,0 +1,21 @@
+# -*- mode: snippet -*-
+# name: vfs
+# --
+probe vfs.${1:vfscall$$(yas/choose-value '("__set_page_dirty_buffers"
+                                           "add_to_page_cache"
+                                           "block_sync_page"
+                                           "buffer_migrate_page"
+                                           "do_mpage_readpage"
+                                           "do_sync_read"
+                                           "do_sync_write"
+                                           "read"
+                                           "readv"
+                                           "remove_from_page_cache"
+                                           "write"
+                                           "writev"))} {
+  $0
+}
+
+probe vfs.$1.return {
+
+}

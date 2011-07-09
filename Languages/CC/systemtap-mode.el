@@ -149,7 +149,10 @@ Key bindings:n\\{systemtap-mode-map}"
   (easy-menu-add systemtap-menu)
   (run-hooks 'c-mode-common-hook)
   (run-hooks 'systemtap-mode-hook)
-  (c-update-modeline))
+  (set (make-local-variable 'comment-start) "/* ")
+  (set (make-local-variable 'comment-end)   " */")
+  (define-key systemtap-mode-map "\C-m" 'newline-and-indent)
+  )
 
 
 (provide 'systemtap-mode)
