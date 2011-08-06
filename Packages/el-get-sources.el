@@ -14,7 +14,7 @@
                :after (lambda () (el-get-remove "psvn")))
         (:name magit
                :type git
-               :url "http://github.com/philjackson/magit.git"
+               :url "http://github.com/magit/magit.git"
                :build ("cp *.el ~/.emacs.d/SourceControl/magit")
                :after (lambda () (el-get-remove "magit")))
         (:name el-get
