@@ -29,6 +29,9 @@
 
 (eval-after-load "comint"
   '(progn
+     ;;["black" "red" "green" "yellow" "blue" "magenta" "cyan" "white"]
+     ;; change blue->yellow
+     (setq ansi-color-names-vector ["black" "red" "green" "yellow" "yellow" "magenta" "cyan" "white"])
      (ansi-color-for-comint-mode-on)
      (define-key comint-mode-map [C-up] 'comint-previous-matching-input-from-input)
      (define-key comint-mode-map [C-down] 'comint-next-matching-input-from-input)))
