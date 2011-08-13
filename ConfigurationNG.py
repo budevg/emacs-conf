@@ -73,6 +73,9 @@ publishing = [Bunch(path = "Publishing/org/org-init.el",
                     msg = "init auctex mode"),
               Bunch(path = "Publishing/artist-mode-init.el",
                     msg = "artist mode initialization"),
+              Bunch(path = "Publishing/rst-init.el",
+                    msg = "configure reStructuredText-documents"),
+
               ]
 
 

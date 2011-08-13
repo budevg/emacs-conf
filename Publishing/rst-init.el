@@ -1,0 +1,1 @@
+(setq rst-level-face-base-color nil)
