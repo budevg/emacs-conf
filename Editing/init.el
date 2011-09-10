@@ -104,34 +104,9 @@
 (setq x-select-enable-clipboard t)
 
 ;; move line up/or down
-(defun swap-line-up ()
-  (interactive)
-  (let ((is-first-line nil))
-    (save-excursion
-      (beginning-of-line)
-      (if (eq (point) 1)
-          (setq is-first-line t)))
-    (if (not is-first-line)
-        (progn 
-          (transpose-lines 1)
-          (forward-line -2)))))
-
-(defun swap-line-down ()
-  (interactive)
-  (let ((is-last-line nil))
-    (save-excursion
-      (end-of-line)
-      (if (eq (point) (point-max))
-          (setq is-last-line t)))
-    (if (not is-last-line)
-        (progn
-          (forward-line 1)
-          (transpose-lines 1)
-          (forward-line -1)))))
-
-(global-set-key [(meta kp-8)] 'swap-line-up)
-(global-set-key [(meta kp-2)] 'swap-line-down)
-
+(setq drag-stuff-modifier '(super shift))
+(require 'drag-stuff)
+(drag-stuff-global-mode t)
 
 ;; don't use lame windows key bindings
 (setq cua-enable-cua-keys nil)
