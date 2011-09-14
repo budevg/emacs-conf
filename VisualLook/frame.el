@@ -17,3 +17,8 @@
 
 (global-set-key (vector (list 'control mouse-wheel-down-event)) 'text-scale-increase)
 (global-set-key (vector (list 'control mouse-wheel-up-event)) 'text-scale-decrease)
+
+;; Font size
+(define-key global-map [(control kp-add)] 'text-scale-increase)
+(define-key global-map [(control kp-subtract)] 'text-scale-decrease)
+

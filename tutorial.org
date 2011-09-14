@@ -127,8 +127,8 @@ EMACS CONFIGURATION TUTORIAL
    swap line up or down
 ** create .dir-locals.el or use add-dir-local-variable
    to save dir specific configuration
-** <super><shift>+up/dow/left/right
-   shift words/lines/regions
+** <meta>+w
+   enable shift of words/lines/regions using meta+up/down/right/left
 * Debugging:
 ** keypad-2
    step

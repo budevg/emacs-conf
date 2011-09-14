@@ -104,9 +104,8 @@
 (setq x-select-enable-clipboard t)
 
 ;; move line up/or down
-(setq drag-stuff-modifier '(super shift))
-(require 'drag-stuff)
-(drag-stuff-global-mode t)
+(autoload 'drag-stuff-mode "drag-stuff" nil t)
+(global-set-key [(meta w)] 'drag-stuff-mode)
 
 ;; don't use lame windows key bindings
 (setq cua-enable-cua-keys nil)
