@@ -38,4 +38,11 @@
                :url "http://github.com/yascentur/judge-indent-el.git"
                :build ("cp *.el ~/.emacs.d/Languages/")
                :after (lambda () (el-get-remove "judge-indent")))
+        (:name eclim
+               :type git
+               :url "http://github.com/senny/emacs-eclim.git"
+               :build ("cp `find . -name \"*.el\" | xargs` ~/.emacs.d/Languages/Java/eclim"
+                       "cp -r snippets ~/.emacs.d/Languages/Java/eclim")
+               :after (lambda () (el-get-remove "eclim")))
+
 	))
