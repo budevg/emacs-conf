@@ -44,5 +44,10 @@
                :build ("cp `find . -name \"*.el\" | xargs` ~/.emacs.d/Languages/Java/eclim"
                        "cp -r snippets ~/.emacs.d/Languages/Java/eclim")
                :after (lambda () (el-get-remove "eclim")))
+        (:name deft
+               :type git
+               :url "git://jblevins.org/git/deft.git"
+               :build ("cp deft.el ~/.emacs.d/Publishing")
+               :after (lambda () (el-get-remove "deft")))
 
 	))

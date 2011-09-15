@@ -63,7 +63,9 @@ editing = [Bunch(path = "Editing/init.el",
                  msg = "dos to unix and vice versa converions"),
            ]
 
-publishing = [Bunch(path = "Publishing/org/org-init.el",
+publishing = [Bunch(path = "Publishing/init.el",
+                    msg = "init publishing stuff"),
+              Bunch(path = "Publishing/org/org-init.el",
                     msg = "init org mode"),
               Bunch(path = "Publishing/org/lisp",
                     msg = ""),
