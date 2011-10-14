@@ -63,6 +63,9 @@
      (global-set-key (kbd "M-]") 'elscreen-emph-next)
      ))
 
+(global-set-key (kbd "M-[") (lambda () (interactive) (elscreen-start)))
+(global-set-key (kbd "M-]") (lambda () (interactive) (elscreen-start)))
+
 
 (autoload 'nav "nav" nil t)
 (global-set-key "\M-`" 'nav)
