@@ -186,4 +186,8 @@ EMACS CONFIGURATION TUTORIAL
 ** meta+M
    start git-mode to view git repository
 * Encryption
-** just edit filename.gpg instead of filename and it will be encrypted  
+** just edit filename.gpg instead of filename and it will be encrypted
+* Configuration
+** meta+x create-dir-locals
+   creates .dir-locals.el and sets configuration recursively
+   to all files and subdirectories
