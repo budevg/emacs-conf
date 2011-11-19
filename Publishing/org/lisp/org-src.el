@@ -8,7 +8,7 @@
 ;;         Dan Davison <davison at stats dot ox dot ac dot uk>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.5
+;; Version: 7.7
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -43,6 +43,8 @@
 (declare-function org-at-table.el-p "org" ())
 (declare-function org-get-indentation "org" (&optional line))
 (declare-function org-switch-to-buffer-other-window "org" (&rest args))
+(declare-function org-pop-to-buffer-same-window 
+		  "org-compat" (&optional buffer-or-name norecord label))
 
 (defcustom org-edit-src-region-extra nil
   "Additional regexps to identify regions for editing with `org-edit-src-code'.
@@ -153,7 +155,7 @@ but which mess up the display of a snippet in Org exported files.")
 (defcustom org-src-lang-modes
   '(("ocaml" . tuareg) ("elisp" . emacs-lisp) ("ditaa" . artist)
     ("asymptote" . asy) ("dot" . fundamental) ("sqlite" . sql)
-    ("calc" . fundamental))
+    ("calc" . fundamental) ("C" . c))
   "Alist mapping languages to their major mode.
 The key is the language name, the value is the string that should
 be inserted as the name of the major mode.  For many languages this is
@@ -214,6 +216,7 @@ buffer."
   (let ((mark (and (org-region-active-p) (mark)))
 	(case-fold-search t)
 	(info (org-edit-src-find-region-and-lang))
+	(full-info (org-babel-get-src-block-info))
 	(org-mode-p (or (org-mode-p) (derived-mode-p 'org-mode)))
 	(beg (make-marker))
 	(end (make-marker))
@@ -323,7 +326,10 @@ buffer."
 	(org-src-mode)
 	(set-buffer-modified-p nil)
 	(and org-edit-src-persistent-message
-	     (org-set-local 'header-line-format msg)))
+	     (org-set-local 'header-line-format msg))
+	(let ((edit-prep-func (intern (concat "org-babel-edit-prep:" lang))))
+	  (when (fboundp edit-prep-func)
+	    (funcall edit-prep-func full-info))))
       t)))
 
 (defun org-edit-src-continue (e)
@@ -336,7 +342,7 @@ buffer."
 (defun org-src-switch-to-buffer (buffer context)
   (case org-src-window-setup
     ('current-window
-     (switch-to-buffer buffer))
+     (org-pop-to-buffer-same-window buffer))
     ('other-window
      (switch-to-buffer-other-window buffer))
     ('other-frame
@@ -347,7 +353,7 @@ buffer."
 	  (delete-frame frame)))
        ('save
 	(kill-buffer (current-buffer))
-	(switch-to-buffer buffer))
+	(org-pop-to-buffer-same-window buffer))
        (t
 	(switch-to-buffer-other-frame buffer))))
     ('reorganize-frame
@@ -359,7 +365,7 @@ buffer."
     (t
      (message "Invalid value %s for org-src-window-setup"
 	      (symbol-name org-src-window-setup))
-     (switch-to-buffer buffer))))
+     (org-pop-to-buffer-same-window buffer))))
 
 (defun org-src-construct-edit-buffer-name (org-buffer-name lang)
   "Construct the buffer name for a source editing buffer."
@@ -419,7 +425,7 @@ the fragment in the Org-mode buffer."
 	    begline (save-excursion (goto-char beg) (org-current-line)))
       (if (and (setq buffer (org-edit-src-find-buffer beg end))
 	       (y-or-n-p "Return to existing edit buffer? [n] will revert changes: "))
-	  (switch-to-buffer buffer)
+	  (org-pop-to-buffer-same-window buffer)
 	(when buffer
 	  (with-current-buffer buffer
 	    (if (boundp 'org-edit-src-overlay)
@@ -439,7 +445,7 @@ the fragment in the Org-mode buffer."
 			   (define-key map [mouse-1] 'org-edit-src-continue)
 			   map))
 	(overlay-put ovl :read-only "Leave me alone")
-	(switch-to-buffer buffer)
+	(org-pop-to-buffer-same-window buffer)
 	(insert code)
 	(remove-text-properties (point-min) (point-max)
 				'(display nil invisible nil intangible nil))
@@ -674,7 +680,7 @@ the language, a switch telling if the content should be in a single line."
 (defun org-src-mode-configure-edit-buffer ()
   (when (org-bound-and-true-p org-edit-src-from-org-mode)
     (org-add-hook 'kill-buffer-hook
-		  '(lambda () (delete-overlay org-edit-src-overlay)) nil 'local)
+		  #'(lambda () (delete-overlay org-edit-src-overlay)) nil 'local)
     (if (org-bound-and-true-p org-edit-src-allow-write-back-p)
 	(progn
 	  (setq buffer-offer-save t)
@@ -770,7 +776,7 @@ fontification of code blocks see `org-src-fontify-block' and
 	      (get-buffer-create
 	       (concat " org-src-fontification:" (symbol-name lang-mode)))
 	    (delete-region (point-min) (point-max))
-	    (insert string)
+	    (insert (concat string " ")) ;; so there's a final property change
 	    (unless (eq major-mode lang-mode) (funcall lang-mode))
 	    (font-lock-fontify-buffer)
 	    (setq pos (point-min))

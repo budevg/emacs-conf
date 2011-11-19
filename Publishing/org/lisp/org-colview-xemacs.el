@@ -6,7 +6,7 @@
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.5
+;; Version: 7.7
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -322,7 +322,9 @@ This is the compiled version of the format.")
 				  (get-text-property (point-at-bol) 'face))
 			     'default) :foreground))))
 	 (face (if (featurep 'xemacs) color (list color 'org-column)))
-	 (pl (or (get-text-property (point-at-bol) 'prefix-length) 0))
+	 (pl (- (point)
+		(or (text-property-any (point-at-bol) (point-at-eol) 'org-heading t)
+		    (point))))
 	 (cphr (get-text-property (point-at-bol) 'org-complex-heading-regexp))
 	 pom property ass width f string ov column val modval s2 title calc)
     ;; Check if the entry is in another buffer.
@@ -354,9 +356,7 @@ This is the compiled version of the format.")
 			 ((equal property "ITEM")
 			  (if (org-mode-p)
 			      (org-columns-cleanup-item
-			       val org-columns-current-fmt-compiled)
-			    (org-agenda-columns-cleanup-item
-			     val pl cphr org-columns-current-fmt-compiled)))
+			       val org-columns-current-fmt-compiled)))
 			 ((and calc (functionp calc)
 			       (not (string= val ""))
 			       (not (get-text-property 0 'org-computed val)))
@@ -532,20 +532,6 @@ This is the compiled version of the format.")
 	     (concat "[" (match-string (if (match-end 3) 3 1) s) "]")
 	     t t s)))
   s)
-
-(defvar org-agenda-columns-remove-prefix-from-item)
-
-(defun org-agenda-columns-cleanup-item (item pl cphr fmt)
-  "Cleanup the time property for agenda column view.
-See also the variable `org-agenda-columns-remove-prefix-from-item'."
-  (let* ((org-complex-heading-regexp cphr)
-	 (prefix (substring item 0 pl))
-	 (rest (substring item pl))
-	 (fake (concat "* " rest))
-	 (cleaned (org-trim (substring (org-columns-cleanup-item fake fmt) 1))))
-    (if org-agenda-columns-remove-prefix-from-item
-	cleaned
-      (concat prefix cleaned))))
 
 (defun org-columns-show-value ()
   "Show the full value of the property."
@@ -876,7 +862,7 @@ around it."
 	  (save-restriction
 	    (narrow-to-region beg end)
 	    (org-clock-sum))))
-      (while (re-search-forward (concat "^" outline-regexp) end t)
+      (while (re-search-forward org-outline-regexp-bol end t)
 	(if (and org-columns-skip-archived-trees
 		 (looking-at (concat ".*:" org-archive-tag ":")))
 	    (org-end-of-subtree t)
@@ -1111,7 +1097,7 @@ Don't set this, this is meant for dynamic scoping.")
 (defun org-columns-compute (property)
   "Sum the values of property PROPERTY hierarchically, for the entire buffer."
   (interactive)
-  (let* ((re (concat "^" outline-regexp))
+  (let* ((re org-outline-regexp-bol)
 	 (lmax 30) ; Does anyone use deeper levels???
 	 (lvals (make-vector lmax nil))
 	 (lflag (make-vector lmax nil))

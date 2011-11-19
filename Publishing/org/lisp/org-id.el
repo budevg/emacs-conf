@@ -5,7 +5,7 @@
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.5
+;; Version: 7.7
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -74,6 +74,8 @@
 (require 'org)
 
 (declare-function message-make-fqdn "message" ())
+(declare-function org-pop-to-buffer-same-window 
+		  "org-compat" (&optional buffer-or-name norecord label))
 
 ;;; Customization
 
@@ -151,9 +153,7 @@ This variable is only relevant when `org-id-track-globally' is set."
   :type 'file)
 
 (defvar org-id-locations nil
-  "List of files with IDs in those files.
-Depending on `org-id-use-hash' this can also be a hash table mapping IDs
-to files.")
+  "List of files with IDs in those files.")
 
 (defvar org-id-files nil
   "List of files that contain IDs.")
@@ -255,7 +255,7 @@ Move the cursor to that entry in that buffer."
   (let ((m (org-id-find id 'marker)))
     (unless m
       (error "Cannot find entry with ID \"%s\"" id))
-    (switch-to-buffer (marker-buffer m))
+    (org-pop-to-buffer-same-window (marker-buffer m))
     (goto-char m)
     (move-marker m nil)
     (org-show-context)))
