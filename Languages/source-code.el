@@ -8,9 +8,13 @@
   (interactive)
   (find-file dir-locals-file)
   (insert "
-((c-mode . ((tab-width . 4)
-            (c-basic-offset . 4)
-            (indent-tabs-mode . nil))))"))
+((c++-mode . ((tab-width . 4)
+              (c-basic-offset . 4)
+              (indent-tabs-mode . nil)))
+(c-mode . ((tab-width . 4)
+           (c-basic-offset . 4)
+           (indent-tabs-mode . nil))))
+"))
 
 
 ;;(require 'judge-indent)

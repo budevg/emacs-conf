@@ -2,11 +2,6 @@
 (setq kill-buffer-query-functions
       (remq 'process-kill-buffer-query-function kill-buffer-query-functions))
 
-;; don't use pcomplete in shell since it tries to parse tar files for example
-(eval-after-load "shell"
-  '(progn
-     (delq 'pcomplete-completions-at-point shell-dynamic-complete-functions)))
-
 (defun new-shell ()
   "create new shell"
   (interactive)

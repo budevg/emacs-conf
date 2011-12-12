@@ -83,3 +83,8 @@
   (let ((font-lock-fontified t))
     ad-do-it))
 (ad-activate 'hi-lock-set-pattern)
+
+
+(defun logs-error ()
+  (interactive)
+  (highlight-lines-matching-regexp "[Ee][Rr][Rr][Oo][Rr]" 'hi-red))
