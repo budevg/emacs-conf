@@ -1,0 +1,27 @@
+# -*- mode: snippet -*-
+# name: main
+#expand-env: ((yas/indent-line 'nil))
+# --
+OBJS:= $1.o
+TARGET:= ${1:main}$0
+
+AS:=as
+ASFLAGS:= -gstabs
+
+LD:=ld
+LDFALGS:=
+
+CC:=gcc
+CCFLAGS:= -g -Wall
+
+$(TARGET): $(OBJS)
+	$(LD) -o $@ $<
+
+%.o: %.S
+	$(AS) $(ASFLAGS) -o $@ $<
+
+%.o: %.c
+	$(CC) $(CCFLAGS) -o $@ $<
+
+clean:
+	-rm *.o main
