@@ -2,8 +2,18 @@
 # name: main
 #expand-env: ((yas/indent-line 'nil))
 # --
-OBJS:= $1.o
-TARGET:= ${1:main}$0
+# $@ - Name of the target
+# $? - List of dependencies more recent than target
+# $^ - All dependencies without duplicates
+# $+ - All dependencies with duplicates
+# $< - First dependency
+# %  - Wildcard, matches text stored in $*
+# OBJ = $(SRC:.c=.o) - replace .c extension with .o
+
+OBJS:= $0
+TARGET:=
+
+AR:=ar
 
 AS:=as
 ASFLAGS:= -gstabs
@@ -12,16 +22,35 @@ LD:=ld
 LDFALGS:=
 
 CC:=gcc
-CCFLAGS:= -g -Wall
+#CC:=g++
+
+CFLAGS:= -g -Wall -fPIC
+
+LIBS:=
+INCLUDES:=
 
 $(TARGET): $(OBJS)
-	$(LD) -o $@ $<
+	$(LD) $(LDFALGS) $(LIBS) -o $@ $<
+
+$(TARGET).a: $(OBJS)
+	$(AR) rcs $@ $^
+
+$(TARGET).so: $(OBJS)
+	$(LD) -shared -soname $@.1 -o $@.1.0 $^
+
+-include $(OBJS:.o=.d)
 
 %.o: %.S
 	$(AS) $(ASFLAGS) -o $@ $<
 
 %.o: %.c
-	$(CC) $(CCFLAGS) -o $@ $<
+	$(CC) -c -MD $(CFLAGS) $(INCLUDES) -o $@ $<
+
+%.o: %.cc
+	$(CC) -c -MD $(CFLAGS) $(INCLUDES) -o $@ $<
+
+%.o: %.cpp
+	$(CC) -c -MD $(CFLAGS) $(INCLUDES) -o $@ $<
 
 clean:
-	-rm *.o main
+	-rm *.o *.d *.a *.so
