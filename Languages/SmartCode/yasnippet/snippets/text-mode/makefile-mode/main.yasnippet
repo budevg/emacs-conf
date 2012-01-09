@@ -7,8 +7,10 @@
 # $^ - All dependencies without duplicates
 # $+ - All dependencies with duplicates
 # $< - First dependency
+# $(@D) - The directory part of the file name of the target
 # %  - Wildcard, matches text stored in $*
 # OBJ = $(SRC:.c=.o) - replace .c extension with .o
+# OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS)) - add prefix to list
 
 OBJS:= $0
 TARGET:=
@@ -29,28 +31,39 @@ CFLAGS:= -g -Wall -fPIC
 LIBS:=
 INCLUDES:=
 
+BUILD_DIR:= build
+
+OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS))
+TARGET:= $(addprefix $(BUILD_DIR)/, $(TARGET))
+
 $(TARGET): $(OBJS)
-	$(LD) $(LDFALGS) $(LIBS) -o $@ $<
+	$(LD) $(LDFALGS) $(LIBS) -o $@ $^
 
 $(TARGET).a: $(OBJS)
+	mkdir -p $(@D)
 	$(AR) rcs $@ $^
 
 $(TARGET).so: $(OBJS)
+	mkdir -p $(@D)
 	$(LD) -shared -soname $@.1 -o $@.1.0 $^
 
 -include $(OBJS:.o=.d)
 
-%.o: %.S
+$(BUILD_DIR)/%.o: %.S
+	mkdir -p $(@D)
 	$(AS) $(ASFLAGS) -o $@ $<
 
-%.o: %.c
+$(BUILD_DIR)/%.o: %.c
+	mkdir -p $(@D)
 	$(CC) -c -MD $(CFLAGS) $(INCLUDES) -o $@ $<
 
-%.o: %.cc
+$(BUILD_DIR)/%.o: %.cc
+	mkdir -p $(@D)
 	$(CC) -c -MD $(CFLAGS) $(INCLUDES) -o $@ $<
 
-%.o: %.cpp
+$(BUILD_DIR)/%.o: %.cpp
+	mkdir -p $(@D)
 	$(CC) -c -MD $(CFLAGS) $(INCLUDES) -o $@ $<
 
 clean:
-	-rm *.o *.d *.a *.so
+	-rm -rf $(BUILD_DIR)
