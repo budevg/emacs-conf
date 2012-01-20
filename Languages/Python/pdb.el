@@ -10,5 +10,5 @@
   (comint-send-input))
 
 (global-set-key [(control meta p)] 'py-pdb-pm)
-(autoload 'py-shell "python-mode" "py-shell autoload" t)
-(global-set-key [(control P)] 'py-shell)
+(autoload 'ipython "python-mode" "ipython autoload" t)
+(global-set-key [(control P)] 'ipython)

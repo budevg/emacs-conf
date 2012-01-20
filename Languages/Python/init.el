@@ -1,14 +1,11 @@
 
 (autoload 'python-mode "python-mode" "python-mode autoload" t)
-
-(eval-after-load "python-mode"
-  '(progn
-     (if (executable-find "ipython")
-         (require 'ipython))
-     (add-hook 'python-mode-hook
-               (lambda ()
-                 (setq py-indent-offset 2)
-                 (setq py-smart-indentation nil)))))
+(if (executable-find "ipython")
+    (progn
+      (setq py-shell-name "ipython")
+      (setq py-complete-function 'py-shell-complete)))
+(setq py-indent-offset 2)
+(setq py-smart-indentation nil)
 
 (autoload 'pymacs-apply "pymacs")
 (autoload 'pymacs-call "pymacs")
@@ -18,8 +15,10 @@
 (eval-after-load "pymacs"
   '(add-to-list 'pymacs-load-path (concat EMACS-CONFIG-PATH "/Languages/Python/pymacs-modules")))
 
+(autoload 'doctest-mode "doctest-mode" "doctest-mode autoload" t)
 
 (add-to-list 'auto-mode-alist '("\\.py\\'" . python-mode))
+(add-to-list 'auto-mode-alist '("\\.doctest$" . doctest-mode))
 (add-to-list 'auto-mode-alist '("\\.scons$" . python-mode))
 (add-to-list 'auto-mode-alist '("SConstruct\\'" . python-mode))
 (add-to-list 'auto-mode-alist '("SConstruct\\'" . python-mode))
