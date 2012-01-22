@@ -88,5 +88,6 @@
 (defun logs-error ()
   (interactive)
   (highlight-lines-matching-regexp "[Ww][Aa][Rr][Nn]" 'hi-orange)
+  (highlight-lines-matching-regexp "ERR" 'hi-red)
   (highlight-lines-matching-regexp "[Ee][Rr][Rr][Oo][Rr]" 'hi-red))
 

@@ -13,3 +13,6 @@
   "Minor mode for incremental blame for Git." t)
 (autoload 'ahg-status "ahg" "ahg-status autoload" t)
 
+(eval-after-load "psvn"
+  '(progn
+     (define-key svn-status-mode-map (kbd "TAB") 'svn-status-show-svn-diff)))
