@@ -129,6 +129,8 @@ EMACS CONFIGURATION TUTORIAL
    to save dir specific configuration
 ** <meta>+w
    enable shift of words/lines/regions using meta+up/down/right/left
+** <meta>+e
+   Expand region increases the selected region by semantic units
 * Debugging:
 ** keypad-2
    step

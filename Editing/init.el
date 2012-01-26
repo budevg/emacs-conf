@@ -44,6 +44,9 @@
 
 (global-set-key "\C-w" 'backward-delete-word)
 
+(autoload 'er/expand-region "expand-region" nil t)
+(global-set-key "\M-e" 'er/expand-region)
+
 (defun switch-to-hexl-mode ()
   (interactive)
   (hexl-mode))
