@@ -75,6 +75,8 @@ EMACS CONFIGURATION TUTORIAL
    omit files
 ** k in dired-mode
    hides selected files
+** <control>+x <control>+j
+   jump to dired mode and put cursor on the current file
 ** <meta>+enter in dired mode
    run less on file in terminal window (usefull to view large files)
 ** <meta>+x rename-buffer

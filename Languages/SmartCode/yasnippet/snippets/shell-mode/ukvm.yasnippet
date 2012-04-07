@@ -1,4 +1,4 @@
 # -*- mode: snippet -*-
 # name: ukvm
 # --
-kvm -snapshot -net user,hostfwd=tcp::5555-:22 -net nic $0
+kvm -snapshot -net user,hostfwd=tcp::5555-:22 -net nic,model=virtio -drive if=virtio,file=$0
