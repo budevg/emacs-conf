@@ -7,3 +7,6 @@
   (comint-send-input)
   (insert-string "EOF")
   (comint-send-input))
+
+(autoload 'remote-edit-file "remote-edit" nil t)
+(define-key ctl-x-map "F" 'remote-edit-file)

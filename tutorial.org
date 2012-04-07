@@ -99,6 +99,8 @@ EMACS CONFIGURATION TUTORIAL
    hide/show all/single #ifdef statement in c
 ** <control>x f
    find file at point
+** <control>x F
+   Edit remote file at point (inside comint-mode buffer)
 ** <control>x a
    open app at point
 * Editing:
