@@ -5,7 +5,7 @@
 ;; Author: Colin Walters <walters@verbum.org>
 ;; Maintainer: Nick Hurley <hurley@cis.ohio-state.edu>
 ;; Created: 7 Apr 2001
-;; Version: 1.3a (CVS)
+;; Version: 1.3c
 ;; X-RCS: $Id: browse-kill-ring.el,v 1.2 2008/10/29 00:23:00 hurley Exp $
 ;; URL: http://freedom.cis.ohio-state.edu/~hurley/
 ;; URL-ja: http://www.fan.gr.jp/~ring/doc/browse-kill-ring.html
@@ -49,6 +49,18 @@
 ;; again.
 
 ;;; Change Log:
+
+;; Changes from 1.3b to 1.3c:
+
+;; * 28-Feb-2011: Andrew Burgess <aburgess@broadcom.com>
+;;   Fix a bug where having other overlays active in the kill ring buffer,
+;;   for example with show-paren-mode would block insertion.
+
+;; Changes from 1.3a to 1.3b:
+
+;; * 24-Feb-2011: Andrew Burgess <aburgess@broadcom.com>
+;;   Correctly handle inserting when multiple windows exist for the
+;;   same buffer.
 
 ;; Changes from 1.3 to 1.3a:
 
@@ -611,12 +623,19 @@ of the *Kill Ring*."
   (browse-kill-ring-resize-window)
   (browse-kill-ring-forward 0))
 
+;; Helper function for browse-kill-ring-current-string, takes a list of
+;; overlays and returns the string from the first overlay that has the 
+;; property. There might be more than just our overlay at this point.
+(defun browse-kill-ring-current-string-1 (overs)
+  (if overs
+      (let ((str (overlay-get (car overs) 'browse-kill-ring-target)))
+        (if str str (browse-kill-ring-current-string-1 (cdr overs))))
+    nil))
+
+;; Find the string to insert at the point by looking for the overlay.
 (defun browse-kill-ring-current-string (buf pt)
-  (with-current-buffer buf
-    (let ((overs (overlays-at pt)))
-      (or (and overs
-	       (overlay-get (car overs) 'browse-kill-ring-target))
- 	  (error "No kill ring item here")))))
+  (or (browse-kill-ring-current-string-1 (overlays-at pt))
+      (error "No kill ring item here")))
 
 (defun browse-kill-ring-do-insert (buf pt)
   (let ((str (browse-kill-ring-current-string buf pt)))
@@ -628,7 +647,13 @@ of the *Kill Ring*."
 		     browse-kill-ring-original-window))
 	    (set-buffer (window-buffer browse-kill-ring-original-window))
 	    (save-excursion
-	      (let ((pt (point)))
+	      ;; Use the point position from the original window that
+	      ;; requested the insert, if we just use (point) then
+	      ;; we'll get the point position from the last window
+	      ;; that was opened onto this buffer, probably not what
+	      ;; you intended.
+	      (let ((pt (window-point browse-kill-ring-original-window)))
+                (goto-char pt)
 		(insert (if browse-kill-ring-depropertize
 			    (browse-kill-ring-depropertize-string str)
 			  str))

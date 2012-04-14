@@ -1,8 +1,8 @@
 
-(autoload 'highlight-80+-mode
-  "highlight-80+" "highlight-80+ autoload" t)
+(autoload 'fci-mode
+  "fill-column-indicator" nil t)
 
-(global-set-key [(control shift b)] 'highlight-80+-mode)
+(global-set-key [(control shift b)] 'fci-mode)
 
 (autoload 'highlight-parentheses-mode
   "highlight-parentheses" "highlight-parentheses autoload" t)
