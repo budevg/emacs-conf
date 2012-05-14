@@ -147,6 +147,10 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+x "gdb-many-windows"
    build debugging environment windows
 
+** control+u control+alt+x
+   edebug instrument function
+   control+alt+x - clean instrumented function
+   
 * more tips:
 ** you should use http://www.randyrants.com/sharpkeys utility to map caps lock to <ctrl> key on windows
 

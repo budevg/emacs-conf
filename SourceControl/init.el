@@ -9,8 +9,6 @@
   (interactive)
   (git-status default-directory))
 (global-set-key [(meta M)] 'git-status-on-current-dir)
-(autoload 'git-blame-mode "git-blame"
-  "Minor mode for incremental blame for Git." t)
 (autoload 'ahg-status "ahg" "ahg-status autoload" t)
 
 (eval-after-load "psvn"

@@ -1,5 +1,6 @@
 (autoload 'magit-status "magit" nil t)
 (autoload 'rebase-mode "rebase-mode" nil t)
+(autoload 'magit-blame-mode "magit-blame" nil t)
 (add-to-list 'auto-mode-alist
              '("git-rebase-todo" . rebase-mode))
 
