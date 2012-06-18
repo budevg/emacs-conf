@@ -201,3 +201,8 @@ EMACS CONFIGURATION TUTORIAL
 ** meta+x create-dir-locals
    creates .dir-locals.el and sets configuration recursively
    to all files and subdirectories
+* Dot-files
+  Write different config files through shell mode
+** meta+x dot-gdb-crack
+** meta+x dot-gdb-common
+** meta+x dot-dircolors   

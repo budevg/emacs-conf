@@ -58,3 +58,9 @@
 (global-set-key (kbd "C-=") 'cssh-term-remote-open)
 
 (setq exec-path (append (list (expand-file-name "~/tools/bin")) exec-path))
+
+(defun dot-dircolors ()
+  (interactive)
+  (comint-send-file
+   "~/.emacs.d/Shell/.dircolors"
+   "~/.dircolors"))

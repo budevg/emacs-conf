@@ -8,6 +8,8 @@ elisp = [Bunch(path = "Elisp/message-notify.el",
                msg = "Show alerts and notifications"),
          Bunch(path = "Elisp/idle-require.el",
                msg  = "Load packages when emacs idle"),
+         Bunch(path = "Elisp/elisp-utils.el",
+               msg  = "Different elisp utils"),
          ]
 
 
@@ -85,7 +87,7 @@ languages = [Bunch(path = "Languages/comments.el",
                    msg = "provides comments shortcuts for all programming languages modes"),
              Bunch(path = "Languages/compiler.el",
                    msg = "compiler definitions"),
-             Bunch(path = "Languages/debug-ng.el",
+             Bunch(path = "Languages/Debug/init.el",
                    msg = "debugging definitions"),
              Bunch(path = "Languages/source-code.el",
                    msg = "general source code configuration"),

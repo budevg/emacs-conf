@@ -1,0 +1,9 @@
+set height 1000000
+set print pretty on
+
+define bta
+  thread apply all bt
+end
+document bta
+Print backtrace of all threads
+end
