@@ -205,4 +205,5 @@ EMACS CONFIGURATION TUTORIAL
   Write different config files through shell mode
 ** meta+x dot-gdb-crack
 ** meta+x dot-gdb-common
-** meta+x dot-dircolors   
+** meta+x dot-dircolors
+** meta+x dot-gitconfig

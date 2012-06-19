@@ -1,0 +1,9 @@
+[user]
+	email = xxx@xxx.com
+	name = xxx xxx
+[core]
+	pager = cat
+[alias]
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(magenta)<%an>%Creset' --abbrev-commit --date=relative
+        l = log --no-merges
+        ll = log --graph --date=short

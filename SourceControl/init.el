@@ -14,3 +14,9 @@
 (eval-after-load "psvn"
   '(progn
      (define-key svn-status-mode-map (kbd "TAB") 'svn-status-show-svn-diff)))
+
+(defun dot-gitconfig ()
+  (interactive)
+  (comint-send-file
+   "~/.emacs.d/SourceControl/.gitconfig"
+   "~/.gitconfig"))
