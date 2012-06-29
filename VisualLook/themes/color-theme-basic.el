@@ -35,6 +35,7 @@
           '(region ((t (:background "#444444"))) t)
           '(magit-header ((t)))
           '(magit-item-highlight ((t (:inherit magit-header))))
+          '(ebrowse-root-class ((t (:foreground "yellow" :weight bold))))
           ))))
 
 (provide 'color-theme-basic)
