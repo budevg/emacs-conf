@@ -2154,17 +2154,29 @@ function can be enriched by magit extension like magit-topgit and magit-svn"
   "Checks if git/ssh asks for a password and ask the user for it."
   (let (ask)
     (cond ((or (string-match "^Enter passphrase for key '\\\(.*\\\)': $" string)
-               (string-match "^\\\(.*\\\)'s password:" string))
+               (string-match "^\\\(.*\\\)'s password:" string)
+               (string-match "^Password for '\\\(.*\\\)':" string))
            (setq ask (format "Password for '%s': " (match-string 1 string))))
           ((string-match "^[pP]assword:" string)
            (setq ask "Password:")))
     (when ask
       (process-send-string proc (concat (read-passwd ask nil) "\n")))))
 
+(defun magit-username (proc string)
+  "Checks if git asks for a username and ask the user for it."
+  (when (string-match "^Username for '\\\(.*\\\)':" string)
+    (process-send-string proc
+                         (concat
+                          (read-string (format "Username for '%s': "
+                                               (match-string 1 string))
+                                       nil nil (user-login-name))
+                          "\n"))))
+
 (defun magit-process-filter (proc string)
   (save-current-buffer
     (set-buffer (process-buffer proc))
     (let ((inhibit-read-only t))
+      (magit-username proc string)
       (magit-password proc string)
       (goto-char (process-mark proc))
       ;; Find last ^M in string.  If one was found, ignore everything
@@ -3646,7 +3658,10 @@ user input."
 \('git merge REVISION')."
   (interactive (list (magit-read-rev "Merge" (magit-guess-branch))))
   (when revision
-    (magit-run-git "merge" "--no-commit" (magit-rev-to-git revision))
+    (apply 'magit-run-git
+           "merge" "--no-commit"
+           (magit-rev-to-git revision)
+           magit-custom-options)
     (when (file-exists-p ".git/MERGE_MSG")
         (magit-log-edit))))
 
@@ -4547,9 +4562,9 @@ This means that the eventual commit does 'git commit --allow-empty'."
     (setq magit-pre-log-edit-window-configuration
           (current-window-configuration))
     (pop-to-buffer buf)
+    (setq default-directory dir)
     (when (file-exists-p (concat (magit-git-dir) "MERGE_MSG"))
       (insert-file-contents (concat (magit-git-dir) "MERGE_MSG")))
-    (setq default-directory dir)
     (magit-log-edit-mode)
     (make-local-variable 'magit-buffer-internal)
     (setq magit-buffer-internal magit-buf)
@@ -5606,14 +5621,13 @@ These are the branch names with the remote name stripped."
 (defvar magit-branches-buffer-name "*magit-branches*")
 
 (defun magit--is-branch-at-point-remote ()
-  "Return t if the branch at point is a remote tracking branch"
+  "Return non-nil if the branch at point is a remote tracking branch"
   (magit-remote-part-of-branch (magit--branch-name-at-point)))
 
 (defun magit-remote-part-of-branch (branch)
   (when (string-match-p "^\\(?:refs/\\)?remotes\\/" branch)
     (loop for remote in (magit-git-lines "remote")
-          until (string-match-p (format "^\\(?:refs/\\)?remotes\\/%s\\/" (regexp-quote remote)) branch)
-          finally return remote)))
+          when (string-match-p (format "^\\(?:refs/\\)?remotes\\/%s\\/" (regexp-quote remote)) branch) return remote)))
 
 (defun magit-branch-no-remote (branch)
   (let ((remote (magit-remote-part-of-branch branch)))
@@ -5748,23 +5762,26 @@ These are the branch names with the remote name stripped."
          (markers
           (append (mapcar (lambda (remote)
                             (save-excursion
-                              (search-forward-regexp (concat "^  remotes\\/" remote))
-                              (beginning-of-line)
-                              (point-marker)))
+                              (when (search-forward-regexp
+                                     (concat "^  remotes\\/" remote) nil t)
+                                (beginning-of-line)
+                                (point-marker))))
                           remotes)
                   (list (save-excursion
                           (goto-char (point-max))
                           (point-marker)))))
          ; list of remote elements to display in the buffer
          (remote-groups (loop for remote in remotes
-                              for end-marker in (cdr markers)
-                              collect (list remote end-marker))))
+                              for end-markers on (cdr markers)
+                              for marker = (loop for x in end-markers thereis x)
+                              collect (list remote marker))))
 
     ; actual displaying of information
     (magit-with-section "local" nil
       (insert-before-markers (propertize "Local:" 'face 'magit-section-title) "\n")
       (magit-set-section-info ".")
-      (magit-wash-branches-between-point-and-marker (car markers)))
+      (magit-wash-branches-between-point-and-marker
+       (loop for x in markers thereis x)))
 
     (insert-before-markers "\n")
 
@@ -5772,7 +5789,8 @@ These are the branch names with the remote name stripped."
 
     ; make sure markers point to nil so that they can be garbage collected
     (mapc (lambda (marker)
-            (set-marker marker nil))
+            (when marker
+             (set-marker marker nil)))
           markers)))
 
 (defun magit-refresh-branch-manager ()
