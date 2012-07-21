@@ -207,3 +207,8 @@ EMACS CONFIGURATION TUTORIAL
 ** meta+x dot-gdb-common
 ** meta+x dot-dircolors
 ** meta+x dot-gitconfig
+* Tricks
+** insert prefix in rectangle
+   C-x r t string-rectangle
+** save mark where search started
+   C-s ... then C-x
