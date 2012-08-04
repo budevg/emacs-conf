@@ -15,6 +15,10 @@
 (autoload 'cscope-find-functions-calling-this-function "xcscope" nil t)
 (autoload 'cscope-find-this-file "xcscope" nil t)
 
+(defun cscope-update-indexer ()
+  (interactive)
+  (shell-command-to-string "cp /usr/bin/cscope-indexer ~/tools/bin/cscope-indexer")
+  (shell-command-to-string "sed -i 's/cc|hh/cc|hh|S/' ~/tools/bin/cscope-indexer"))
 
 (setq cscope-do-not-update-database t)
 (define-key global-map [(meta f9)]  'cscope-find-this-symbol)

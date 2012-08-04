@@ -90,7 +90,7 @@
   (interactive)
   (let ((file-path (ffap-file-at-point)))
     (if file-path
-        (find-file file-path))))
+        (find-file-other-window file-path))))
 
 (defun app-open-file-at-point ()
   (interactive)
