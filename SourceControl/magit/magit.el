@@ -3557,7 +3557,7 @@ FULLY-QUALIFIED-NAME is non-nil."
 (defun magit-init (dir)
   "Initialize git repository in the DIR directory."
   (interactive (list (read-directory-name "Directory for Git repository: ")))
-  (let* ((dir (expand-file-name dir))
+  (let* ((dir (file-name-as-directory (expand-file-name dir)))
          (topdir (magit-get-top-dir dir)))
     (when (or (not topdir)
               (yes-or-no-p
@@ -3569,7 +3569,8 @@ FULLY-QUALIFIED-NAME is non-nil."
       (unless (file-directory-p dir)
         (and (y-or-n-p (format "Directory %s does not exists.  Create it? " dir))
              (make-directory dir)))
-      (magit-run* (list magit-git-executable "init" dir)))))
+      (let ((default-directory dir))
+        (magit-run* (list magit-git-executable "init"))))))
 
 (define-derived-mode magit-status-mode magit-mode "Magit"
   "Mode for looking at git status.
@@ -5193,7 +5194,7 @@ the current git repository."
   (let ((topdir (expand-file-name
                  (magit-get-top-dir (or (file-name-directory filename)
                                         default-directory))))
-        (file (expand-file-name filename)))
+        (file (file-truename filename)))
     (when (and (not (string= topdir ""))
                ;; FILE must start with the git repository path
                (zerop (string-match-p (concat "\\`" topdir) file)))
@@ -5584,7 +5585,8 @@ Return values:
          (commit (and (member 'commit (magit-section-context-type section))
                       (magit-section-info section)))
          (old-editor (getenv "GIT_EDITOR")))
-    (setenv "GIT_EDITOR" (locate-file "emacsclient" exec-path))
+    (setenv "GIT_EDITOR" (concat (locate-file "emacsclient" exec-path)
+                                 " -s " server-name))
     (unwind-protect
         (magit-run-git-async "rebase" "-i"
                              (or (and commit (concat commit "^"))
@@ -5962,7 +5964,8 @@ With a prefix arg, do a submodule update --init"
 layer. This can be added to `magit-mode-hook' for example"
   (dolist (ext (magit-get-all "magit.extension"))
     (let ((sym (intern (format "magit-%s-mode" ext))))
-      (when (fboundp sym)
+      (when (and (fboundp sym)
+                 (not (eq sym 'magit-wip-save-mode)))
         (funcall sym 1)))))
 
 (provide 'magit)

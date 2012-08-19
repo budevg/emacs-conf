@@ -3,7 +3,9 @@
      (define-key asm-mode-map [tab] 'asm-indent-line)
      (add-hook 'asm-mode-set-comment-hook
                (lambda ()
-                 (set (make-local-variable 'tab-always-indent) t)))
+                 (set (make-local-variable 'tab-always-indent) t)
+                 (set (make-local-variable 'tab-width) 4)
+                 (set (make-local-variable 'tab-stop-list) '(4 8 12 16 20 24 28 32 36 40 44 48 52 56 60))))
 
      ))
 
@@ -30,4 +32,3 @@
      mode)             ; params
     (switch-to-buffer-other-window out-buffer)
     ))
-

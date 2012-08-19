@@ -114,3 +114,6 @@
 (setq cua-enable-cua-keys nil)
 ;; Edit text rectangles in emacs
 (cua-mode)
+
+;; no trailing spaces at the end
+(add-hook 'before-save-hook 'delete-trailing-whitespace)
