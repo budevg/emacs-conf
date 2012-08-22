@@ -162,6 +162,9 @@ packages = [Bunch(path = "Packages/init.el",
                   msg = "load el-get packages")
             ]
 
+email = [Bunch(path = "Email/init.el",
+               msg = "Email configuration"),
+         ]
 
 PACKAGES = [elisp,
             faces,
@@ -175,6 +178,7 @@ PACKAGES = [elisp,
             source_control,
             applications,
             packages,
+            email,
             ]
 
 SCREEN = Bunch(x=0,

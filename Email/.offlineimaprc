@@ -1,0 +1,23 @@
+[general]
+accounts = Gmail
+maxsyncaccounts = 3
+
+pythonfile = ~/.offlineimaprc.py
+
+[Account Gmail]
+localrepository = Local
+remoterepository = Remote
+
+[Repository Local]
+type = Maildir
+localfolders = ~/Maildir
+
+[Repository Remote]
+type = IMAP
+remotehost = imap.gmail.com
+#remoteuser = USER
+#remotepass = PASSWORD
+remotepasseval = my_get_output("gmail password")
+ssl = yes
+maxconnections = 1
+realdelete = no
