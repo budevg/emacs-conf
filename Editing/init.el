@@ -57,7 +57,7 @@
 (autoload 'browse-kill-ring "browse-kill-ring" nil t)
 (global-set-key [(meta delete)] 'browse-kill-ring)
 (eval-after-load "browse-kill-ring"
-  '(progn 
+  '(progn
      (define-key browse-kill-ring-mode-map [down] 'browse-kill-ring-forward)
      (define-key browse-kill-ring-mode-map [(control down)] 'browse-kill-ring-forward)
      (define-key browse-kill-ring-mode-map [up] 'browse-kill-ring-previous)
@@ -90,7 +90,7 @@
     (if mark-active
         (list (region-beginning) (region-end))
       (list (line-beginning-position) (line-beginning-position 2)))))
-   
+
    (require 'uniquify)
    (setq uniquify-buffer-name-style 'post-forward)
    ))
@@ -117,3 +117,8 @@
 
 ;; no trailing spaces at the end
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
+
+;; latitude E6530 shortcuts
+;;(global-set-key (kbd "<C-prior>") 'kill-ring-save)
+;;(global-set-key (kbd "<S-prior>") 'cua-paste)
+;;(global-set-key (kbd "<S-next>") 'kill-region)
