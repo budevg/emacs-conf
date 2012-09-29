@@ -1,6 +1,6 @@
 
 ;grep
-(require 'grep-edit)
+(require 'wgrep)
 (setq grep-find-history '("find . -type f -print0 |xargs -0 -e grep -n"))
 (global-set-key [(control f9)] 'grep-find)
 
