@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: beamer
+# key: beamer
+# --
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+#+LaTeX_CLASS_OPTIONS: [bigger]
+#+latex_header: \mode<beamer>{\usetheme{Madrid}}
+#+BEAMER_FRAME_LEVEL: 2
+
+#+COLUMNS: %20ITEM %13BEAMER_env(Env) %6BEAMER_envargs(Args) %4BEAMER_col(Col) %7BEAMER_extra(Extra)
+$0

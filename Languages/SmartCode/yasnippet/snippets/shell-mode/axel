@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: axel
+# key: axel
+# --
+axel -an 10 $0

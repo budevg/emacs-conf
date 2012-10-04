@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: end
+# key: end
+# --
+probe end {
+  $0
+}

@@ -1,0 +1,17 @@
+# -*- mode: snippet -*-
+# name: header
+# key: header
+# --
+/// ---------------------------------------------------------------------------
+/// @file     `(file-name-nondirectory buffer-file-name)`
+/// @brief    xxx
+/// @author   xxx
+/// @date     `(current-time-string)`
+/// ---------------------------------------------------------------------------
+
+#ifndef ${1:`(format "__%s__" (replace-regexp-in-string "[\.]" "_" (upcase (file-name-nondirectory buffer-file-name))))`}
+#define $1
+
+$0
+
+#endif // $1

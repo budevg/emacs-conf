@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: trace
+# key: trace
+# --
+probe kernel.trace("${1:tracepoint}") {
+  $0
+}

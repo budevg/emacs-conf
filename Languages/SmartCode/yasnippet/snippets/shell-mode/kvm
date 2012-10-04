@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: kvm -snapshot
+# key: kvm
+# --
+kvm -snapshot $0

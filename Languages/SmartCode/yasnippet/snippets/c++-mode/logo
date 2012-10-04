@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: logo
+# key: logo
+# --
+/// ---------------------------------------------------------------------------
+/// @file     `(file-name-nondirectory buffer-file-name)`
+/// @brief    xxx
+/// @author   xxx
+/// @date     `(current-time-string)`
+/// ---------------------------------------------------------------------------

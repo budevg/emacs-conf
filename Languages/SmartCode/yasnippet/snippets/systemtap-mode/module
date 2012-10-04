@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: module
+# key: module
+# --
+probe module("${1:module}").function("${2:function}") {
+  $0
+}
+
+probe module("$1").function("$2").return {
+
+}

@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: kernel
+# key: kernel
+# --
+probe kernel.function("${1:function}") {
+  $0
+}
+probe kernel.function("$1").return {
+
+}

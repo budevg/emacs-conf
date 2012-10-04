@@ -1,0 +1,9 @@
+# -*- mode: snippet -*-
+# name: margins
+# key: margins
+# --
+#+LATEX_HEADER: \addtolength{\textwidth}{4cm}
+#+LATEX_HEADER: \addtolength{\hoffset}{-2cm}
+#+LATEX_HEADER: \addtolength{\textheight}{2cm}
+#+LATEX_HEADER: \addtolength{\voffset}{-1cm}
+$0

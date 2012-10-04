@@ -1,0 +1,14 @@
+# -*- mode: snippet -*-
+# name: kern
+# key: kern
+# expand-env: ((yas-indent-line 'nil))
+# --
+
+KERNELDIR := /lib/modules/\`uname -r\`/build
+
+obj-m  := ${1:test}.o
+
+all:
+	make -C $(KERNELDIR) M=\`pwd\` modules
+clean:
+	make -C $(KERNELDIR) M=\`pwd\` clean

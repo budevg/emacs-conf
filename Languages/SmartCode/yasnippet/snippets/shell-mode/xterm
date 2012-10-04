@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: xterm
+# key: xterm
+# --
+xterm -fn *-fixed-*-*-*-20-*

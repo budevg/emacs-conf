@@ -1,7 +1,0 @@
-#name : struct
-# --
-class ${name}(ctypes.Structure):
-    _fields_ = [
-        ("field", ctypes.c_uint64),
-        ]
-$0

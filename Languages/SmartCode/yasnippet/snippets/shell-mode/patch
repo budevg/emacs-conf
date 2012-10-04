@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: patch
+# key: patch
+# --
+patch -p1 --dry-run < $0

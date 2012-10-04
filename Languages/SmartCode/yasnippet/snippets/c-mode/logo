@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: logo
+# key: logo
+# --
+/*******************************************************************************
+*                                                                             *
+* @file     `(format "%-66s" (file-name-nondirectory buffer-file-name))`*
+* @brief    xxx                                                               *
+* @author   xxx                                                               *
+* @date     `(format "%-66s" (current-time-string))`*
+*                                                                             *
+******************************************************************************/
