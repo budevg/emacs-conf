@@ -21,7 +21,7 @@
 
 ;;; Commentary:
 
-;; 
+;;
 
 ;;; Code:
 
@@ -141,17 +141,26 @@
 
 (defun ac-yasnippet-candidates ()
   (with-no-warnings
-    (if (fboundp 'yas/get-snippet-tables)
-        ;; >0.6.0
-        (apply 'append (mapcar 'ac-yasnippet-candidate-1 (yas/get-snippet-tables major-mode)))
-      (let ((table
-             (if (fboundp 'yas/snippet-table)
-                 ;; <0.6.0
-                 (yas/snippet-table major-mode)
-               ;; 0.6.0
-               (yas/current-snippet-table))))
-        (if table
-            (ac-yasnippet-candidate-1 table))))))
+    (cond (;; 0.8 onwards
+           (fboundp 'yas-active-keys)
+           (all-completions ac-prefix (yas-active-keys)))
+          (;; >0.6.0
+           (fboundp 'yas/get-snippet-tables)
+           (apply 'append (mapcar 'ac-yasnippet-candidate-1
+                                  (condition-case nil
+                                      (yas/get-snippet-tables major-mode)
+                                    (wrong-number-of-arguments
+                                     (yas/get-snippet-tables)))))
+           )
+          (t
+           (let ((table
+                  (if (fboundp 'yas/snippet-table)
+                      ;; <0.6.0
+                      (yas/snippet-table major-mode)
+                    ;; 0.6.0
+                    (yas/current-snippet-table))))
+             (if table
+                 (ac-yasnippet-candidate-1 table)))))))
 
 (ac-define-source yasnippet
   '((depends yasnippet)
@@ -166,17 +175,29 @@
 (defun ac-semantic-candidates (prefix)
   (with-no-warnings
     (delete ""            ; semantic sometimes returns an empty string
-            (mapcar 'semantic-tag-name
+            (mapcar (lambda (elem)
+                      (cons (semantic-tag-name elem)
+                            (semantic-tag-clone elem)))
                     (ignore-errors
                       (or (semantic-analyze-possible-completions
                            (semantic-analyze-current-context))
                           (senator-find-tag-for-completion prefix)))))))
 
+(defun ac-semantic-doc (symbol)
+  (with-no-warnings
+    (let* ((proto (semantic-format-tag-summarize-with-file symbol nil t))
+           (doc (semantic-documentation-for-tag symbol))
+           (res proto))
+      (when doc
+        (setq res (concat res "\n\n" doc)))
+      res)))
+
 (ac-define-source semantic
   '((available . (or (require 'semantic-ia nil t)
                      (require 'semantic/ia nil t)))
     (candidates . (ac-semantic-candidates ac-prefix))
-    (prefix . c-dot-ref)
+    (document . ac-semantic-doc)
+    (prefix . cc-member)
     (requires . 0)
     (symbol . "m")))
 
@@ -184,6 +205,7 @@
   '((available . (or (require 'semantic-ia nil t)
                      (require 'semantic/ia nil t)))
     (candidates . (ac-semantic-candidates ac-prefix))
+    (document . ac-semantic-doc)
     (symbol . "s")))
 
 ;; eclim
@@ -368,7 +390,7 @@
   "Current editing property.")
 
 (defun ac-css-prefix ()
-  (when (save-excursion (re-search-backward "\\_<\\(.+?\\)\\_>\\s *:.*\\=" nil t))
+  (when (save-excursion (re-search-backward "\\_<\\(.+?\\)\\_>\\s *:[^;]*\\=" nil t))
     (setq ac-css-property (match-string 1))
     (or (ac-prefix-symbol) (point))))
 
@@ -470,7 +492,8 @@
 ;;;; Default settings
 
 (defun ac-common-setup ()
-  (add-to-list 'ac-sources 'ac-source-filename))
+  ;(add-to-list 'ac-sources 'ac-source-filename)
+  )
 
 (defun ac-emacs-lisp-mode-setup ()
   (setq ac-sources (append '(ac-source-features ac-source-functions ac-source-yasnippet ac-source-variables ac-source-symbols) ac-sources)))
