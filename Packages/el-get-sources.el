@@ -29,10 +29,19 @@
                :after (lambda () (el-get-remove "cssh")))
         (:name auto-complete
                :type git
-               :url "http://github.com/m2ym/auto-complete.git"
-               :build ("cp *.el ~/.emacs.d/Languages/SmartCode/auto-complete"
+               :url "https://github.com/auto-complete/auto-complete.git"
+               :build ("git submodule update --init"
+                       "cp *.el ~/.emacs.d/Languages/SmartCode/auto-complete"
+                       "cp lib/fuzzy/fuzzy.el ~/.emacs.d/Languages/SmartCode/auto-complete"
+                       "cp lib/popup/popup.el ~/.emacs.d/Languages/SmartCode/auto-complete"
                        "cp -r dict ~/.emacs.d/Languages/SmartCode/auto-complete")
                :after (lambda () (el-get-remove "auto-complete")))
+        (:name yasnippet
+               :type git
+               :url "git://github.com/capitaomorte/yasnippet.git"
+               :build ("cp *.el ~/.emacs.d/Languages/SmartCode/yasnippet"
+                       "cp -r snippets ~/.emacs.d/Languages/SmartCode/yasnippet")
+               :after (lambda () (el-get-remove "yasnippet")))
         (:name judge-indent
                :type git
                :url "http://github.com/yascentur/judge-indent-el.git"
