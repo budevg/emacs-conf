@@ -434,9 +434,9 @@ TODO: be meaner"
 (ert-deftest test-yas-tab-binding ()
   (with-temp-buffer
     (yas-minor-mode -1)
-    (should (not (eq (key-binding (yas--read-keybinding "<tab>")) 'yas-expand)))
+    (should (not (eq (key-binding (yas--read-keybinding yas-trigger-key)) 'yas-expand)))
     (yas-minor-mode 1)
-    (should (eq (key-binding (yas--read-keybinding "<tab>")) 'yas-expand))
+    (should (eq (key-binding (yas--read-keybinding yas-trigger-key)) 'yas-expand))
     (yas-expand-snippet "$1 $2 $3")
     (dolist (k (if (listp yas-next-field-key)
                    yas-next-field-key
@@ -451,7 +451,7 @@ TODO: be meaner"
   (with-temp-buffer
     (org-mode)
     (yas-minor-mode 1)
-    (should (eq (key-binding (yas--read-keybinding "<tab>")) 'yas-expand))))
+    (should (eq (key-binding (yas--read-keybinding yas-trigger-key)) 'yas-expand))))
 
 ;;; Helpers
 ;;;
