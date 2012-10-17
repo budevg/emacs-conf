@@ -13,4 +13,4 @@
 (eval-after-load "js"
   '(progn
      (define-key js-mode-map "\C-m" 'newline-and-indent)
-     (setq js-indent-level 2)))
+     (setq js-indent-level 4)))
