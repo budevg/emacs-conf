@@ -26,3 +26,15 @@
 (define-key global-map [(control \?)]  'cscope-pop-mark)
 (define-key global-map [(control \.)]  'cscope-find-functions-calling-this-function)
 (define-key global-map [(control \,)]  'cscope-find-this-file)
+
+
+(defun ctags-build ()
+  (interactive)
+  (message "building project tags")
+  (shell-command (concat "ctags -e -R --extra=+fq --exclude=.git -f TAGS "))
+  (visit-tags-table "TAGS")
+  (message "tags built successfully"))
+
+(autoload 'etags-select-find-tag-at-point "etags-select" nil t)
+(global-set-key (kbd "M-.") 'etags-select-find-tag-at-point)
+(global-set-key (kbd "C->") 'pop-tag-mark)

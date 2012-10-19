@@ -1,5 +1,5 @@
 
-        
+
 EMACS CONFIGURATION TUTORIAL
 
 
@@ -37,7 +37,7 @@ EMACS CONFIGURATION TUTORIAL
    (makes tab indentations and 8 chars tab width)
 * Syntax Highlighting:
 ** <ctrl>+<shift>+b
-   highlight lines with more than 80 characters 
+   highlight lines with more than 80 characters
 ** <meta>+x "highline-mode"
    highlights current line
 ** <meta>+x "hl-spotlight-mode"
@@ -58,11 +58,11 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+up/down
    window up/down
 ** <meta>+left/right
-   rotate windows 
+   rotate windows
 ** <ctrl>+<meta>+o
-   switch c/c++ header/source files 
+   switch c/c++ header/source files
 ** <shift>+<f9>
-   search all open buffers with files association  
+   search all open buffers with files association
 ** <ctrl>+;
    switch to buffer
 ** <ctrl>+]
@@ -103,11 +103,15 @@ EMACS CONFIGURATION TUTORIAL
    Edit remote file at point (inside comint-mode buffer)
 ** <control>x a
    open app at point
+** meta + .
+   find symbol from TAGS file
+** meta + >
+   pop back after symbol find using meta + .
 * Editing:
 ** <ctrl>+w
    backward kill word
 ** <ctrl>+enter
-   Text rectangles editing 
+   Text rectangles editing
 ** <meta>+insert
    Search kill ring
 ** <meta>+delete
@@ -126,7 +130,7 @@ EMACS CONFIGURATION TUTORIAL
    aligns lines to the same column structure
 ** <ctrl>+c d
    insert date
-   
+
 ** <meta>+kp-8/2
    swap line up or down
 ** create .dir-locals.el or use add-dir-local-variable
@@ -150,7 +154,7 @@ EMACS CONFIGURATION TUTORIAL
 ** control+u control+alt+x
    edebug instrument function
    control+alt+x - clean instrumented function
-   
+
 * more tips:
 ** you should use http://www.randyrants.com/sharpkeys utility to map caps lock to <ctrl> key on windows
 
@@ -168,7 +172,7 @@ EMACS CONFIGURATION TUTORIAL
    apply last keyboard macro to region
 ** <ctrl>+x =
    evaluate mathematical expression in selected region
-   
+
 * Info
 ** <meta>+=
    prints the number of lines and characters in the region
@@ -197,6 +201,8 @@ EMACS CONFIGURATION TUTORIAL
    start git-mode to view git repository
 ** meta+x cscope-update-indexer
    add extra files suffixes to the cscope-indexer which is used by cscope
+** meta+x ctags-build
+   build ctags for current directory
 * Encryption
 ** just edit filename.gpg instead of filename and it will be encrypted
 * Configuration
