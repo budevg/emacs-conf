@@ -135,6 +135,8 @@ languages = [Bunch(path = "Languages/comments.el",
                    msg = "init assembly mode"),
              Bunch(path = "Languages/Scala/init.el",
                    msg = "init scala mode"),
+             Bunch(path = "Languages/Markdown/init.el",
+                   msg = "init markdown mode"),
              ]
 
 build_system = [Bunch(path = "BuildSystem/init.el",
