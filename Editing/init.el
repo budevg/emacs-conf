@@ -65,6 +65,8 @@
      (setq browse-kill-ring-display-duplicates nil)))
 
 
+; autosave settings
+(setq auto-save-list-file-prefix nil)
 (setq make-backup-files nil)
 
 ;; disable autoencoding on <?xml version="1.0" encoding="UTF-16" ?> line
