@@ -69,11 +69,18 @@
      (setq ibuffer-always-show-last-buffer t)
      (setq ibuffer-view-ibuffer t)
      (setq ibuffer-saved-filter-groups
-           (quote (("default"      
-                    ("Org" ;; all org-related buffers
-                     (mode . org-mode))
-                    ("Text" 
+           (quote (("default"
+                    ("Publishing" ;; all org-related buffers
+                     (mode . org-mode)
                      (mode . text-mode))
+                    ("Web"
+                     (or
+                      (mode . nxhtml-mode)
+                      (mode . javascript-mode)
+                      (mode . js-mode)
+                      (mode . css-mode)
+                      )
+                     )
                     ("Programming" ;; prog stuff not already in MyProjectX
                      (or
                       (mode . c-mode)
@@ -83,6 +90,7 @@
                       (mode . python-mode)
                       (mode . emacs-lisp-mode)
                       (mode . latex-mode)
+                      (mode . sh-mode)
                       ;; etc
                       ))
                     ("SourceControl"
@@ -90,13 +98,17 @@
                       (mode . cvs-mode)
                       (mode . git-blame-mode)
                       (mode . git-status-mode)
+                      (name . "\*magit.*\*")
                       ))
                     ("ERC"   (mode . erc-mode))
                     ("Directories"   (mode . dired-mode))
                     ("Shell"
                      (or
                       (mode . shell-mode)
-                      (mode . term-mode)))))))
+                      (mode . term-mode)))
+                    ("Emacs"
+                     (name . "\*.*\*"))
+                    ))))
 
      (add-hook 'ibuffer-mode-hook
                (lambda ()
