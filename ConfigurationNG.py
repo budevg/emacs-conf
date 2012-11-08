@@ -2,14 +2,12 @@ class Bunch(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-
-
-elisp = [Bunch(path = "Elisp/message-notify.el",
+elisp = [Bunch(path = "Elisp/elisp-utils.el",
+               msg  = "Misc elisp utils"),
+         Bunch(path = "Elisp/message-notify.el",
                msg = "Show alerts and notifications"),
          Bunch(path = "Elisp/idle-require.el",
                msg  = "Load packages when emacs idle"),
-         Bunch(path = "Elisp/elisp-utils.el",
-               msg  = "Different elisp utils"),
          ]
 
 

@@ -11,3 +11,7 @@
     (comint-send-eof)
     ))
 
+(defun autoload-and-run (symbol file interactive callback)
+  (autoload symbol file nil interactive)
+  (eval-after-load (symbol-name symbol) callback)
+  )
