@@ -105,3 +105,12 @@
 (defun pycscope-index-files (top-directory)
   (interactive "DIndex files in directory: ")
   (call-process (in-emacs-d "Navigation/pycscope.py") nil nil nil "-R"))
+
+
+; ace-jump - quickly navigate to any character
+(autoload 'ace-jump-char-mode "ace-jump-mode.el" nil t)
+(setq ace-jump-mode-case-sensitive-search nil)
+(global-set-key (kbd "C-x j") 'ace-jump-char-mode)
+;   only use lowercase letters for lookup
+(setq ace-jump-mode-move-keys
+  (nconc (loop for i from ?a to ?z collect i)))
