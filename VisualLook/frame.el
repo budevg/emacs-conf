@@ -5,6 +5,7 @@
 ;; Prevent the annoying beep on errors
 (setq visible-bell t)
 
+;; Annoying cursor blinking
 (blink-cursor-mode -1)
 
 ;; zoom in/out
@@ -21,4 +22,3 @@
 ;; Font size
 (define-key global-map [(control kp-add)] 'text-scale-increase)
 (define-key global-map [(control kp-subtract)] 'text-scale-decrease)
-
