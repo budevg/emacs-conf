@@ -13,7 +13,7 @@
 (autoload 'pymacs-exec "pymacs" nil t)
 (autoload 'pymacs-load "pymacs" nil t)
 (eval-after-load "pymacs"
-  '(add-to-list 'pymacs-load-path (concat EMACS-CONFIG-PATH "/Languages/Python/pymacs-modules")))
+  '(add-to-list 'pymacs-load-path (in-emacs-d "Languages/Python/pymacs-modules")))
 
 (autoload 'doctest-mode "doctest-mode" "doctest-mode autoload" t)
 

@@ -33,7 +33,7 @@
        (interactive)
        (let ((elscreens (sort (elscreen-get-screen-list) '<))
              (emphased ""))
-        
+
          (dolist (s elscreens)
            (setq emphased
                  (concat emphased (if (= (elscreen-get-current-screen) s)
@@ -45,8 +45,8 @@
                                     (number-to-string s))
                          " ")))
          (message "screens: %s" emphased)))
-    
-    
+
+
      (defun elscreen-emph-prev ()
        (interactive)
        (elscreen-previous)
@@ -83,9 +83,9 @@
       (minimap-create)
       (setq minimap-flag t))))
 (global-set-key [(control \`)] 'minimap-show)
-    
 
-(autoload 'ffap-file-at-point "ffap" nil t)  
+
+(autoload 'ffap-file-at-point "ffap" nil t)
 (defun jump-to-file-at-point ()
   (interactive)
   (let ((file-path (ffap-file-at-point)))
@@ -104,4 +104,4 @@
 
 (defun pycscope-index-files (top-directory)
   (interactive "DIndex files in directory: ")
-  (call-process (concat EMACS-CONFIG-PATH "Navigation/pycscope.py") nil nil nil "-R"))
+  (call-process (in-emacs-d "Navigation/pycscope.py") nil nil nil "-R"))

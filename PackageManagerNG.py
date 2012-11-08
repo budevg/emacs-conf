@@ -1,6 +1,6 @@
 import os
 import sys
-        
+
 
 class LispWriter(object):
     SCREEN_CONFIGURE_CODE = '''
@@ -22,32 +22,37 @@ class LispWriter(object):
 
     def set_root(self, path):
         self._setq("EMACS-CONFIG-PATH", path)
+        self.fd.write("""
+(defun in-emacs-d (path)
+  (concat EMACS-CONFIG-PATH "/" path))
+
+""")
 
     def load_file(self, path):
         self.fd.write("(load-file \"%s\")\n" % path)
 
     def add_search_path(self, path):
-        self.fd.write("(setq load-path (append (list \"%s\") load-path))\n" % path)
+      self.fd.write("(add-to-list 'load-path \"%s\")\n" % path)
 
     def _setq(self, name, value):
         self.fd.write('(setq %s \"%s\")\n' % (name, value))
-        
+
     def set_screen_configuration(self, x, y, width, height, font):
         data = self.SCREEN_CONFIGURE_CODE % (x, y, width, height, font)
         self.fd.write(data+"\n")
 
     def call(self, func, *args):
         self.fd.write("(%s %s)\n" % (func, " ".join(args)))
-        
+
     def lisp(self, s):
         self.fd.write("%s\n" % s)
 
-                      
+
 class PackageManager(object):
     def __init__(self, packages, screen):
         self.packages = packages
         self.screen = screen
-        
+
     def write_init_file(self, verbose = False, profiling = False):
         lisp_writer = LispWriter("init.el")
         lisp_writer.set_root(self.root_directory())
@@ -69,7 +74,7 @@ class PackageManager(object):
             lisp_writer.lisp("(princ (format \"%s\\n\" (package-manager-get-load-time)) results-buffer)")
             lisp_writer.lisp("(switch-to-buffer results-buffer)")
             lisp_writer.lisp("(shell-command-on-region (point-min) (point-max) \"sort -n\" 1)")
-            
+
         lisp_writer.set_screen_configuration(self.screen.x,
                                              self.screen.y,
                                              self.screen.width,
@@ -104,11 +109,11 @@ class PackageManager(object):
         return files
 
 
-                
 
-    
-        
-        
+
+
+
+
 COMMANDS = ["init_file",
             ]
 
@@ -118,7 +123,7 @@ def usage():
     for command in COMMANDS:
         print "\t%s" % command
     exit(1)
-    
+
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
         usage()
@@ -136,7 +141,3 @@ if __name__ == "__main__":
         from ConfigurationNG import PACKAGES, SCREEN
         pm = PackageManager(PACKAGES, SCREEN)
         pm.write_init_file(verbose=verbose, profiling = profiling)
-            
-
-    
-    
