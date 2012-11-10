@@ -58,5 +58,10 @@
                :url "git://jblevins.org/git/deft.git"
                :build ("cp deft.el ~/.emacs.d/Publishing")
                :after (lambda () (el-get-remove "deft")))
+        (:name scala-mode
+               :type git
+               :url "https://github.com/scala/scala-dist.git"
+               :build ("cp tool-support/src/emacs/*.el ~/.emacs.d/Languages/Scala")
+               :after (lambda () (el-get-remove "scala-mode")))
 
 	))
