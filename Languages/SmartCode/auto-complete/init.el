@@ -10,4 +10,4 @@
   (define-key ac-completing-map [right] 'ac-stop))
 
 
-(run-with-idle-timer 6 nil 'load-auto-complete)
+(run-with-idle-timer 4 nil 'load-auto-complete)
