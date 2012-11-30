@@ -71,16 +71,17 @@
      (setq ibuffer-saved-filter-groups
            (quote (("default"
                     ("Publishing" ;; all org-related buffers
-                     (mode . org-mode)
-                     (mode . text-mode))
+                     (or
+                      (mode . org-mode)
+                      (mode . text-mode)
+                      ))
                     ("Web"
                      (or
                       (mode . nxhtml-mode)
                       (mode . javascript-mode)
                       (mode . js-mode)
                       (mode . css-mode)
-                      )
-                     )
+                      ))
                     ("Programming" ;; prog stuff not already in MyProjectX
                      (or
                       (mode . c-mode)
@@ -91,6 +92,7 @@
                       (mode . emacs-lisp-mode)
                       (mode . latex-mode)
                       (mode . sh-mode)
+                      (mode . asm-mode)
                       ;; etc
                       ))
                     ("SourceControl"
