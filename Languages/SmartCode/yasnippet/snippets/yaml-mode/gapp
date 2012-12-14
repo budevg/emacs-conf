@@ -1,0 +1,20 @@
+# -*- mode: snippet -*-
+# name: gapp
+# key: gapp
+# expand-env: ((yas-indent-line 'nil))
+# --
+application: ${1:test}
+version: 1
+runtime: python27
+api_version: 1
+threadsafe: true
+
+handlers:
+- url: /.*
+  script: $1.app
+
+libraries:
+- name: jinja2
+  version: latest
+
+$0
