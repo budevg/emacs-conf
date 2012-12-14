@@ -4,7 +4,7 @@
     (progn
       (setq py-shell-name "ipython")
       (setq py-complete-function 'py-shell-complete)))
-(setq py-indent-offset 2)
+(setq py-indent-offset 4)
 (setq py-smart-indentation nil)
 
 (autoload 'pymacs-apply "pymacs")
