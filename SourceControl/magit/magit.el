@@ -14,6 +14,7 @@
 ;; Copyright (C) 2009 Ian Eure.
 ;; Copyright (C) 2009 Jesse Alama.
 ;; Copyright (C) 2009 John Wiegley.
+;; Copyright (C) 2012 Jonas Bernoulli.
 ;; Copyright (C) 2010 Leo.
 ;; Copyright (C) 2008, 2009 Marcin Bachry.
 ;; Copyright (C) 2008, 2009 Marius Vollmer.
@@ -30,7 +31,7 @@
 ;; Copyright (C) 2009 René Stadler.
 ;; Copyright (C) 2010 Robin Green.
 ;; Copyright (C) 2010 Roger Crew.
-;; Copyright (C) 2009, 2010, 2011 Rémi Vanicat.
+;; Copyright (C) 2009, 2010, 2011, 2012 Rémi Vanicat.
 ;; Copyright (C) 2010 Sean Bryant.
 ;; Copyright (C) 2009, 2011 Steve Purcell.
 ;; Copyright (C) 2010 Timo Juhani Lindfors.
@@ -88,7 +89,7 @@
 (eval-and-compile
   (unless (fboundp 'declare-function) (defmacro declare-function (&rest args))))
 
-(eval-when-compile  (require 'view))
+(eval-when-compile (require 'view))
 (declare-function view-mode 'view)
 (eval-when-compile (require 'iswitchb))
 (eval-when-compile (require 'ido))
@@ -98,7 +99,6 @@
 (eval-when (load eval)
   (defalias 'magit-set-variable-and-refresh 'set-default))
 
-;;; Code:
 (defgroup magit nil
   "Controlling Git from Emacs."
   :prefix "magit-"
@@ -5587,8 +5587,10 @@ Return values:
          (commit (and (member 'commit (magit-section-context-type section))
                       (magit-section-info section)))
          (old-editor (getenv "GIT_EDITOR")))
-    (setenv "GIT_EDITOR" (concat (locate-file "emacsclient" exec-path)
-                                 " -s " server-name))
+    (if (executable-find "emacsclient")
+        (setenv "GIT_EDITOR" (concat (executable-find "emacsclient")
+                                     " -s " server-name))
+        (message "Cannot find emacsclient, using default git editor, please check you PATH"))
     (unwind-protect
         (magit-run-git-async "rebase" "-i"
                              (or (and commit (concat commit "^"))
