@@ -2,7 +2,7 @@
       eshell-save-history-on-exit t
       eshell-cmpl-dir-ignore "\\`\\(\\.\\.?\\|CVS\\|\\.svn\\|\\.git\\)/\\'")
 
-(eval-after-load 'esh-opt
+(eval-after-load 'esh-mode
   '(progn
      (require 'em-prompt)
      (require 'em-term)
