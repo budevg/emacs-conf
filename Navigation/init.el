@@ -88,9 +88,17 @@
 (autoload 'ffap-file-at-point "ffap" nil t)
 (defun jump-to-file-at-point ()
   (interactive)
-  (let ((file-path (ffap-file-at-point)))
+  (let ((file-path (ffap-file-at-point))
+        (line-num 0))
     (if file-path
-        (find-file-other-window file-path))))
+        (progn
+          (save-excursion
+            (search-forward-regexp "[^ ]:" (point-max) t)
+            (if (looking-at "[0-9]+")
+                (setq line-num (string-to-number (buffer-substring (match-beginning 0) (match-end 0))))))
+          (find-file-other-window file-path)
+          (if (not (equal line-num 0))
+              (goto-line line-num))))))
 
 (defun app-open-file-at-point ()
   (interactive)
