@@ -63,5 +63,10 @@
                :url "https://github.com/scala/scala-dist.git"
                :build ("cp tool-support/src/emacs/*.el ~/.emacs.d/Languages/Scala")
                :after (lambda () (el-get-remove "scala-mode")))
+        (:name scala-mode2
+               :type git
+               :url "git://github.com/hvesalai/scala-mode2.git"
+               :build ("cp tool-support/src/emacs/*.el ~/.emacs.d/Languages/Scala")
+               :after (lambda () (el-get-remove "scala-mode2")))
 
 	))
