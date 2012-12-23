@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: date
+# key: date
+# --
+`(remove ?\n (shell-command-to-string "date +%d_%m_%Y-%H_%M_%S"))`

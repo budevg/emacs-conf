@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: frestart
+# key: frestart
+# --
+echo b > /proc/sysrq-trigger
