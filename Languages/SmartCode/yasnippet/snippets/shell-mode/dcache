@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: dcache
+# key: dcache
+# --
+sync ; echo 3 > /proc/sys/vm/drop_caches $0
