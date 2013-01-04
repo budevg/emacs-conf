@@ -73,5 +73,9 @@
                :url "git://github.com/haskell/haskell-mode.git"
                :build ("cp *.el ~/.emacs.d/Languages/Haskell")
                :after (lambda () (el-get-remove "haskell-mode")))
-
+        (:name clojure-mode
+               :type git
+               :url "git://github.com/technomancy/clojure-mode.git"
+               :build ("cp *.el ~/.emacs.d/Languages/Clojure")
+               :after (lambda () (el-get-remove "clojure-mode")))
 	))
