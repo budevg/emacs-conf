@@ -7,8 +7,8 @@
 	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(magenta)<%an>%Creset' --abbrev-commit --date=relative
         l = log --no-merges
         ll = log --graph --date=short
-        fp = git format-patch -s
-        fpp = git format-patch -s --cover-letter
+        fp = format-patch -s
+        fpp = format-patch -s --cover-letter
 
 [sendemail]
 	smtpserver = smtp.gmail.com
