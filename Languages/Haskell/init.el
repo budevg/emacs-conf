@@ -8,7 +8,7 @@
   '(progn
      (define-key haskell-mode-map [(control c) (control l)] 'nil)
      (define-key haskell-mode-map [(control c) (control b)] 'nil)
-     (define-key haskell-mode-map [(control c) (control z)] 'switch-to-haskell)
+     (define-key haskell-mode-map [(control P)] 'switch-to-haskell)
      (define-key haskell-mode-map [(control c) (control c)] 'inferior-haskell-load-file)
      (setq haskell-program-name "ghci")
      (add-hook 'haskell-mode-hook (lambda ()
