@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: kvm kernel
+# key: kvm
+# --
+kvm -snapshot -kernel ${1:vmlinuz} -initrd ${2:initramfs} -append "console=ttyS0 earlyprintk=ttyS0 keep_bootcon" -serial stdio -drive file=$0
