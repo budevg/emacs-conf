@@ -7,6 +7,7 @@
      (add-hook 'scala-mode-hook
                (lambda ()
                  ;;(scala-electric-mode)
+                 (hs-org/minor-mode 1)
                  (setq scala-indent:align-parameters t)
                  (setq imenu-generic-expression
                        '(
