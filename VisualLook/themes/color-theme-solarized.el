@@ -45,7 +45,7 @@
   "Color theme by Ethan Schoonover, created 2011-03-24.
 Ported to Emacs by Greg Pfeil, http://ethanschoonover.com/solarized."
   (interactive "Slight or dark? ")
-  (cl-flet ((find-color (name)
+  (flet ((find-color (name)
            (let ((index (if (or (<= (display-color-cells) 256)
                                 color-theme-solarized-degrade)
                             2
