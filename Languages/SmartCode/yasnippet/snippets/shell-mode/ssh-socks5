@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ssh socks5
+# key: ssh
+# --
+ssh -D 5555 ${1:root}@${2:host} $0
