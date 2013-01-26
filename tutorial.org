@@ -139,6 +139,8 @@ EMACS CONFIGURATION TUTORIAL
    enable shift of words/lines/regions using meta+up/down/right/left
 ** <meta>+e
    Expand region increases the selected region by semantic units
+** <meta>+j
+   join lines (append current line to the line before it)
 * Debugging:
 ** keypad-2
    step

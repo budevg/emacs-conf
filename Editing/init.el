@@ -119,6 +119,12 @@
 (autoload 'drag-stuff-mode "drag-stuff" nil t)
 (global-set-key [(meta w)] 'drag-stuff-mode)
 
+;; join lines
+(global-set-key (kbd "M-j")
+            (lambda ()
+              (interactive)
+              (join-line -1)))
+
 ;; don't use lame windows key bindings
 (setq cua-enable-cua-keys nil)
 ;; Edit text rectangles in emacs
