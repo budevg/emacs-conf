@@ -122,3 +122,23 @@
 ;   only use lowercase letters for lookup
 (setq ace-jump-mode-move-keys
   (nconc (loop for i from ?a to ?z collect i)))
+
+; find file in projects
+(autoload 'find-file-in-project "find-file-in-project.el" nil t)
+;; Function to create new functions that look for a specific pattern
+(defun ffip-create-pattern-file-finder (&rest patterns)
+  (lexical-let ((patterns patterns))
+    (lambda ()
+      (interactive)
+      (let ((ffip-patterns patterns))
+        (find-file-in-project)))))
+
+(global-unset-key (kbd "C-f"))
+(global-set-key (kbd "C-f c")
+                (ffip-create-pattern-file-finder "*.c" "*.h" "*.cpp" "*.hpp" "*.cc"))
+(global-set-key (kbd "C-f js")
+                (ffip-create-pattern-file-finder "*.js"))
+(global-set-key (kbd "C-f p")
+                (ffip-create-pattern-file-finder "*.py"))
+(global-set-key (kbd "C-f e")
+                (ffip-create-pattern-file-finder "*.el"))

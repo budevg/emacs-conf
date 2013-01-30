@@ -107,6 +107,12 @@ EMACS CONFIGURATION TUTORIAL
    find symbol from TAGS file
 ** meta + >
    pop back after symbol find using meta + .
+** meta + f
+   find file in project
+   use:
+   - e for elisp files
+   - p for python files
+   - c for c/c++ file
 * Editing:
 ** <ctrl>+w
    backward kill word
