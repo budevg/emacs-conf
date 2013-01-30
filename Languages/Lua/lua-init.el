@@ -3,4 +3,5 @@
 (add-hook 'lua-mode-hook 'hs-minor-mode)
 (add-hook 'lua-mode-hook
           (lambda ()
-            (define-key lua-mode-map "\C-m" 'newline-and-indent)))
+            (define-key lua-mode-map "\C-m" 'newline-and-indent)
+            (define-key lua-mode-map [(control c) (control c)] 'lua-send-buffer)))
