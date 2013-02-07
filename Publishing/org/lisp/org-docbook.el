@@ -1,10 +1,9 @@
 ;;; org-docbook.el --- DocBook exporter for org-mode
 ;;
-;; Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2013 Free Software Foundation, Inc.
 ;;
 ;; Emacs Lisp Archive Entry
 ;; Filename: org-docbook.el
-;; Version: 7.7
 ;; Author: Baoqiu Cui <cbaoqiu AT yahoo DOT com>
 ;; Maintainer: Baoqiu Cui <cbaoqiu AT yahoo DOT com>
 ;; Keywords: org, wp, docbook
@@ -151,6 +150,7 @@ avoid same set of footnote IDs being used multiple times."
 (defcustom org-export-docbook-footnote-separator "<superscript>, </superscript>"
   "Text used to separate footnotes."
   :group 'org-export-docbook
+  :version "24.1"
   :type 'string)
 
 (defcustom org-export-docbook-emphasis-alist
@@ -163,7 +163,7 @@ avoid same set of footnote IDs being used multiple times."
   "A list of DocBook expressions to convert emphasis fontifiers.
 Each element of the list is a list of three elements.
 The first element is the character used as a marker for fontification.
-The second element is a formatting string to wrap fontified text with.
+The second element is a format string to wrap fontified text with.
 The third element decides whether to protect converted text from other
 conversions."
   :group 'org-export-docbook
@@ -196,6 +196,7 @@ This XSLT stylesheet is used by
 Object (FO) files.  You can use either `fo/docbook.xsl' that
 comes with DocBook, or any customization layer you may have."
   :group 'org-export-docbook
+  :version "24.1"
   :type 'string)
 
 (defcustom org-export-docbook-xslt-proc-command nil
@@ -273,14 +274,14 @@ For example:
 $ emacs --batch
         --load=$HOME/lib/emacs/org.el
         --visit=MyOrgFile.org --funcall org-export-as-docbook-batch"
-  (org-export-as-docbook 'hidden))
+  (org-export-as-docbook))
 
 ;;;###autoload
 (defun org-export-as-docbook-to-buffer ()
   "Call `org-export-as-docbook' with output to a temporary buffer.
 No file is created."
   (interactive)
-  (org-export-as-docbook nil nil "*Org DocBook Export*")
+  (org-export-as-docbook nil "*Org DocBook Export*")
   (when org-export-show-temporary-export-buffer
     (switch-to-buffer-other-window "*Org DocBook Export*")))
 
@@ -294,7 +295,7 @@ then use this command to convert it."
   (interactive "r")
   (let (reg docbook buf)
     (save-window-excursion
-      (if (org-mode-p)
+      (if (derived-mode-p 'org-mode)
 	  (setq docbook (org-export-region-as-docbook
 			 beg end t 'string))
 	(setq reg (buffer-substring beg end)
@@ -333,17 +334,14 @@ in a window.  A non-interactive call will only return the buffer."
     (goto-char end)
     (set-mark (point)) ;; To activate the region
     (goto-char beg)
-    (setq rtn (org-export-as-docbook
-	       nil nil
-	       buffer body-only))
+    (setq rtn (org-export-as-docbook nil buffer body-only))
     (if (fboundp 'deactivate-mark) (deactivate-mark))
     (if (and (org-called-interactively-p 'any) (bufferp rtn))
 	(switch-to-buffer-other-window rtn)
       rtn)))
 
 ;;;###autoload
-(defun org-export-as-docbook-pdf (&optional hidden ext-plist
-					    to-buffer body-only pub-dir)
+(defun org-export-as-docbook-pdf (&optional ext-plist to-buffer body-only pub-dir)
   "Export as DocBook XML file, and generate PDF file."
   (interactive "P")
   (if (or (not org-export-docbook-xslt-proc-command)
@@ -359,8 +357,7 @@ in a window.  A non-interactive call will only return the buffer."
 	   (org-combine-plists (org-default-export-plist)
 			       ext-plist
 			       (org-infile-export-plist))))
-	 (docbook-buf (org-export-as-docbook hidden ext-plist
-					     to-buffer body-only pub-dir))
+	 (docbook-buf (org-export-as-docbook ext-plist to-buffer body-only pub-dir))
 	 (filename (buffer-file-name docbook-buf))
 	 (base (file-name-sans-extension filename))
 	 (fofile (concat base ".fo"))
@@ -394,9 +391,10 @@ in a window.  A non-interactive call will only return the buffer."
 	(org-open-file pdffile)
       (error "PDF file was not produced"))))
 
+(defvar org-heading-keyword-regexp-format) ; defined in org.el
+
 ;;;###autoload
-(defun org-export-as-docbook (&optional hidden ext-plist
-					to-buffer body-only pub-dir)
+(defun org-export-as-docbook (&optional ext-plist to-buffer body-only pub-dir)
   "Export the current buffer as a DocBook file.
 If there is an active region, export only the region.  When
 HIDDEN is obsolete and does nothing.  EXT-PLIST is a
@@ -475,9 +473,11 @@ publishing directory."
 	 (current-dir (if buffer-file-name
 			  (file-name-directory buffer-file-name)
 			default-directory))
+	 (auto-insert nil); Avoid any auto-insert stuff for the new file
 	 (buffer (if to-buffer
 		     (cond
-		      ((eq to-buffer 'string) (get-buffer-create "*Org DocBook Export*"))
+		      ((eq to-buffer 'string)
+		       (get-buffer-create "*Org DocBook Export*"))
 		      (t (get-buffer-create to-buffer)))
 		   (find-file-noselect filename)))
 	 ;; org-levels-open is a global variable
@@ -499,8 +499,9 @@ publishing directory."
 	 ;; We will use HTML table formatter to export tables to DocBook
 	 ;; format, so need to set html-table-tag here.
 	 (html-table-tag (plist-get opt-plist :html-table-tag))
-	 (quote-re0   (concat "^[ \t]*" org-quote-string "\\>"))
-	 (quote-re    (concat "^\\(\\*+\\)\\([ \t]+" org-quote-string "\\>\\)"))
+	 (quote-re0   (concat "^ *" org-quote-string "\\( +\\|[ \t]*$\\)"))
+	 (quote-re    (format org-heading-keyword-regexp-format
+			      org-quote-string))
 	 (inquote     nil)
 	 (infixed     nil)
 	 (inverse     nil)
@@ -623,7 +624,7 @@ publishing directory."
 	    (insert org-export-docbook-doctype))
 	(insert "<!-- Date: " date " -->\n")
 	(insert (format "<!-- DocBook XML file generated by Org-mode %s Emacs %s -->\n"
-			org-version emacs-major-version))
+			(org-version) emacs-major-version))
 	(insert org-export-docbook-article-header)
 	(insert (format
 		 "\n  <title>%s</title>
@@ -970,7 +971,7 @@ publishing directory."
 		    (push (cons num 1) footref-seen))))))
 
 	  (cond
-	   ((string-match "^\\(\\*+\\)[ \t]+\\(.*\\)" line)
+	   ((string-match "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$" line)
 	    ;; This is a headline
 	    (setq level (org-tr-level (- (match-end 1) (match-beginning 1)
 					 level-offset))
@@ -1012,11 +1013,11 @@ publishing directory."
 	   (t
 	    ;; This line either is list item or end a list.
 	    (when (when (get-text-property 0 'list-item line)
-	   	      (setq line (org-export-docbook-list-line
-			  line
-			  (get-text-property 0 'list-item line)
-			  (get-text-property 0 'list-struct line)
-			  (get-text-property 0 'list-prevs line)))))
+		    (setq line (org-export-docbook-list-line
+				line
+				(get-text-property 0 'list-item line)
+				(get-text-property 0 'list-struct line)
+				(get-text-property 0 'list-prevs line)))))
 
 	    ;; Empty lines start a new paragraph.  If hand-formatted lists
 	    ;; are not fully interpreted, lines starting with "-", "+", "*"
@@ -1060,7 +1061,7 @@ publishing directory."
 	(if (eq major-mode (default-value 'major-mode))
 	    (nxml-mode)))
 
-      ;; Remove empty paragraphs. Replace them with a newline.
+      ;; Remove empty paragraphs.  Replace them with a newline.
       (goto-char (point-min))
       (while (re-search-forward
 	      "[ \r\n\t]*\\(<para>\\)[ \r\n\t]*</para>[ \r\n\t]*" nil t)
@@ -1349,10 +1350,10 @@ that need to be preserved in later phase of DocBook exporting."
     (concat replaced line)))
 
 (defun org-export-docbook-list-line (line pos struct prevs)
-  "Insert list syntax in export buffer. Return LINE, maybe modified.
+  "Insert list syntax in export buffer.  Return LINE, maybe modified.
 
 POS is the item position or line position the line had before
-modifications to buffer. STRUCT is the list structure. PREVS is
+modifications to buffer.  STRUCT is the list structure.  PREVS is
 the alist of previous items."
   (let* ((get-type
 	  (function
@@ -1445,5 +1446,8 @@ the alist of previous items."
 
 (provide 'org-docbook)
 
-;; arch-tag: a24a127c-d365-4c2a-9e9b-f7dcb0ebfdc3
+;; Local variables:
+;; generated-autoload-file: "org-loaddefs.el"
+;; End:
+
 ;;; org-docbook.el ends here

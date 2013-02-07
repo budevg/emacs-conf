@@ -1,11 +1,10 @@
 ;;; ob-haskell.el --- org-babel functions for haskell evaluation
 
-;; Copyright (C) 2009, 2010  Free Software Foundation, Inc.
+;; Copyright (C) 2009-2013 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.7
 
 ;; This file is part of GNU Emacs.
 
@@ -80,7 +79,7 @@
                    (cdr (member org-babel-haskell-eoe
                                 (reverse (mapcar #'org-babel-trim raw)))))))
     (org-babel-reassemble-table
-     (cond 
+     (cond
       ((equal result-type 'output)
        (mapconcat #'identity (reverse (cdr results)) "\n"))
       ((equal result-type 'value)
@@ -126,12 +125,12 @@ then create one.  Return the initialized session."
       (current-buffer))))
 
 (defun org-babel-variable-assignments:haskell (params)
-  "Return list of haskell statements assigning the block's variables"
+  "Return list of haskell statements assigning the block's variables."
   (mapcar (lambda (pair)
 	    (format "let %s = %s"
 		    (car pair)
 		    (org-babel-haskell-var-to-haskell (cdr pair))))
-   (mapcar #'cdr (org-babel-get-header params :var))))
+	  (mapcar #'cdr (org-babel-get-header params :var))))
 
 (defun org-babel-haskell-table-or-string (results)
   "Convert RESULTS to an Emacs-lisp table or string.
@@ -148,6 +147,8 @@ specifying a variable of the same value."
     (format "%S" var)))
 
 (defvar org-src-preserve-indentation)
+(declare-function org-export-as-latex "org-latex"
+		  (arg &optional ext-plist to-buffer body-only pub-dir))
 (defun org-babel-haskell-export-to-lhs (&optional arg)
   "Export to a .lhs file with all haskell code blocks escaped.
 When called with a prefix argument the resulting
@@ -213,6 +214,6 @@ constructs (header arguments, no-web syntax etc...) are ignored."
 
 (provide 'ob-haskell)
 
-;; arch-tag: b53f75f3-ba1a-4b05-82d9-a2a0d4e70804
+
 
 ;;; ob-haskell.el ends here

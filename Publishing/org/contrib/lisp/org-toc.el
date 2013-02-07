@@ -1,11 +1,13 @@
 ;;; org-toc.el --- Table of contents for Org-mode buffer
 
-;; Copyright 2007 Bastien Guerry
+;; Copyright 2007-2013 Free Software Foundation, Inc.
 ;;
-;; Author: Bastien Guerry <bzg AT altern DOT org>
+;; Author: Bastien Guerry <bzg AT gnu DOT org>
 ;; Keywords: Org table of contents
 ;; Homepage: http://www.cognition.ens.fr/~guerry/u/org-toc.el
 ;; Version: 0.8
+
+;; This file is not part of GNU Emacs.
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -216,7 +218,7 @@ specified, then make `org-toc-recenter' use this value."
 (defun org-toc-show (&optional depth position)
   "Show the table of contents of the current Org-mode buffer."
   (interactive "P")
-  (if (org-mode-p)
+  (if (eq major-mode 'org-mode)
       (progn (setq org-toc-base-buffer (current-buffer))
 	     (setq org-toc-odd-levels-only org-odd-levels-only))
     (if (eq major-mode 'org-toc-mode)
@@ -276,7 +278,7 @@ specified, then make `org-toc-recenter' use this value."
 ;;; Navigation functions:
 (defun org-toc-goto (&optional jump cycle)
   "From Org TOC buffer, follow the targeted subtree in the Org window.
-If JUMP is non-nil, go to the base buffer.  
+If JUMP is non-nil, go to the base buffer.
 If JUMP is 'delete, go to the base buffer and delete other windows.
 If CYCLE is non-nil, cycle the targeted subtree in the Org window."
   (interactive)
@@ -457,15 +459,15 @@ status."
 (defun org-toc-help ()
   "Display a quick help message in the echo-area for `org-toc-mode'."
   (interactive)
-  (let ((st-start 0) 
+  (let ((st-start 0)
 	(help-message
 	 "\[space\]   show heading                     \[1-4\] hide headlines below this level
 \[TAB\]     jump to heading                  \[f\]   toggle follow mode (currently %s)
 \[return\]  jump and delete others windows   \[i\]   toggle info mode (currently %s)
 \[S-TAB\]   cycle subtree (in Org)           \[S\]   toggle show subtree mode (currently %s)
-\[C-S-TAB\] global cycle (in Org)            \[r\]   toggle recenter mode (currently %s)   
+\[C-S-TAB\] global cycle (in Org)            \[r\]   toggle recenter mode (currently %s)
 \[:\]       cycle subtree (in TOC)           \[c\]   toggle column view (currently %s)
-\[n/p\]     next/previous heading            \[s\]   save TOC configuration 
+\[n/p\]     next/previous heading            \[s\]   save TOC configuration
 \[q\]       quit the TOC                     \[g\]   restore last TOC configuration"))
     (while (string-match "\\[[^]]+\\]" help-message st-start)
       (add-text-properties (match-beginning 0)
@@ -482,7 +484,5 @@ status."
 ;;;;##########################################################################
 ;;;;  User Options, Variables
 ;;;;##########################################################################
-
-
 
 ;;; org-toc.el ends here

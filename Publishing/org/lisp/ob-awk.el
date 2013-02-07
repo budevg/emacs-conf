@@ -1,11 +1,10 @@
 ;;; ob-awk.el --- org-babel functions for awk evaluation
 
-;; Copyright (C) 2011  Free Software Foundation, Inc.
+;; Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.7
 
 ;; This file is part of GNU Emacs.
 
@@ -24,18 +23,17 @@
 
 ;;; Commentary:
 
-;;; Commentary:
-
 ;; Babel's awk can use special header argument:
-;; 
+;;
 ;; - :in-file takes a path to a file of data to be processed by awk
-;;   
+;;
 ;; - :stdin takes an Org-mode data or code block reference, the value
 ;;          of which will be passed to the awk process through STDIN
 
 ;;; Code:
 (require 'ob)
 (require 'ob-eval)
+(require 'org-compat)
 (eval-when-compile (require 'cl))
 
 (declare-function org-babel-ref-resolve "ob-ref" (ref))
@@ -51,7 +49,7 @@
   "Expand BODY according to PARAMS, return the expanded body."
   (dolist (pair (mapcar #'cdr (org-babel-get-header params :var)))
     (setf body (replace-regexp-in-string
-                (regexp-quote (concat "$" (car pair))) (cdr pair) body)))
+                (regexp-quote (format "$%s" (car pair))) (cdr pair) body)))
   body)
 
 (defun org-babel-execute:awk (body params)
@@ -99,13 +97,13 @@ called by `org-babel-execute-src-block'"
 
 (defun org-babel-awk-var-to-awk (var &optional sep)
   "Return a printed value of VAR suitable for parsing with awk."
-  (flet ((echo-var (v) (if (stringp v) v (format "%S" v))))
+  (let ((echo-var (lambda (v) (if (stringp v) v (format "%S" v)))))
     (cond
      ((and (listp var) (listp (car var)))
-      (orgtbl-to-generic var  (list :sep (or sep "\t") :fmt #'echo-var)))
+      (orgtbl-to-generic var  (list :sep (or sep "\t") :fmt echo-var)))
      ((listp var)
-      (mapconcat #'echo-var var "\n"))
-     (t (echo-var var)))))
+      (mapconcat echo-var var "\n"))
+     (t (funcall echo-var var)))))
 
 (defun org-babel-awk-table-or-string (results)
   "If the results look like a table, then convert them into an
@@ -114,6 +112,6 @@ Emacs-lisp table, otherwise return the results as a string."
 
 (provide 'ob-awk)
 
-;; arch-tag: 844e2c88-6aad-4018-868d-a2df6bcdf68f
+
 
 ;;; ob-awk.el ends here

@@ -1,11 +1,10 @@
 ;;; ob-org.el --- org-babel functions for org code block evaluation
 
-;; Copyright (C) 2010  Free Software Foundation, Inc.
+;; Copyright (C) 2010-2013 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
 ;; Homepage: http://orgmode.org
-;; Version: 7.7
 
 ;; This file is part of GNU Emacs.
 
@@ -33,7 +32,7 @@
 (declare-function org-export-string "org-exp" (string fmt &optional dir))
 
 (defvar org-babel-default-header-args:org
-  '((:results . "raw silent") (:exports . "results"))
+  '((:results . "raw silent") (:exports . "code"))
   "Default arguments for evaluating a org source block.")
 
 (defvar org-babel-org-default-header
@@ -66,6 +65,6 @@ This function is called by `org-babel-execute-src-block'."
 
 (provide 'ob-org)
 
-;; arch-tag: 130af5fe-cc56-46bd-9508-fa0ebd94cb1f
+
 
 ;;; ob-org.el ends here

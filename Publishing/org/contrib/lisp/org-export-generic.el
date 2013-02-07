@@ -1,6 +1,6 @@
 ;; org-export-generic.el --- Export frameworg with custom backends
 
-;; Copyright (C) 2009  Free Software Foundation, Inc.
+;; Copyright (C) 2009-2013  Free Software Foundation, Inc.
 
 ;; Author:   Wes Hardaker <hardaker at users dot sourceforge dot net>
 ;; Keywords: outlines, hypermedia, calendar, wp, export
@@ -8,7 +8,7 @@
 ;; Version:  6.25trans
 ;; Acks:     Much of this code was stolen form the ascii export from Carsten
 ;;
-;; This file is not yet part of GNU Emacs.
+;; This file is not part of GNU Emacs.
 ;;
 ;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -27,6 +27,10 @@
 ;;
 ;; OVERVIEW
 ;;
+;; IMPORTANT: IF YOU WANT TO WRITE A NEW EXPORTER FOR ORG, PLEASE
+;; CHECK contrib/lisp/org-export.el -- ORG-EXPORT-GENERIC.EL, WHILE
+;; STILL USEFUL, SHOULD NOT BE USED FOR NEW EXPORTERS.
+;;
 ;; org-export-generic is basically a simple translation system that
 ;; knows how to parse at least most of a .org buffer and then add
 ;; various formatting prefixes before and after each section type.  It
@@ -35,7 +39,7 @@
 ;; org-set-generic-type function:
 ;;
 ;;    (org-set-generic-type
-;;     "really-basic-text" 
+;;     "really-basic-text"
 ;;     '(:file-suffix  ".txt"
 ;;       :key-binding  ?R
 ;;
@@ -87,7 +91,9 @@
 ;;     *** allow different open/closing prefixes
 ;;   * properties
 ;;   * drawers
-;;   * oh my
+;;   * Escape camel-case for wiki exporters.
+;;   * Adjust to depth limits on headers --- need to roll-over from headers
+;;     to lists, as per other exporters
 ;;   * optmization (many plist extracts should be in let vars)
 ;;   * define defcustom spec for the specifier list
 ;;   * fonts:  at least monospace is not handled at all here.
@@ -98,6 +104,7 @@
 
 (require 'org-exp)
 (require 'assoc)
+(eval-when-compile (require 'cl))
 
 (defgroup org-export-generic nil
   "Options specific for ASCII export of Org-mode files."
@@ -153,10 +160,10 @@ in this way, it will be wrapped."
 
      :toc-section-numbers       t
      :toc-section-number-format "\#(%s) "
-     :toc-format                "--%s--"    
+     :toc-format                "--%s--"
      :toc-format-with-todo      "!!%s!!\n"
-     :toc-indent-char           ?\ 
-     :toc-indent-depth          4         
+     :toc-indent-char           ?\
+     :toc-indent-depth          4
 
      :toc-tags-export           t
      :toc-tags-prefix           "   <tags>"
@@ -187,8 +194,8 @@ in this way, it will be wrapped."
 					; section prefixes/suffixes can be direct strings or lists as well
      :body-section-prefix         "<secprefix>\n"
      :body-section-suffix         "</secsuffix>\n"
-;	 :body-section-prefix         ("<sec1>\n" "<sec2>\n" "<sec3>\n")
-;	 :body-section-suffix         ("</sec1>\n" "</sec2>\n" "</sec3>\n")
+					;	 :body-section-prefix         ("<sec1>\n" "<sec2>\n" "<sec3>\n")
+					;	 :body-section-suffix         ("</sec1>\n" "</sec2>\n" "</sec3>\n")
 
 
 					; if preformated text should be included (eg, : prefixed)
@@ -215,7 +222,7 @@ in this way, it will be wrapped."
      :body-list-checkbox-half-end  "</checkbox (half)>"
 
 
-     
+
 
 					; other body lines
      :body-line-format             "%s"
@@ -223,10 +230,7 @@ in this way, it will be wrapped."
 
 					; print above and below all body parts
      :body-text-prefix 	       "<p>\n"
-     :body-text-suffix 	       "</p>\n"
-
-     )
-
+     :body-text-suffix 	       "</p>\n")
     ;;
     ;; ascii exporter
     ;;
@@ -255,37 +259,36 @@ in this way, it will be wrapped."
      :toc-export                t
      :toc-section-numbers       t
      :toc-section-number-format "%s "
-     :toc-format                "%s\n"    
+     :toc-format                "%s\n"
      :toc-format-with-todo      "%s (*)\n"
-     :toc-indent-char           ?\ 
-     :toc-indent-depth          4         
+     :toc-indent-char           ?\
+     :toc-indent-depth          4
 
      :body-header-section-numbers 3
      :body-section-prefix         "\n"
 
-;	 :body-section-header-prefix  "\n"
-;	 :body-section-header-format  "%s\n"
-;	 :body-section-header-suffix  (?\$ ?\# ?^ ?\~ ?\= ?\-)
+					;	 :body-section-header-prefix  "\n"
+					;	 :body-section-header-format  "%s\n"
+					;	 :body-section-header-suffix  (?\$ ?\# ?^ ?\~ ?\= ?\-)
 
      :body-section-header-prefix  ("" "" "" "* " "  + " "    - ")
      :body-section-header-format  "%s\n"
      :body-section-header-suffix  (?~ ?= ?- "\n" "\n" "\n")
 
-;	 :body-section-marker-prefix  ""
-;	 :body-section-marker-chars   (?\$ ?\# ?^ ?\~ ?\= ?\-)
-;	 :body-section-marker-suffix  "\n"
+					;	 :body-section-marker-prefix  ""
+					;	 :body-section-marker-chars   (?\$ ?\# ?^ ?\~ ?\= ?\-)
+					;	 :body-section-marker-suffix  "\n"
 
      :body-line-export-preformated t
      :body-line-format             "%s\n"
      :body-line-wrap               75
 
-;	 :body-text-prefix "<t>\n"
-;	 :body-text-suffix "</t>\n"
+					;	 :body-text-prefix "<t>\n"
+					;	 :body-text-suffix "</t>\n"
 
 
-     :body-bullet-list-prefix      (?* ?+ ?-)
-;	 :body-bullet-list-suffix      (?* ?+ ?-)
-     )
+     :body-bullet-list-prefix      (?* ?+ ?-))
+					;	 :body-bullet-list-suffix      (?* ?+ ?-)
 
     ;;
     ;; wikipedia
@@ -308,7 +311,41 @@ in this way, it will be wrapped."
 
      :body-section-header-prefix    ("= " "== " "=== "
 				     "==== " "===== " "====== ")
-     :body-section-header-suffix    (" =\n\n" " ==\n\n" " ===\n\n" 
+     :body-section-header-suffix    (" =\n\n" " ==\n\n" " ===\n\n"
+				     " ====\n\n" " =====\n\n" " ======\n\n")
+
+     :body-line-export-preformated  t          ;; yes/no/maybe???
+     :body-line-format              "%s\n"
+     :body-line-wrap                75
+
+     :body-line-fixed-format       " %s\n"
+
+     :body-list-format              "* %s\n"
+     :body-number-list-format       "# %s\n"
+
+     :body-bullet-list-prefix       ("* " "** " "*** " "**** " "***** "))
+    ;;
+    ;; mediawiki
+    ;;
+    ("mediawiki"
+     :file-suffix        	    ".txt"
+     :key-binding                   ?m
+
+     :header-prefix            	    ""
+     :header-suffix            	    ""
+
+     :title-format             	    "= %s =\n"
+
+     :date-export        	    nil
+
+     :toc-export                    nil
+
+     :body-header-section-numbers   nil
+     :body-section-prefix           "\n"
+
+     :body-section-header-prefix    ("= " "== " "=== "
+				     "==== " "===== " "====== ")
+     :body-section-header-suffix    (" =\n\n" " ==\n\n" " ===\n\n"
 				     " ====\n\n" " =====\n\n" " ======\n\n")
 
      :body-line-export-preformated  t          ;; yes/no/maybe???
@@ -321,48 +358,14 @@ in this way, it will be wrapped."
      :body-number-list-format       "# %s\n"
 
      :body-bullet-list-prefix       ("* " "** " "*** " "**** " "***** ")
-     )
-
-    ;;
-    ;; minimal html exporter
-    ;;
-    ("html"
-     ;; simple html output
-     :file-suffix        	    ".html"
-     :key-binding                   ?h
-
-     :header-prefix             "<body>"
-
-     :title-format              "<h1>%s</h1>\n\n"
-
-     :date-export        	    t
-     :date-format               "<br /><b>Date:</b> <i>%s</i><br />\n\n"
-
-     :toc-export                nil
-
-     :body-header-section-numbers 3
-
-     :body-section-header-prefix  ("<h1>" "<h2>" "<h3>"
-				   "<h4>" "<h5>" "<h6>")
-     :body-section-header-format  "%s"
-     :body-section-header-suffix  ("</h1>\n" "</h2>\n" "</h3>\n"
-				   "</h4>\n" "</h5>\n" "</h6>\n")
-
-     :body-section-prefix         "<secprefix>\n"
-     :body-section-suffix         "</secsuffix>\n"
-;	 :body-section-prefix         ("<sec1>\n" "<sec2>\n" "<sec3>\n")
-;	 :body-section-suffix         ("</sec1>\n" "</sec2>\n" "</sec3>\n")
-
-     :body-line-export-preformated t
-     :body-line-format             "%s\n"
-
-     :body-text-prefix "<p>\n"
-     :body-text-suffix "</p>\n"
-
-     :body-bullet-list-prefix      (?* ?+ ?-)
-;	 :body-bullet-list-suffix      (?* ?+ ?-)
-     )
-
+     :body-list-checkbox-todo       "&#9744; "
+     :body-list-checkbox-done       "&#9746; "
+     :body-table-start              "{|"
+     :body-table-end                "|}"
+     :body-table-cell-start         "|"
+     :body-table-cell-end           "\n"
+     :body-table-last-cell-end      "|-"
+     :body-table-hline-start          "")
     ;;
     ;; internet-draft .xml for xml2rfc exporter
     ;;
@@ -426,12 +429,85 @@ in this way, it will be wrapped."
 
      :body-list-prefix 	       "<list style=\"symbols\">\n"
      :body-list-suffix 	       "</list>\n"
-     :body-list-format 	       "<t>%s</t>\n"
+     :body-list-format 	       "<t>%s</t>\n")
+    ("trac-wiki"
+     :file-suffix     ".txt"
+     :key-binding     ?T
 
-     )
-    )
-  "A assoc list of property lists to specify export definitions"
-)
+     ;; lifted from wikipedia exporter
+     :header-prefix            	    ""
+     :header-suffix            	    ""
+
+     :title-format             	    "= %s =\n"
+
+     :date-export        	    nil
+
+     :toc-export                    nil
+
+     :body-header-section-numbers   nil
+     :body-section-prefix           "\n"
+
+     :body-section-header-prefix    (" == " " === " " ==== "
+				     " ===== " )
+     :body-section-header-suffix    (" ==\n\n" " ===\n\n" " ====\n\n"
+				     " =====\n\n" " ======\n\n" " =======\n\n")
+
+     :body-line-export-preformated  t ;; yes/no/maybe???
+     :body-line-format              "%s\n"
+     :body-line-wrap                75
+
+     :body-line-fixed-format       " %s\n"
+
+     :body-list-format              " * %s\n"
+     :body-number-list-format       " # %s\n"
+     ;;    :body-list-prefix              "LISTSTART"
+     ;;    :body-list-suffix              "LISTEND"
+
+     ;; this is ignored! [2010/02/02:rpg]
+     :body-bullet-list-prefix       ("* " "** " "*** " "**** " "***** "))
+    ("tikiwiki"
+     :file-suffix     ".txt"
+     :key-binding     ?U
+
+     ;; lifted from wikipedia exporter
+     :header-prefix            	    ""
+     :header-suffix            	    ""
+
+     :title-format             	    "-= %s =-\n"
+
+     :date-export        	    nil
+
+     :toc-export                    nil
+
+     :body-header-section-numbers   nil
+     :body-section-prefix           "\n"
+
+     :body-section-header-prefix    ("! " "!! " "!!! " "!!!! "
+				     "!!!!! " "!!!!!! " "!!!!!!! ")
+     :body-section-header-suffix    (" \n" " \n" " \n"
+				     " \n" " \n" " \n")
+
+
+     :body-line-export-preformated  t ;; yes/no/maybe???
+     :body-line-format              "%s "
+     :body-line-wrap                nil
+
+     :body-line-fixed-format       " %s\n"
+
+     :body-list-format              "* %s\n"
+     :body-number-list-format       "# %s\n"
+     ;;    :body-list-prefix              "LISTSTART"
+     ;;    :body-list-suffix              "LISTEND"
+     :blockquote-start              "\n^\n"
+     :blockquote-end                "^\n\n"
+     :body-newline-paragraph        "\n"
+     :bold-format                   "__%s__"
+     :italic-format                 "''%s''"
+     :underline-format              "===%s==="
+     :strikethrough-format          "--%s--"
+     :code-format                   "-+%s+-"
+     :verbatim-format               "~pp~%s~/pp~"))
+  "A assoc list of property lists to specify export definitions")
 
 (setq org-generic-export-type "demo")
 
@@ -448,24 +524,23 @@ export definitions."
 (defvar org-export-generic-keywords nil)
 (defmacro* def-org-export-generic-keyword (keyword
                                            &key documentation
-                                                type)
+					   type)
   "Define KEYWORD as a legitimate element for inclusion in
 the body of an org-set-generic-type definition."
+  ;; TODO: push the documentation and type information
+  ;; somewhere where it will do us some good.
   `(progn
-     (pushnew ,keyword org-export-generic-keywords)
-     ;; TODO: push the documentation and type information
-     ;; somewhere where it will do us some good.
-     ))
+     (pushnew ,keyword org-export-generic-keywords)))
 
 (def-org-export-generic-keyword :body-newline-paragraph
-    :documentation "Bound either to NIL or to a pattern to be 
+  :documentation "Bound either to NIL or to a pattern to be
 inserted in the output for every blank line in the input.
   The intention is to handle formats where text is flowed, and
 newlines are interpreted as significant \(e.g., as indicating
 preformatted text\).  A common non-nil value for this keyword
-is \"\\n\".  Should typically be combined with a value for 
+is \"\\n\".  Should typically be combined with a value for
 :body-line-format that does NOT end with a newline."
-    :type string)
+  :type string)
 
 ;;; fontification keywords
 (def-org-export-generic-keyword :bold-format)
@@ -475,15 +550,11 @@ is \"\\n\".  Should typically be combined with a value for
 (def-org-export-generic-keyword :code-format)
 (def-org-export-generic-keyword :verbatim-format)
 
-    
-  
-
 (defun org-export-generic-remember-section (type suffix &optional prefix)
   (setq org-export-generic-section-type type)
   (setq org-export-generic-section-suffix suffix)
   (if prefix
-      (insert prefix))
-)
+      (insert prefix)))
 
 (defun org-export-generic-check-section (type &optional prefix suffix)
   "checks to see if type is already in use, or we're switching parts
@@ -493,7 +564,7 @@ suffix a later change time."
 
   (when (not (equal type org-export-generic-section-type))
     (if org-export-generic-section-suffix
-      (insert org-export-generic-section-suffix))
+	(insert org-export-generic-section-suffix))
     (setq org-export-generic-section-type type)
     (setq org-export-generic-section-suffix suffix)
     (if prefix
@@ -529,7 +600,7 @@ underlined headlines.  The default is 3."
 			      (org-export-add-subtree-options opt-plist rbeg)
 			    opt-plist)))
 
-	 helpstart 
+	 helpstart
 	 (bogus (mapc (lambda (x)
 			(setq helpstart
 			      (concat helpstart "\["
@@ -550,7 +621,7 @@ underlined headlines.  The default is 3."
 		     (list
 		      (plist-get (cdr x) :key-binding)
 		      (car x)))
-		      org-generic-alist)
+		   org-generic-alist)
 	   (list (list ?  "default"))))
 
 	 r1 r2 ass
@@ -571,7 +642,7 @@ underlined headlines.  The default is 3."
 	    (unless (setq ass (cadr (assq r2 cmds)))
 	      (error "No command associated with key %c" r1))
 
-	    (cdr (assoc 
+	    (cdr (assoc
 		  (if (equal ass "default") org-generic-export-type ass)
 		  org-generic-alist))))
 
@@ -610,13 +681,14 @@ underlined headlines.  The default is 3."
 	 (email       (plist-get opt-plist :email))
 	 (language    (plist-get opt-plist :language))
 	 (quote-re0   (concat "^[ \t]*" org-quote-string "\\>"))
-;	 (quote-re    (concat "^\\(\\*+\\)\\([ \t]*" org-quote-string "\\>\\)"))
+					;	 (quote-re    (concat "^\\(\\*+\\)\\([ \t]*" org-quote-string "\\>\\)"))
 	 (todo nil)
 	 (lang-words nil)
 	 (region
 	  (buffer-substring
 	   (if (org-region-active-p) (region-beginning) (point-min))
 	   (if (org-region-active-p) (region-end) (point-max))))
+	 (org-export-current-backend 'org-export-generic)
 	 (lines (org-split-string
 		 (org-export-preprocess-string
 		  region
@@ -674,7 +746,34 @@ underlined headlines.  The default is 3."
 	  (or (plist-get export-plist :body-list-checkbox-done-end) ""))
 	 (listcheckhalfend
 	  (or (plist-get export-plist :body-list-checkbox-half-end) ""))
-         (bodynewline-paragraph   (plist-get export-plist :body-newline-paragraph))
+	 (bodytablestart
+	  (or (plist-get export-plist :body-table-start) ""))
+	 (bodytableend
+	  (or (plist-get export-plist :body-table-end) ""))
+	 (bodytablerowstart
+	  (or (plist-get export-plist :body-table-row-start) ""))
+	 (bodytablerowend
+	  (or (plist-get export-plist :body-table-row-end) ""))
+	 (bodytablecellstart
+	  (or (plist-get export-plist :body-table-cell-start) ""))
+	 (bodytablecellend
+	  (or (plist-get export-plist :body-table-cell-end) ""))
+	 (bodytablefirstcellstart
+	  (or (plist-get export-plist :body-table-first-cell-start) ""))
+	 (bodytableinteriorcellstart
+	  (or (plist-get export-plist :body-table-interior-cell-start) ""))
+	 (bodytableinteriorcellend
+	  (or (plist-get export-plist :body-table-interior-cell-end) ""))
+	 (bodytablelastcellend
+	  (or (plist-get export-plist :body-table-last-cell-end) ""))
+	 (bodytablehlinestart
+	  (or (plist-get export-plist :body-table-hline-start) " \\1"))
+	 (bodytablehlineend
+	  (or (plist-get export-plist :body-table-hline-end) ""))
+
+
+
+	 (bodynewline-paragraph   (plist-get export-plist :body-newline-paragraph))
 	 (bodytextpre   (plist-get export-plist :body-text-prefix))
 	 (bodytextsuf   (plist-get export-plist :body-text-suffix))
 	 (bodylinewrap  (plist-get export-plist :body-line-wrap))
@@ -691,11 +790,11 @@ underlined headlines.  The default is 3."
          (format-code (plist-get export-plist :code-format))
          (format-verbatim (plist-get export-plist :verbatim-format))
 
-         
+
 
 	 thetoc toctags have-headings first-heading-pos
 	 table-open table-buffer link-buffer link desc desc0 rpl wrap)
-    
+
     (let ((inhibit-read-only t))
       (org-unmodified
        (remove-text-properties (point-min) (point-max)
@@ -763,81 +862,80 @@ underlined headlines.  The default is 3."
 	  (if tocprefix
 	      (push tocprefix thetoc))
 
-	  (mapc '(lambda (line)
-		   (if (string-match org-todo-line-regexp line)
-		       ;; This is a headline
-		       (progn
-			 (setq have-headings t)
-			 (setq level (- (match-end 1) (match-beginning 1)
-					level-offset)
-			       level (org-tr-level level)
-			       txt (match-string 3 line)
-			       todo
-			       (or (and org-export-mark-todo-in-toc
-					(match-beginning 2)
-					(not (member (match-string 2 line)
-						     org-done-keywords)))
+	  (mapc #'(lambda (line)
+		    (if (string-match org-todo-line-regexp line)
+			;; This is a headline
+			(progn
+			  (setq have-headings t)
+			  (setq level (- (match-end 1) (match-beginning 1)
+					 level-offset)
+				level (org-tr-level level)
+				txt (match-string 3 line)
+				todo
+				(or (and org-export-mark-todo-in-toc
+					 (match-beginning 2)
+					 (not (member (match-string 2 line)
+						      org-done-keywords)))
 					; TODO, not DONE
-				   (and org-export-mark-todo-in-toc
-					(= level umax-toc)
-					(org-search-todo-below
-					 line lines level))))
-			 (setq txt (org-html-expand-for-generic txt))
+				    (and org-export-mark-todo-in-toc
+					 (= level umax-toc)
+					 (org-search-todo-below
+					  line lines level))))
+			  (setq txt (org-html-expand-for-generic txt))
 
-			 (while (string-match org-bracket-link-regexp txt)
-			   (setq txt
-				 (replace-match
-				  (match-string (if (match-end 2) 3 1) txt)
-				  t t txt)))
+			  (while (string-match org-bracket-link-regexp txt)
+			    (setq txt
+				  (replace-match
+				   (match-string (if (match-end 2) 3 1) txt)
+				   t t txt)))
 
-			 (if (and (not tagsintoc)
+			  (if (and (not tagsintoc)
+				   (string-match
+				    (org-re "[ \t]+:[[:alnum:]_@:]+:[ \t]*$")
+				    txt))
+			      (setq txt (replace-match "" t t txt))
+					; include tags but formated
+			    (if (string-match
+				 (org-re "[ \t]+:\\([[:alnum:]_@:]+\\):[ \t]*$")
+				 txt)
+				(progn
+				  (setq
+				   toctags
+				   (org-export-generic-header
+				    (match-string 1 txt)
+				    export-plist :toc-tags-prefix
+				    :toc-tags-format :toc-tags-suffix))
 				  (string-match
 				   (org-re "[ \t]+:[[:alnum:]_@:]+:[ \t]*$")
-				   txt))
-			     (setq txt (replace-match "" t t txt))
-			   ; include tags but formated
-			   (if (string-match
-				(org-re "[ \t]+:\\([[:alnum:]_@:]+\\):[ \t]*$")
-				txt)
-			       (progn
-				 (setq 
-				  toctags
-				  (org-export-generic-header
-				   (match-string 1 txt)
-				   export-plist :toc-tags-prefix
-				   :toc-tags-format :toc-tags-suffix))
-				 (string-match
-				  (org-re "[ \t]+:[[:alnum:]_@:]+:[ \t]*$")
-				  txt)
-				 (setq txt (replace-match "" t t txt)))
-			     (setq toctags tocnotagsstr)))
-			   
-			 (if (string-match quote-re0 txt)
-			     (setq txt (replace-match "" t t txt)))
+				   txt)
+				  (setq txt (replace-match "" t t txt)))
+			      (setq toctags tocnotagsstr)))
 
-			 (if (<= level umax-toc)
-			     (progn
-			       (push
-				(concat
+			  (if (string-match quote-re0 txt)
+			      (setq txt (replace-match "" t t txt)))
 
-				 (make-string
-				  (* (max 0 (- level org-min-level)) tocdepth)
-				  tocindentchar)
+			  (if (<= level umax-toc)
+			      (progn
+				(push
+				 (concat
 
-				 (if tocsecnums
-				     (format tocsecnumform
-				      (org-section-number level))
-				   "")
+				  (make-string
+				   (* (max 0 (- level org-min-level)) tocdepth)
+				   tocindentchar)
 
-				 (format
-				  (if todo tocformtodo tocformat) 
-				  txt)
+				  (if tocsecnums
+				      (format tocsecnumform
+					      (org-section-number level))
+				    "")
 
-				 toctags)
+				  (format
+				   (if todo tocformtodo tocformat)
+				   txt)
 
-				thetoc)
-			       (setq org-last-level level))
-			   ))))
+				  toctags)
+
+				 thetoc)
+				(setq org-last-level level))))))
 		lines)
 	  (if tocsuffix
 	      (push tocsuffix thetoc))
@@ -867,7 +965,7 @@ underlined headlines.  The default is 3."
 				      (substring link 8)
 				      org-export-code-refs)))
 			t t line))
-	  (setq rpl (concat "[" 
+	  (setq rpl (concat "["
 			    (or (match-string 3 line) (match-string 1 line))
 			    "]"))
 	  (when (and desc0 (not (equal desc0 link)))
@@ -957,8 +1055,7 @@ underlined headlines.  The default is 3."
 			     listcheckdoneend)))
 	 ((string-match "^\\(\\[/\\]\\)[ \t]*" line)
 	  (setq line (concat (replace-match listcheckhalf nil nil line)
-			     listcheckhalfend)))
-	 )
+			     listcheckhalfend))))
 
 	(insert (format listformat (org-export-generic-fontify line))))
        ((string-match "^\\([ \t]+\\)\\([0-9]+\\.[ \t]*\\)" line)
@@ -983,8 +1080,7 @@ underlined headlines.  The default is 3."
 			     listcheckdoneend)))
 	 ((string-match "\\(\\[/\\]\\)[ \t]*" line)
 	  (setq line (concat (replace-match listcheckhalf nil nil line)
-			     listcheckhalfend)))
-	 )
+			     listcheckhalfend))))
 
 	(insert (format numlistformat (org-export-generic-fontify line))))
 
@@ -1002,7 +1098,7 @@ underlined headlines.  The default is 3."
 	;;
 	(org-export-generic-check-section "body" bodytextpre bodytextsuf)
 
-        (setq line 
+        (setq line
               (org-export-generic-fontify line))
 
 	;; XXX: properties?  list?
@@ -1103,20 +1199,18 @@ REVERSE means to reverse the list if the plist match is a list
       (if (stringp subtype)
 	  subtype
 	(concat (make-string len subtype) "\n")))
-     (t ""))
-    ))
+     (t ""))))
 
 (defun org-export-generic-header (header export-plist
-				  prefixprop formatprop postfixprop
-				  &optional n reverse)
+					 prefixprop formatprop postfixprop
+					 &optional n reverse)
   "convert a header to an output string given formatting property names"
   (let* ((formatspec (plist-get export-plist formatprop))
 	 (len (length header)))
     (concat
      (org-export-generic-format export-plist prefixprop len n reverse)
      (format (or formatspec "%s") header)
-     (org-export-generic-format export-plist postfixprop len n reverse))
-    ))
+     (org-export-generic-format export-plist postfixprop len n reverse))))
 
 (defun org-export-generic-preprocess (parameters)
   "Do extra work for ASCII export"
@@ -1124,7 +1218,7 @@ REVERSE means to reverse the list if the plist match is a list
   (goto-char (point-min))
   (while (re-search-forward org-verbatim-re nil t)
     (goto-char (match-end 2))
-    (backward-delete-char 1) (insert "'")
+    (delete-backward-char 1) (insert "'")
     (goto-char (match-beginning 2))
     (delete-char 1) (insert "`")
     (goto-char (match-end 2)))
@@ -1151,9 +1245,9 @@ REVERSE means to reverse the list if the plist match is a list
     (while (> len where)
       (catch 'found
 	(loop for i from where downto (/ where 2) do
-	  (and (equal (aref line i) ?\ )
-	       (setq pos i)
-	       (throw 'found t))))
+	      (and (equal (aref line i) ?\ )
+		   (setq pos i)
+		   (throw 'found t))))
       (if pos
 	  (progn
 	    (setq result
@@ -1167,7 +1261,7 @@ REVERSE means to reverse the list if the plist match is a list
 	(setq result (concat result line))
 	(setq len 0)))
     (concat result indstr line)))
-			   
+
 (defun org-export-generic-push-links (link-buffer)
   "Push out links in the buffer."
   (when link-buffer
@@ -1205,25 +1299,21 @@ REVERSE means to reverse the list if the plist match is a list
 	(insert
 	 (org-export-generic-format export-plist :body-section-prefix 0
 				    (+ old-level counter)))
-	(setq counter (1+ counter))
-	))
+	(setq counter (1+ counter))))
      ;; going up
      ((< level old-level)
       (while (> (- old-level counter) (1- level))
 	(insert
 	 (org-export-generic-format export-plist :body-section-suffix 0
 				    (- old-level counter)))
-	(setq counter (1+ counter))
-	))
+	(setq counter (1+ counter))))
      ;; same level
      ((= level old-level)
-      (insert 
-       (org-export-generic-format export-plist :body-section-suffix 0 level))
-      )
-     )
+      (insert
+       (org-export-generic-format export-plist :body-section-suffix 0 level))))
     (insert
      (org-export-generic-format export-plist :body-section-prefix 0 level))
-    
+
     (if (and org-export-with-section-numbers
 	     secnums
 	     (or (not (numberp secnums))
@@ -1287,16 +1377,21 @@ REVERSE means to reverse the list if the plist match is a list
       (setq lines (org-table-clean-before-export lines)))
     ;; Get rid of the vertical lines except for grouping
     (let ((vl (org-colgroup-info-to-vline-list org-table-colgroup-info))
-	  rtn line vl1 start)
+	  (rtn (list bodytablestart)) line vl1 start)
       (while (setq line (pop lines))
+	(setq line (concat bodytablerowstart line))
 	(if (string-match org-table-hline-regexp line)
 	    (and (string-match "|\\(.*\\)|" line)
-		 (setq line (replace-match " \\1" t nil line)))
+		 (setq line (replace-match (concat bodytablehlinestart bodytablehlineend) t nil line)))
 	  (setq start 0 vl1 vl)
+	  (if (string-match "|\\(.*\\)|" line)
+	      (setq line (replace-match (concat bodytablefirstcellstart bodytablecellstart " \\1 " bodytablecellend bodytablelastcellend) t nil line)))
 	  (while (string-match "|" line start)
-	    (setq start (match-end 0))
-	    (or (pop vl1) (setq line (replace-match " " t t line)))))
+	    (setq start (+ (match-end 0) (length (concat bodytablecellend bodytableinteriorcellend bodytableinteriorcellstart bodytablecellstart))))
+	    (or (pop vl1) (setq line (replace-match (concat bodytablecellend bodytableinteriorcellend bodytableinteriorcellstart bodytablecellstart) t t line)))))
+	(setq line (concat line bodytablerowend))
 	(push line rtn))
+      (setq rtn (cons bodytableend rtn))
       (nreverse rtn))))
 
 (defun org-colgroup-info-to-vline-list (info)
@@ -1324,7 +1419,7 @@ REVERSE means to reverse the list if the plist match is a list
 Each element of the list is a list of three elements.
 The first element is the character used as a marker for fontification.
 The second element is a variable name, set in org-export-generic.  That
-variable will be dereferenced to obtain a formatting string to wrap 
+variable will be dereferenced to obtain a formatting string to wrap
 fontified text with.
 The third element decides whether to protect converted text from other
 conversions.")
@@ -1341,31 +1436,31 @@ conversions.")
 (defun org-export-generic-fontify (string)
   "Convert fontification according to generic rules."
   (if (string-match org-emph-re string)
-        ;; The match goes one char after the *string*, except at the end of a line
-        (let ((emph (assoc (match-string 3 string)
-                           org-export-generic-emphasis-alist))
-              (beg (match-beginning 0))
-              (end (match-end 0)))
-          (unless emph
-            (message "`org-export-generic-emphasis-alist' has no entry for formatting triggered by \"%s\""
-                     (match-string 3 string)))
-          ;; now we need to determine whether we have strikethrough or
-          ;; a list, which is a bit nasty
-          (if (and (equal (match-string 3 string) "+")
-                   (save-match-data
-                     (string-match "\\`-+\\'" (match-string 4 string))))
-              ;; a list --- skip this match and recurse on the point after the
-              ;; first emph char...
-              (concat (substring string 0 (1+ (match-beginning 3)))
-                      (org-export-generic-fontify (substring string (match-beginning 3))))
-              (concat (substring string 0 beg) ;; part before the match
-                      (match-string 1 string)
-                      (org-export-generic-emph-format (second emph)
-                                                      (match-string 4 string)
-                                                      (third emph))
-                      (or (match-string 5 string) "")
-                      (org-export-generic-fontify (substring string end)))))
-        string))
+      ;; The match goes one char after the *string*, except at the end of a line
+      (let ((emph (assoc (match-string 3 string)
+			 org-export-generic-emphasis-alist))
+	    (beg (match-beginning 0))
+	    (end (match-end 0)))
+	(unless emph
+	  (message "`org-export-generic-emphasis-alist' has no entry for formatting triggered by \"%s\""
+		   (match-string 3 string)))
+	;; now we need to determine whether we have strikethrough or
+	;; a list, which is a bit nasty
+	(if (and (equal (match-string 3 string) "+")
+		 (save-match-data
+		   (string-match "\\`-+\\'" (match-string 4 string))))
+	    ;; a list --- skip this match and recurse on the point after the
+	    ;; first emph char...
+	    (concat (substring string 0 (1+ (match-beginning 3)))
+		    (org-export-generic-fontify (substring string (match-beginning 3))))
+	  (concat (substring string 0 beg) ;; part before the match
+		  (match-string 1 string)
+		  (org-export-generic-emph-format (second emph)
+						  (match-string 4 string)
+						  (third emph))
+		  (or (match-string 5 string) "")
+		  (org-export-generic-fontify (substring string end)))))
+    string))
 
 (defun org-export-generic-emph-format (format-varname string protect)
   "Return a string that results from applying the markup indicated by
@@ -1374,10 +1469,10 @@ FORMAT-VARNAME to STRING."
     (let ((string-to-emphasize
            (if protect
                string
-               (org-export-generic-fontify string))))
+	     (org-export-generic-fontify string))))
       (if format
           (format format string-to-emphasize)
-          string-to-emphasize))))
+	string-to-emphasize))))
 
 (provide 'org-generic)
 (provide 'org-export-generic)

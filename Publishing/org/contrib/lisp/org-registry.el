@@ -1,12 +1,12 @@
 ;;; org-registry.el --- a registry for Org links
 ;;
-;; Copyright 2007, 2008 Bastien Guerry
+;; Copyright 2007-2013 Bastien Guerry
 ;;
 ;; Emacs Lisp Archive Entry
 ;; Filename: org-registry.el
 ;; Version: 0.1a
-;; Author: Bastien Guerry <bzg AT altern DOT org>
-;; Maintainer: Bastien Guerry <bzg AT altern DOT org>
+;; Author: Bastien Guerry <bzg AT gnu DOT org>
+;; Maintainer: Bastien Guerry <bzg AT gnu DOT org>
 ;; Keywords: org, wp, registry
 ;; Description: Shows Org files where the current buffer is linked
 ;; URL: http://www.cognition.ens.fr/~guerry/u/org-registry.el
@@ -145,15 +145,15 @@ buffer."
 
 (defun org-registry-assoc-all (link &optional registry)
   "Return all associated entries of LINK in the registry."
-  (org-registry-find-all 
+  (org-registry-find-all
    (lambda (entry) (string= link (car entry)))
    registry))
 
 (defun org-registry-find-all (test &optional registry)
   "Return all entries satisfying `test' in the registry."
-  (delq nil 
-        (mapcar 
-         (lambda (x) (and (funcall test x) x)) 
+  (delq nil
+        (mapcar
+         (lambda (x) (and (funcall test x) x))
          (or registry org-registry-alist))))
 
 ;;;###autoload
@@ -219,7 +219,7 @@ Use with caution.  This could slow down things a bit."
 (defun org-registry-update ()
   "Update the registry for the current Org file."
   (interactive)
-  (unless (org-mode-p) (error "Not in org-mode"))
+  (unless (eq major-mode 'org-mode) (error "Not in org-mode"))
   (let* ((from-file (expand-file-name (buffer-file-name)))
 	 (new-entries (org-registry-get-entries from-file)))
     (with-temp-buffer

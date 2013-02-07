@@ -1,25 +1,22 @@
-;;; org-special-blocks.el --- Turn blocks into LaTeX envs and HTML divs
-
-;; Copyright (C) 2009 Chris Gray
+;;; org-special-blocks.el --- handle Org special blocks
+;; Copyright (C) 2009-2013 Free Software Foundation, Inc.
 
 ;; Author: Chris Gray <chrismgray@gmail.com>
 
-;; This file is not currently part of GNU Emacs.
+;; This file is part of GNU Emacs.
 
-;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License as
-;; published by the Free Software Foundation; either version 2, or (at
-;; your option) any later version.
+;; GNU Emacs is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful, but
-;; WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-;; General Public License for more details.
+;; GNU Emacs is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program ; see the file COPYING.  If not, write to
-;; the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-;; Boston, MA 02111-1307, USA.
+;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -40,7 +37,11 @@
 ;; user to add this class to his or her stylesheet if this div is to
 ;; mean anything.
 
+(require 'org-html)
 (require 'org-compat)
+
+(declare-function org-open-par "org-html" ())
+(declare-function org-close-par-maybe "org-html" ())
 
 (defvar org-special-blocks-ignore-regexp "^\\(LaTeX\\|HTML\\)$"
   "A regexp indicating the names of blocks that should be ignored
@@ -51,7 +52,7 @@ interpreted by other mechanisms.")
 (defun org-special-blocks-make-special-cookies ()
   "Adds special cookies when #+begin_foo and #+end_foo tokens are
 seen.  This is run after a few special cases are taken care of."
-  (when (or (eq org-export-current-backend 'html) 
+  (when (or (eq org-export-current-backend 'html)
 	    (eq org-export-current-backend 'latex))
     (goto-char (point-min))
     (while (re-search-forward "^[ \t]*#\\+\\(begin\\|end\\)_\\(.*\\)$" nil t)
@@ -79,16 +80,20 @@ seen.  This is run after a few special cases are taken care of."
 (add-hook 'org-export-latex-after-blockquotes-hook
 	  'org-special-blocks-convert-latex-special-cookies)
 
-(defvar line)
+(defvar org-line)
 (defun org-special-blocks-convert-html-special-cookies ()
   "Converts the special cookies into div blocks."
-  ;; Uses the dynamically-bound variable `line'.
-  (when (string-match "^ORG-\\(.*\\)-\\(START\\|END\\)$" line)
-;    (org-close-par-maybe)
+  ;; Uses the dynamically-bound variable `org-line'.
+  (when (and org-line (string-match "^ORG-\\(.*\\)-\\(START\\|END\\)$" org-line))
     (message "%s" (match-string 1))
-    (if (equal (match-string 2 line) "START")
-	(insert "<div class=\"" (match-string 1 line) "\">\n")
-      (insert "</div>\n"))
+    (when (equal (match-string 2 org-line) "START")
+      (org-close-par-maybe)
+      (insert "\n<div class=\"" (match-string 1 org-line) "\">")
+      (org-open-par))
+    (when (equal (match-string 2 org-line) "END")
+      (org-close-par-maybe)
+      (insert "\n</div>")
+      (org-open-par))
     (throw 'nextline nil)))
 
 (add-hook 'org-export-html-after-blockquotes-hook

@@ -1,12 +1,10 @@
 ;;; org-xoxo.el --- XOXO export for Org-mode
 
-;; Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 2004-2013 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.7
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -51,7 +49,7 @@ The XOXO buffer is named *xoxo-<source buffer name>*"
   (with-current-buffer (get-buffer buffer)
     (let* ((pos (point))
 	   (opt-plist (org-combine-plists (org-default-export-plist)
-					(org-infile-export-plist)))
+					  (org-infile-export-plist)))
 	   (filename (concat (file-name-as-directory
 			      (org-export-directory :xoxo opt-plist))
 			     (file-name-sans-extension
@@ -124,5 +122,8 @@ The XOXO buffer is named *xoxo-<source buffer name>*"
 
 (provide 'org-xoxo)
 
-;; arch-tag: 16e6a31f-f4f5-46f1-af18-48dc89faa702
+;; Local variables:
+;; generated-autoload-file: "org-loaddefs.el"
+;; End:
+
 ;;; org-xoxo.el ends here

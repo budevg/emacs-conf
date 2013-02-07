@@ -1,11 +1,13 @@
 ;;; org-elisp-symbol.el --- Org links to emacs-lisp symbols
 ;;
-;; Copyright 2007, 2008, 2009 Bastien Guerry
+;; Copyright 2007-2013 Free Software Foundation, Inc.
 ;;
-;; Author: bzg AT altern DOT org
+;; Author: bzg AT gnu DOT org
 ;; Version: 0.2
 ;; Keywords: org, remember, lisp
 ;; URL: http://www.cognition.ens.fr/~guerry/u/org-elisp-symbol.el
+;;
+;; This file is not part of GNU Emacs.
 ;;
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -102,8 +104,9 @@
 	     (stype (cond ((commandp sym-name) "Command")
 			  ((functionp sym-name) "Function")
 			  ((user-variable-p sym-name) "User variable")
-			  ((eq def "defvar") "Variable")
-			  ((eq def "defmacro") "Macro")
+			  ((string= def "defvar") "Variable")
+			  ((string= def "defmacro") "Macro")
+			  ((string= def "defun") "Function or command")
 			  (t "Symbol")))
 	     (args (if (match-string 3)
 		       (mapconcat (lambda (a) (unless (string-match "^&" a) a))
@@ -154,6 +157,5 @@
 ;;;;##########################################################################
 ;;;;  User Options, Variables
 ;;;;##########################################################################
-
 
 ;;; org-elisp-symbol.el ends here

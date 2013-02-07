@@ -1,11 +1,13 @@
 ;;; org-mime.el --- org html export for text/html MIME emails
 
-;; Copyright (C) 2010 Eric Schulte
+;; Copyright (C) 2010-2013 Eric Schulte
 
 ;; Author: Eric Schulte
 ;; Keywords: mime, mail, email, html
 ;; Homepage: http://orgmode.org/worg/org-contrib/org-mime.php
 ;; Version: 0.01
+
+;; This file is not part of GNU Emacs.
 
 ;;; License:
 
@@ -41,13 +43,13 @@
 ;;
 ;; you might want to bind this to a key with something like the
 ;; following message-mode binding
-;; 
+;;
 ;;   (add-hook 'message-mode-hook
 ;;             (lambda ()
 ;;               (local-set-key "\C-c\M-o" 'org-mime-htmlize)))
 ;;
 ;; and the following org-mode binding
-;; 
+;;
 ;;   (add-hook 'org-mode-hook
 ;;             (lambda ()
 ;;               (local-set-key "\C-c\M-o" 'org-mime-org-buffer-htmlize)))
@@ -130,13 +132,13 @@ exported html."
 (defun org-mime-file (ext path id)
   "Markup a file for attachment."
   (case org-mime-library
-    ('mml (format
-           "<#part type=\"%s\" filename=\"%s\" id=\"<%s>\">\n<#/part>\n"
-           ext path id))
+    ('mml (format (concat "<#part type=\"%s\" filename=\"%s\" "
+			  "disposition=inline id=\"<%s>\">\n<#/part>\n")
+		  ext path id))
     ('semi (concat
-            (format
-             "--[[%s\nContent-Disposition: inline;\nContent-ID: <%s>][base64]]\n"
-             ext id)
+            (format (concat "--[[%s\nContent-Disposition: "
+			    "inline;\nContent-ID: <%s>][base64]]\n")
+		    ext id)
             (base64-encode-string
              (with-temp-buffer
                (set-buffer-multibyte nil)
@@ -144,17 +146,26 @@ exported html."
                (buffer-string)))))
     ('vm "?")))
 
-(defun org-mime-multipart (plain html)
-  "Markup a multipart/alternative with text/plain and text/html
-  alternatives."
+(defun org-mime-multipart (plain html &optional images)
+  "Markup a multipart/alternative with text/plain and text/html alternatives.
+If the html portion of the message includes images wrap the html
+and images in a multipart/related part."
   (case org-mime-library
-    ('mml (format (concat "<#multipart type=alternative><#part type=text/plain>"
-                          "%s<#part type=text/html>%s<#/multipart>\n")
-                  plain html))
+    ('mml (concat "<#multipart type=alternative><#part type=text/plain>"
+		  plain
+		  (when images "<#multipart type=related>")
+		  "<#part type=text/html>"
+		  html
+		  images
+		  (when images "<#/multipart>\n")
+		  "<#/multipart>\n"))
     ('semi (concat
             "--" "<<alternative>>-{\n"
             "--" "[[text/plain]]\n" plain
+	    (when images (concat "--" "<<alternative>>-{\n"))
             "--" "[[text/html]]\n"  html
+	    images
+	    (when images (concat "--" "}-<<alternative>>\n"))
             "--" "}-<<alternative>>\n"))
     ('vm "?")))
 
@@ -203,6 +214,8 @@ export that region, otherwise export the entire body."
          (org-export-htmlize-output-type 'inline-css)
          ;; makes the replies with ">"s look nicer
          (org-export-preserve-breaks org-mime-preserve-breaks)
+	 ;; dvipng for inline latex because MathJax doesn't work in mail
+	 (org-export-with-LaTeX-fragments 'dvipng)
          ;; to hold attachments for inline html images
          (html-and-images
           (org-mime-replace-images
@@ -216,8 +229,8 @@ export that region, otherwise export the entire body."
     (delete-region html-start html-end)
     (save-excursion
       (goto-char html-start)
-      (insert (org-mime-multipart body html)
-              (mapconcat 'identity html-images "\n")))))
+      (insert (org-mime-multipart
+	       body html (mapconcat 'identity html-images "\n"))))))
 
 (defun org-mime-apply-html-hook (html)
   (if org-mime-html-hook
