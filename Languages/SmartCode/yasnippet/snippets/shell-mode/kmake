@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: kmake
+# key: kmake
+# --
+make -C /lib/modules/\`uname -r\`/build M=\`pwd\` $0
