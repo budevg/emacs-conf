@@ -107,7 +107,7 @@ EMACS CONFIGURATION TUTORIAL
    find symbol from TAGS file
 ** meta + >
    pop back after symbol find using meta + .
-** meta + f
+** control + f
    find file in project
    use:
    - e for elisp files
