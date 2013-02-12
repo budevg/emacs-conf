@@ -147,6 +147,8 @@ EMACS CONFIGURATION TUTORIAL
    Expand region increases the selected region by semantic units
 ** <meta>+j
    join lines (append current line to the line before it)
+** select text and then ctr+d
+   multiple cursor like in sublime
 * Debugging:
 ** keypad-2
    step

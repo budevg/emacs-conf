@@ -61,6 +61,8 @@ editing = [Bunch(path = "Editing/init.el",
                  msg = "commong editing settings"),
            Bunch(path = "Editing/dos2unix.el",
                  msg = "dos to unix and vice versa converions"),
+           Bunch(path = "Editing/multiple-cursors/init.el",
+                 msg = "multiple cursors support"),
            ]
 
 publishing = [Bunch(path = "Publishing/init.el",
