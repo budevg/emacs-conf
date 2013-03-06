@@ -136,6 +136,8 @@
 (global-unset-key (kbd "C-f"))
 (global-set-key (kbd "C-f c")
                 (ffip-create-pattern-file-finder "*.c" "*.h" "*.cpp" "*.hpp" "*.cc"))
+(global-set-key (kbd "C-f f")
+                (ffip-create-pattern-file-finder "*.*"))
 (global-set-key (kbd "C-f js")
                 (ffip-create-pattern-file-finder "*.js"))
 (global-set-key (kbd "C-f p")
