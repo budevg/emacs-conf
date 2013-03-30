@@ -1,8 +1,10 @@
 (autoload 'haskell-mode "haskell-mode" nil t)
+(autoload 'haskell-cabal-mode "haskell-cabal" nil t)
 (defalias 'run-haskell 'switch-to-haskell)
 (autoload 'switch-to-haskell "inf-haskell" nil t)
 
 (add-to-list 'auto-mode-alist '("\\.\\(?:[gh]s\\|hi\\)\\'" . haskell-mode))
+(add-to-list 'auto-mode-alist '("\\.cabal\\'" . haskell-cabal-mode))
 
 (eval-after-load "haskell-mode"
   '(progn
