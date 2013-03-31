@@ -2,13 +2,13 @@
 (defun dot-gdb-crack ()
   (interactive)
   (comint-send-file
-   (in-emacs-d "prog_lang/Debug/.gdbinit-crack")
+   (in-emacs-d "prog_lang/debug/.gdbinit-crack")
    "~/.gdbinit"))
 
 (defun dot-gdb-common ()
   (interactive)
   (comint-send-file
-   (in-emacs-d "prog_lang/Debug/.gdbinit-common")
+   (in-emacs-d "prog_lang/debug/.gdbinit-common")
    "~/.gdbinit"))
 
 

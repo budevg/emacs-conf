@@ -524,7 +524,7 @@ The timer is used only if `post-gc-hook' is not available.")
                       "-c" (concat "import sys;"
                                    (format " sys.path.append('%s');"
                                            (expand-file-name
-                                            "~/.emacs.d/Languages/Python/pymacs-modules"))
+                                            (in-emacs-d "prog_lang/python/pymacs-modules")))
                                    " print sys.path;"
                                    " from Pymacs.pymacs import main;"
                                    " main(*sys.argv[1:])")

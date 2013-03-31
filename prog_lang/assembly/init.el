@@ -20,7 +20,7 @@
 
 (defun disas-generic (start end mode)
   (let ((out-buffer (concat "*disas-" mode "*"))
-        (disas-script (in-emacs-d "Languages/Assembly/disas.py")))
+        (disas-script (in-emacs-d "prog_lang/assembly/disas.py")))
     (if (get-buffer out-buffer)
         (kill-buffer out-buffer))
     (call-process-region

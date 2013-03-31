@@ -13,7 +13,7 @@
 (autoload 'pymacs-exec "pymacs" nil t)
 (autoload 'pymacs-load "pymacs" nil t)
 (eval-after-load "pymacs"
-  '(add-to-list 'pymacs-load-path (in-emacs-d "Languages/Python/pymacs-modules")))
+  '(add-to-list 'pymacs-load-path (in-emacs-d "prog_lang/python/pymacs-modules")))
 
 (autoload 'doctest-mode "doctest-mode" "doctest-mode autoload" t)
 
@@ -74,7 +74,7 @@
 (eval-after-load "python-mode" '(define-key py-mode-map [(control ?x) ?p ?s] 'python-auto-super))
 ;;(eval-after-load "python-mode" '(load-file (in-modes-d "virtualenv/virtualenv.el")))
 
-(setq pylookup-dir (in-emacs-d "Languages/Python/pylookup"))
+(setq pylookup-dir (in-emacs-d "prog_lang/python/pylookup"))
 (setq pylookup-program (concat pylookup-dir "/pylookup.py"))
 (setq pylookup-db-file (concat pylookup-dir "/pylookup.db"))
 (add-to-list 'load-path pylookup-dir)
