@@ -7,15 +7,11 @@ class Node(object):
         return self.__dict__
 
 
-elisp = [Node(path = "Elisp/init.el",
-              msg  = "Misc elisp function"),
-         Node(path = "Elisp/elisp-utils.el",
-              msg  = "Misc elisp utils"),
-         Node(path = "Elisp/message-notify.el",
-              msg = "Show alerts and notifications"),
-         Node(path = "Elisp/idle-require.el",
-              msg  = "Load packages when emacs idle"),
-         ]
+lisp_lib = [Node(path = "lisp_lib/init.el",
+                 msg  = "Misc elisp function"),
+            Node(path = "lisp_lib/idle-require.el",
+                 msg  = "Load packages when emacs idle"),
+            ]
 
 
 look_and_feel = [Node(path = "look_and_feel/fonts.el",
@@ -179,7 +175,7 @@ email = [Node(path = "Email/init.el",
               msg = "Email configuration"),
          ]
 
-PACKAGES = [elisp,
+PACKAGES = [lisp_lib,
             look_and_feel,
             editing,
             navigation,
@@ -195,7 +191,7 @@ PACKAGES = [elisp,
             ]
 
 FRAME = Node(x=0,
-              y=26,
-              height=51,
-              width =159,
-              font="-unknown-DejaVu Sans Mono-normal-normal-normal-*-14-*-*-*-m-0-iso10646-1")
+             y=26,
+             height=51,
+             width =159,
+             font="-unknown-DejaVu Sans Mono-normal-normal-normal-*-14-*-*-*-m-0-iso10646-1")
