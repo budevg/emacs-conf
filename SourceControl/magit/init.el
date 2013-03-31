@@ -35,3 +35,6 @@ buffer"
   (interactive)
   (kill-buffer)
   (jump-to-register :magit-fullscreen))
+
+(custom-set-faces
+ '(magit-item-highlight ((t (:inherit nil)))))

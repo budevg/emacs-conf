@@ -7,7 +7,9 @@ class Node(object):
         return self.__dict__
 
 
-elisp = [Node(path = "Elisp/elisp-utils.el",
+elisp = [Node(path = "Elisp/init.el",
+              msg  = "Misc elisp function"),
+         Node(path = "Elisp/elisp-utils.el",
               msg  = "Misc elisp utils"),
          Node(path = "Elisp/message-notify.el",
               msg = "Show alerts and notifications"),
@@ -16,17 +18,19 @@ elisp = [Node(path = "Elisp/elisp-utils.el",
          ]
 
 
-faces = [Node(path = "VisualLook/fonts.el",
-              msg  = "fonts colors"),
-         Node(path = "VisualLook/frame.el",
-              msg = "emacs frame confgiuration"),
-         Node(path = "VisualLook/general-highlight.el",
-              msg = "highlight text peaces"),
-         Node(path = "VisualLook/display-clock.el",
-              msg = "display clock"),
-         Node(path = "VisualLook/htmlfontify-init.el",
-              msg = "create html representation of the buffer"),
-         ]
+look_and_feel = [Node(path = "look_and_feel/fonts.el",
+                      msg  = "fonts colors"),
+                 Node(path = "look_and_feel/themes",
+                      msg  = "various color themes"),
+                 Node(path = "look_and_feel/frame.el",
+                      msg = "emacs frame confgiuration"),
+                 Node(path = "look_and_feel/general-highlight.el",
+                      msg = "highlight text peaces"),
+                 Node(path = "look_and_feel/display-clock.el",
+                      msg = "display clock"),
+                 Node(path = "look_and_feel/htmlfontify-init.el",
+                      msg = "create html representation of the buffer"),
+                ]
 
 
 navigation = [Node(path = "Navigation/init.el",
@@ -176,7 +180,7 @@ email = [Node(path = "Email/init.el",
          ]
 
 PACKAGES = [elisp,
-            faces,
+            look_and_feel,
             editing,
             navigation,
             macros,

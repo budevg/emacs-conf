@@ -1,5 +1,0 @@
-(setq color-theme-directory (in-emacs-d "VisualLook/themes"))
-(setq color-theme-load-all-themes nil)
-(require 'color-theme)
-(color-theme-initialize)
-(color-theme-basic)
