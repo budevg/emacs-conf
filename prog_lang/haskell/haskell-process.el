@@ -43,16 +43,28 @@
   :group 'haskell
   :type '(choice string (repeat string)))
 
+(defcustom haskell-process-path-cabal-ghci
+  "cabal-ghci"
+  "The path for starting cabal-ghci."
+  :group 'haskell
+  :type '(choice string (repeat string)))
+
 (defcustom haskell-process-path-cabal-dev
   "cabal-dev"
   "The path for starting cabal-dev."
   :group 'haskell
   :type '(choice string (repeat string)))
 
+(defcustom haskell-process-args-ghci
+  '()
+  "Any arguments for starting cabal-ghci."
+  :group 'haskell
+  :type '(choice list))
+
 (defcustom haskell-process-type
   'ghci
   "The inferior Haskell process type to use."
-  :options '(ghci cabal-dev)
+  :options '(ghci cabal-dev cabal-ghci)
   :type 'symbol
   :group 'haskell)
 
@@ -101,6 +113,7 @@ has changed?"
   :group 'haskell)
 
 (defvar haskell-process-prompt-regex "\\(^[> ]*> $\\|\n[> ]*> $\\)")
+(defvar haskell-reload-p nil)
 
 (defconst haskell-process-logo
   (expand-file-name "logo.svg" (file-name-directory load-file-name))
@@ -219,16 +232,29 @@ changed. Restarts the process if that is the case."
   (interactive)
   (save-buffer)
   (haskell-interactive-mode-reset-error (haskell-session))
-  (haskell-process-file-loadish (concat "load " (buffer-file-name))))
+  (haskell-process-file-loadish (concat "load " (buffer-file-name)) nil))
 
 ;;;###autoload
 (defun haskell-process-reload-file ()
-  "Load the current buffer file."
+  "Re-load the current buffer file."
   (interactive)
   (save-buffer)
-  (haskell-process-file-loadish "reload"))
+  (haskell-interactive-mode-reset-error (haskell-session))
+  (haskell-process-file-loadish "reload" t))
 
-(defun haskell-process-file-loadish (command)
+;;;###autoload
+(defun haskell-process-load-or-reload (&optional toggle)
+  "Load or reload. Universal argument toggles which."
+  (interactive "P")
+  (if toggle
+      (progn (setq haskell-reload-p (not haskell-reload-p))
+             (message "%s (No action taken this time)"
+                      (if haskell-reload-p
+                          "Now running :reload."
+                        "Now running :load <buffer-filename>.")))
+    (if haskell-reload-p (haskell-process-reload-file) (haskell-process-load-file))))
+
+(defun haskell-process-file-loadish (command reload-p)
   (let ((session (haskell-session)))
     (haskell-session-current-dir session)
     (when haskell-process-check-cabal-config-on-load
@@ -237,7 +263,7 @@ changed. Restarts the process if that is the case."
       (haskell-process-queue-command
        process
        (make-haskell-command
-        :state (list session process command)
+        :state (list session process command reload-p)
         :go (lambda (state)
               (haskell-process-send-string
                (cadr state) (format ":%s" (caddr state))))
@@ -246,7 +272,8 @@ changed. Restarts the process if that is the case."
                  (cadr state) buffer nil))
         :complete (lambda (state response)
                     (haskell-process-load-complete
-                     (car state) (cadr state) response)))))))
+                     (car state) (cadr state) response
+                     (cadddr state))))))))
 
 ;;;###autoload
 (defun haskell-process-cabal-build ()
@@ -291,6 +318,7 @@ to be loaded by ghci."
                  (format "%s %s"
                          (ecase haskell-process-type
                            ('ghci "cabal")
+                           ('cabal-ghci "cabal")
                            ('cabal-dev "cabal-dev"))
                          (caddr state)))))
 
@@ -324,6 +352,7 @@ to be loaded by ghci."
                :body msg
                :app-name (ecase haskell-process-type
                            ('ghci "cabal")
+                           ('cabal-ghci "cabal")
                            ('cabal-dev "cabal-dev"))
                :app-icon haskell-process-logo
                )))))))))
@@ -339,7 +368,7 @@ to be loaded by ghci."
   (setf (cdddr state) (list (length buffer)))
   nil)
 
-(defun haskell-process-load-complete (session process buffer)
+(defun haskell-process-load-complete (session process buffer reload)
   "Handle the complete loading response."
   (cond ((haskell-process-consume process "Ok, modules loaded: \\(.+\\)$")
          (let ((cursor (haskell-process-response-cursor process)))
@@ -348,7 +377,7 @@ to be loaded by ghci."
              (while (haskell-process-errors-warnings session process buffer)
                (setq warning-count (1+ warning-count)))
              (haskell-process-set-response-cursor process cursor)
-             (haskell-mode-message-line "OK."))))
+             (haskell-mode-message-line (if reload "Reloaded OK." "OK.")))))
         ((haskell-process-consume process "Failed, modules loaded: \\(.+\\)$")
          (let ((cursor (haskell-process-response-cursor process)))
            (haskell-process-set-response-cursor process 0)
@@ -495,9 +524,17 @@ to be loaded by ghci."
          ('ghci
           (haskell-process-log (format "Starting inferior GHCi process %s ..."
                                        haskell-process-path-ghci))
+          (apply #'start-process
+                 (append (list (haskell-session-name session)
+                               nil
+                               haskell-process-path-ghci)
+                         haskell-process-args-ghci)))
+         ('cabal-ghci
+          (haskell-process-log (format "Starting inferior cabal-ghci process using %s ..."
+                                       haskell-process-path-cabal-ghci))
           (start-process (haskell-session-name session)
                          nil
-                         haskell-process-path-ghci))
+                         haskell-process-path-cabal-ghci))
          ('cabal-dev
           (let ((dir (concat (haskell-session-cabal-dir session)
                              "/cabal-dev")))

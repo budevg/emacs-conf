@@ -353,8 +353,10 @@ May return a qualified name."
   (save-excursion
     ;; Skip whitespace if we're on it.  That way, if we're at "map ", we'll
     ;; see the word "map".
-    (if (eq ?  (char-syntax (char-after)))
+    (if (and (not (eobp))
+             (eq ?  (char-syntax (char-after))))
         (skip-chars-backward " \t"))
+
     (let ((case-fold-search nil))
       (multiple-value-bind (start end)
           (if (looking-at "\\s_")
@@ -449,7 +451,7 @@ CONFIGURING INDENTATION
                                        'turn-on-haskell-doc-mode) ; Emacs 21
                                     ,@(if (fboundp 'capitalized-words-mode)
                                           '(capitalized-words-mode))
-                                    turn-on-simple-indent turn-on-haskell-doc-mode
+                                    turn-on-haskell-simple-indent turn-on-haskell-doc-mode
                                     turn-on-haskell-decl-scan imenu-add-menubar-index))
 
 (defvar eldoc-print-current-symbol-info-function)
@@ -535,10 +537,8 @@ Invokes `haskell-mode-hook'."
   (set (make-local-variable 'dabbrev-case-replace) nil)
   (set (make-local-variable 'dabbrev-abbrev-char-regexp) "\\sw\\|[.]")
   (setq haskell-literate nil)
-  (make-local-variable 'before-save-hook)
-  (add-hook 'before-save-hook 'haskell-mode-before-save-handler)
-  (make-local-variable 'after-save-hook)
-  (add-hook 'after-save-hook 'haskell-mode-after-save-handler)
+  (add-hook 'before-save-hook 'haskell-mode-before-save-handler nil t)
+  (add-hook 'after-save-hook 'haskell-mode-after-save-handler nil t)
   )
 
 (defun haskell-fill-paragraph (justify)
@@ -748,17 +748,19 @@ This function will be called with no arguments.")
 (defun haskell-mode-contextual-space ()
   "Contextually do clever stuff when hitting space."
   (interactive)
-  (cond ((save-excursion (forward-word -1)
-                         (looking-at "^import$"))
-         (insert " ")
-         (let ((module (ido-completing-read "Module: " (haskell-session-all-modules))))
-           (insert module)
-           (haskell-mode-format-imports)))
-        ((not (string= "" (save-excursion (forward-char -1) (haskell-ident-at-point))))
-         (let ((ident (save-excursion (forward-char -1) (haskell-ident-at-point))))
+  (if (not (haskell-session-maybe))
+      (self-insert-command 1)
+    (cond ((save-excursion (forward-word -1)
+                           (looking-at "^import$"))
            (insert " ")
-           (haskell-process-do-try-info ident)))
-        (t (insert " "))))
+           (let ((module (ido-completing-read "Module: " (haskell-session-all-modules))))
+             (insert module)
+             (haskell-mode-format-imports)))
+          ((not (string= "" (save-excursion (forward-char -1) (haskell-ident-at-point))))
+           (let ((ident (save-excursion (forward-char -1) (haskell-ident-at-point))))
+             (insert " ")
+             (haskell-process-do-try-info ident)))
+          (t (insert " ")))))
 
 (defun haskell-mode-before-save-handler ()
   "Function that will be called before buffer's saving."
@@ -770,27 +772,61 @@ This function will be called with no arguments.")
     (ignore-errors (haskell-process-generate-tags)))
   (when haskell-stylish-on-save
     (ignore-errors (haskell-mode-stylish-buffer)))
-  (set-buffer-modified-p nil)
+  (let ((before-save-hook '())
+        (after-save-hook '()))
+    (basic-save-buffer))
   )
 
 (defun haskell-mode-buffer-apply-command (cmd)
   "Execute shell command CMD with current buffer as input and
   replace the whole buffer with the output. If CMD fails the
   buffer remains unchanged."
-  (let* ((file (buffer-file-name (current-buffer)))
-         (output (with-temp-buffer
-                   (let ((default-directory (if (and (boundp 'haskell-session)
-                                                     haskell-session)
-                                                (haskell-session-cabal-dir haskell-session)
-                                              default-directory)))
-                     (call-process cmd
-                                   file
-                                   (list t nil)
-                                   nil))
-                   (buffer-substring-no-properties (point-min) (point-max)))))
-    (unless (string= "" output)
-      (erase-buffer)
-      (insert output))))
+  (set-buffer-modified-p t)
+  (flet
+      ((chomp (str)
+              (while (string-match "\\`\n+\\|^\\s-+\\|\\s-+$\\|\n+\\'"
+                                   str)
+                (setq str (replace-match "" t t str)))
+              str)
+       (errout
+        (fmt &rest args)
+        (let* ((warning-fill-prefix "    "))
+          (display-warning cmd (apply 'format fmt args) :warning))))
+    (let*
+        ((filename (buffer-file-name (current-buffer)))
+         (cmd-prefix (replace-regexp-in-string " .*" "" cmd))
+         (tmp-file (make-temp-file cmd-prefix))
+         (err-file (make-temp-file cmd-prefix))
+         (default-directory (if (and (boundp 'haskell-session)
+                                     haskell-session)
+                                (haskell-session-cabal-dir haskell-session)
+                              default-directory))
+         (errcode (with-temp-file tmp-file
+                    (call-process cmd filename
+                                  (list (current-buffer) err-file) nil)))
+         (stderr-output
+          (with-temp-buffer
+            (insert-file-contents err-file)
+            (chomp (buffer-substring-no-properties (point-min) (point-max)))))
+         (stdout-output
+          (with-temp-buffer
+            (insert-file-contents tmp-file)
+            (buffer-substring-no-properties (point-min) (point-max)))))
+      (if (string= "" stderr-output)
+          (if (string= "" stdout-output)
+              (errout
+               "Error: %s produced no output, leaving buffer alone" cmd)
+            (save-restriction
+              (widen)
+              ;; command successful, insert file with replacement to preserve
+              ;; markers.
+              (insert-file-contents tmp-file nil nil nil t)))
+        ;; non-null stderr, command must have failed
+        (errout "%s failed: %s" cmd stderr-output)
+        )
+      (delete-file tmp-file)
+      (delete-file err-file)
+      )))
 
 (defun haskell-mode-stylish-buffer ()
   "Apply stylish-haskell to the current buffer."
