@@ -62,5 +62,5 @@
 (defun dot-dircolors ()
   (interactive)
   (comint-send-file
-   "~/.emacs.d/Shell/.dircolors"
+   (in-emacs-d "shell/.dircolors")
    "~/.dircolors"))

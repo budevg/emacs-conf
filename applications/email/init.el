@@ -49,9 +49,9 @@
 (defun dot-offlineimap ()
   (interactive)
   (comint-send-file
-   "~/.emacs.d/Email/.offlineimaprc"
+   (in-emacs-d "applications/email/.offlineimaprc")
      "~/.offlineimaprc")
   (comint-send-file
-   "~/.emacs.d/Email/.offlineimaprc.py"
+   (in-emacs-d "applications/email/.offlineimaprc.py")
      "~/.offlineimaprc.py")
   )

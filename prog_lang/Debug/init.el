@@ -2,13 +2,13 @@
 (defun dot-gdb-crack ()
   (interactive)
   (comint-send-file
-   "~/.emacs.d/Languages/Debug/.gdbinit-crack"
+   (in-emacs-d "prog_lang/Debug/.gdbinit-crack")
    "~/.gdbinit"))
 
 (defun dot-gdb-common ()
   (interactive)
   (comint-send-file
-   "~/.emacs.d/Languages/Debug/.gdbinit-common"
+   (in-emacs-d "prog_lang/Debug/.gdbinit-common")
    "~/.gdbinit"))
 
 
@@ -33,5 +33,5 @@
                   (local-set-key [kp-6] 'gud-next)
                   (local-set-key [kp-7] 'gud-up)
                   (local-set-key [kp-1] 'gud-down)
-                  
+
                   ))))

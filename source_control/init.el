@@ -18,5 +18,5 @@
 (defun dot-gitconfig ()
   (interactive)
   (comint-send-file
-   "~/.emacs.d/SourceControl/.gitconfig"
+   (in-emacs-d "source_control/.gitconfig")
    "~/.gitconfig"))

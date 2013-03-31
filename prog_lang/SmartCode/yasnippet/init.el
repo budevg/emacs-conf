@@ -1,6 +1,6 @@
 
 (defun load-yasnippet ()
-  (setq yas-snippet-dirs "~/.emacs.d/Languages/SmartCode/yasnippet/snippets")
+  (setq yas-snippet-dirs (in-emacs-d "prog_lang/SmartCode/yasnippet/snippets"))
   (setq yas-verbosity 0)
   (require 'yasnippet)
   (yas-global-mode 1)
