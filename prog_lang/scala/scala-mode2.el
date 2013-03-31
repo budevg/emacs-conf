@@ -95,18 +95,17 @@ When started, runs `scala-mode-hook'.
         indent-tabs-mode                nil
         )
   (use-local-map scala-mode-map)
-  (turn-on-font-lock)
   ;; add indent functionality to some characters
   (scala-mode-map:add-remove-indent-hook)
   (scala-mode-map:add-self-insert-hooks)
 )
 
 ;; Attach .scala files to the scala-mode
-(add-to-list 'auto-mode-alist '("\\.sbt\\'" . scala-mode))
-(modify-coding-system-alist 'file "\\.sbt\\'" 'utf-8)
-
-(add-to-list 'auto-mode-alist '("\\.scala\\'" . scala-mode))
-(modify-coding-system-alist 'file "\\.scala\\'" 'utf-8)
+;;;###autoload
+(progn
+  (add-to-list 'auto-mode-alist
+               '("\\.\\(scala\\|sbt\\)\\'" . scala-mode))
+  (modify-coding-system-alist 'file "\\.\\(scala\\|sbt\\)\\'" 'utf-8))
 
 (provide 'scala-mode2)
 ;;; scala-mode2.el ends here
