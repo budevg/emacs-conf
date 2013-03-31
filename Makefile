@@ -1,12 +1,12 @@
 
-all: init
+all:
+	echo Creating emacs configuration
+	python autogen/builder.py --action create
 
-init:
-	python PackageManagerNG.py init_file
-profiling:
-	python PackageManagerNG.py init_file profiling
+skeleton:
+	echo Creating emacs configuration skeleton
+	python autogen/builder.py --action skeleton
+
 
 clean:
-	rm -f init.el
-help:
-	echo target: all, profiling, clean
+	echo Cleaninig emacs configuration
