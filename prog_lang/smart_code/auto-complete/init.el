@@ -1,6 +1,6 @@
 (defun load-auto-complete ()
   (require 'auto-complete-config)
-  (add-to-list 'ac-dictionary-directories  (in-emacs-d "prog_lang/SmartCode/auto-complete/dict"))
+  (add-to-list 'ac-dictionary-directories  (in-emacs-d "prog_lang/smart_code/auto-complete/dict"))
   (ac-config-default)
   (setq ac-auto-show-menu nil)
   (setq ac-cursor-color "white")
