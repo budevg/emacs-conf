@@ -1,11 +1,12 @@
-;;; rainbow-mode.el --- Displays color names with colored background.
+;;; rainbow-mode.el --- Colorize color names in buffers
 
-;; Copyright (C) 2010 Free Software Foundation, Inc
+;; Copyright (C) 2010-2012 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
 ;; Keywords: faces
+;; Version: 0.7
 
-;; This file is NOT part of GNU Emacs.
+;; This file is part of GNU Emacs.
 
 ;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -22,9 +23,8 @@
 
 ;;; Commentary:
 ;;
-;; This minor mode will set background color to strings that matches color
-;; names.
-;; i.e.  #0000ff Will be printed in white with a blue background.
+;; This minor mode sets background color to strings that match color
+;; names, e.g. #0000ff is displayed in white with a blue background.
 ;;
 
 ;;; Code:
@@ -34,6 +34,10 @@
 
 (require 'regexp-opt)
 (require 'faces)
+(require 'color)
+
+(unless (require 'xterm-color nil t)
+  (require 'ansi-color))
 
 (defgroup rainbow nil
   "Show color strings with a background color."
@@ -42,7 +46,15 @@
 
 ;; Hexadecimal colors
 (defvar rainbow-hexadecimal-colors-font-lock-keywords
-  '(("#[0-9a-fA-F]\\{3\\}[0-9a-fA-F]\\{3\\}?"
+  '(("[^&]\\(#\\(?:[0-9a-fA-F]\\{3\\}\\)+\\{1,4\\}\\)"
+     (1 (rainbow-colorize-itself 1)))
+    ("^\\(#\\(?:[0-9a-fA-F]\\{3\\}\\)+\\{1,4\\}\\)"
+     (0 (rainbow-colorize-itself)))
+    ("[Rr][Gg][Bb]:[0-9a-fA-F]\\{1,4\\}/[0-9a-fA-F]\\{1,4\\}/[0-9a-fA-F]\\{1,4\\}"
+     (0 (rainbow-colorize-itself)))
+    ("[Rr][Gg][Bb][Ii]:[0-9.]+/[0-9.]+/[0-9.]+"
+     (0 (rainbow-colorize-itself)))
+    ("\\(?:[Cc][Ii][Ee]\\(?:[Xx][Yy][Zz]\\|[Uu][Vv][Yy]\\|[Xx][Yy][Yy]\\|[Ll][Aa][Bb]\\|[Ll][Uu][Vv]\\)\\|[Tt][Ee][Kk][Hh][Vv][Cc]\\):[+-]?[0-9.]+\\(?:[Ee][+-]?[0-9]+\\)?/[+-]?[0-9.]+\\(?:[Ee][+-]?[0-9]+\\)?/[+-]?[0-9.]+\\(?:[Ee][+-]?[0-9]+\\)?"
      (0 (rainbow-colorize-itself))))
   "Font-lock keywords to add for hexadecimal colors.")
 
@@ -64,153 +76,153 @@
 (make-variable-buffer-local 'rainbow-html-colors-font-lock-keywords)
 
 (defcustom rainbow-html-colors-alist
-  '(("AliceBlue" "#F0F8FF")
-    ("AntiqueWhite" "#FAEBD7")
-    ("Aqua" "#00FFFF")
-    ("Aquamarine" "#7FFFD4")
-    ("Azure" "#F0FFFF")
-    ("Beige" "#F5F5DC")
-    ("Bisque" "#FFE4C4")
-    ("Black" "#000000")
-    ("BlanchedAlmond" "#FFEBCD")
-    ("Blue" "#0000FF")
-    ("BlueViolet" "#8A2BE2")
-    ("Brown" "#A52A2A")
-    ("BurlyWood" "#DEB887")
-    ("CadetBlue" "#5F9EA0")
-    ("Chartreuse" "#7FFF00")
-    ("Chocolate" "#D2691E")
-    ("Coral" "#FF7F50")
-    ("CornflowerBlue" "#6495ED")
-    ("Cornsilk" "#FFF8DC")
-    ("Crimson" "#DC143C")
-    ("Cyan" "#00FFFF")
-    ("DarkBlue" "#00008B")
-    ("DarkCyan" "#008B8B")
-    ("DarkGoldenRod" "#B8860B")
-    ("DarkGray" "#A9A9A9")
-    ("DarkGrey" "#A9A9A9")
-    ("DarkGreen" "#006400")
-    ("DarkKhaki" "#BDB76B")
-    ("DarkMagenta" "#8B008B")
-    ("DarkOliveGreen" "#556B2F")
-    ("Darkorange" "#FF8C00")
-    ("DarkOrchid" "#9932CC")
-    ("DarkRed" "#8B0000")
-    ("DarkSalmon" "#E9967A")
-    ("DarkSeaGreen" "#8FBC8F")
-    ("DarkSlateBlue" "#483D8B")
-    ("DarkSlateGray" "#2F4F4F")
-    ("DarkSlateGrey" "#2F4F4F")
-    ("DarkTurquoise" "#00CED1")
-    ("DarkViolet" "#9400D3")
-    ("DeepPink" "#FF1493")
-    ("DeepSkyBlue" "#00BFFF")
-    ("DimGray" "#696969")
-    ("DimGrey" "#696969")
-    ("DodgerBlue" "#1E90FF")
-    ("FireBrick" "#B22222")
-    ("FloralWhite" "#FFFAF0")
-    ("ForestGreen" "#228B22")
-    ("Fuchsia" "#FF00FF")
-    ("Gainsboro" "#DCDCDC")
-    ("GhostWhite" "#F8F8FF")
-    ("Gold" "#FFD700")
-    ("GoldenRod" "#DAA520")
-    ("Gray" "#808080")
-    ("Grey" "#808080")
-    ("Green" "#008000")
-    ("GreenYellow" "#ADFF2F")
-    ("HoneyDew" "#F0FFF0")
-    ("HotPink" "#FF69B4")
-    ("IndianRed" "#CD5C5C")
-    ("Indigo" "#4B0082")
-    ("Ivory" "#FFFFF0")
-    ("Khaki" "#F0E68C")
-    ("Lavender" "#E6E6FA")
-    ("LavenderBlush" "#FFF0F5")
-    ("LawnGreen" "#7CFC00")
-    ("LemonChiffon" "#FFFACD")
-    ("LightBlue" "#ADD8E6")
-    ("LightCoral" "#F08080")
-    ("LightCyan" "#E0FFFF")
-    ("LightGoldenRodYellow" "#FAFAD2")
-    ("LightGray" "#D3D3D3")
-    ("LightGrey" "#D3D3D3")
-    ("LightGreen" "#90EE90")
-    ("LightPink" "#FFB6C1")
-    ("LightSalmon" "#FFA07A")
-    ("LightSeaGreen" "#20B2AA")
-    ("LightSkyBlue" "#87CEFA")
-    ("LightSlateGray" "#778899")
-    ("LightSlateGrey" "#778899")
-    ("LightSteelBlue" "#B0C4DE")
-    ("LightYellow" "#FFFFE0")
-    ("Lime" "#00FF00")
-    ("LimeGreen" "#32CD32")
-    ("Linen" "#FAF0E6")
-    ("Magenta" "#FF00FF")
-    ("Maroon" "#800000")
-    ("MediumAquaMarine" "#66CDAA")
-    ("MediumBlue" "#0000CD")
-    ("MediumOrchid" "#BA55D3")
-    ("MediumPurple" "#9370D8")
-    ("MediumSeaGreen" "#3CB371")
-    ("MediumSlateBlue" "#7B68EE")
-    ("MediumSpringGreen" "#00FA9A")
-    ("MediumTurquoise" "#48D1CC")
-    ("MediumVioletRed" "#C71585")
-    ("MidnightBlue" "#191970")
-    ("MintCream" "#F5FFFA")
-    ("MistyRose" "#FFE4E1")
-    ("Moccasin" "#FFE4B5")
-    ("NavajoWhite" "#FFDEAD")
-    ("Navy" "#000080")
-    ("OldLace" "#FDF5E6")
-    ("Olive" "#808000")
-    ("OliveDrab" "#6B8E23")
-    ("Orange" "#FFA500")
-    ("OrangeRed" "#FF4500")
-    ("Orchid" "#DA70D6")
-    ("PaleGoldenRod" "#EEE8AA")
-    ("PaleGreen" "#98FB98")
-    ("PaleTurquoise" "#AFEEEE")
-    ("PaleVioletRed" "#D87093")
-    ("PapayaWhip" "#FFEFD5")
-    ("PeachPuff" "#FFDAB9")
-    ("Peru" "#CD853F")
-    ("Pink" "#FFC0CB")
-    ("Plum" "#DDA0DD")
-    ("PowderBlue" "#B0E0E6")
-    ("Purple" "#800080")
-    ("Red" "#FF0000")
-    ("RosyBrown" "#BC8F8F")
-    ("RoyalBlue" "#4169E1")
-    ("SaddleBrown" "#8B4513")
-    ("Salmon" "#FA8072")
-    ("SandyBrown" "#F4A460")
-    ("SeaGreen" "#2E8B57")
-    ("SeaShell" "#FFF5EE")
-    ("Sienna" "#A0522D")
-    ("Silver" "#C0C0C0")
-    ("SkyBlue" "#87CEEB")
-    ("SlateBlue" "#6A5ACD")
-    ("SlateGray" "#708090")
-    ("SlateGrey" "#708090")
-    ("Snow" "#FFFAFA")
-    ("SpringGreen" "#00FF7F")
-    ("SteelBlue" "#4682B4")
-    ("Tan" "#D2B48C")
-    ("Teal" "#008080")
-    ("Thistle" "#D8BFD8")
-    ("Tomato" "#FF6347")
-    ("Turquoise" "#40E0D0")
-    ("Violet" "#EE82EE")
-    ("Wheat" "#F5DEB3")
-    ("White" "#FFFFFF")
-    ("WhiteSmoke" "#F5F5F5")
-    ("Yellow" "#FFFF00")
-    ("YellowGreen" "#9ACD32"))
+  '(("AliceBlue" . "#F0F8FF")
+    ("AntiqueWhite" . "#FAEBD7")
+    ("Aqua" . "#00FFFF")
+    ("Aquamarine" . "#7FFFD4")
+    ("Azure" . "#F0FFFF")
+    ("Beige" . "#F5F5DC")
+    ("Bisque" . "#FFE4C4")
+    ("Black" . "#000000")
+    ("BlanchedAlmond" . "#FFEBCD")
+    ("Blue" . "#0000FF")
+    ("BlueViolet" . "#8A2BE2")
+    ("Brown" . "#A52A2A")
+    ("BurlyWood" . "#DEB887")
+    ("CadetBlue" . "#5F9EA0")
+    ("Chartreuse" . "#7FFF00")
+    ("Chocolate" . "#D2691E")
+    ("Coral" . "#FF7F50")
+    ("CornflowerBlue" . "#6495ED")
+    ("Cornsilk" . "#FFF8DC")
+    ("Crimson" . "#DC143C")
+    ("Cyan" . "#00FFFF")
+    ("DarkBlue" . "#00008B")
+    ("DarkCyan" . "#008B8B")
+    ("DarkGoldenRod" . "#B8860B")
+    ("DarkGray" . "#A9A9A9")
+    ("DarkGrey" . "#A9A9A9")
+    ("DarkGreen" . "#006400")
+    ("DarkKhaki" . "#BDB76B")
+    ("DarkMagenta" . "#8B008B")
+    ("DarkOliveGreen" . "#556B2F")
+    ("Darkorange" . "#FF8C00")
+    ("DarkOrchid" . "#9932CC")
+    ("DarkRed" . "#8B0000")
+    ("DarkSalmon" . "#E9967A")
+    ("DarkSeaGreen" . "#8FBC8F")
+    ("DarkSlateBlue" . "#483D8B")
+    ("DarkSlateGray" . "#2F4F4F")
+    ("DarkSlateGrey" . "#2F4F4F")
+    ("DarkTurquoise" . "#00CED1")
+    ("DarkViolet" . "#9400D3")
+    ("DeepPink" . "#FF1493")
+    ("DeepSkyBlue" . "#00BFFF")
+    ("DimGray" . "#696969")
+    ("DimGrey" . "#696969")
+    ("DodgerBlue" . "#1E90FF")
+    ("FireBrick" . "#B22222")
+    ("FloralWhite" . "#FFFAF0")
+    ("ForestGreen" . "#228B22")
+    ("Fuchsia" . "#FF00FF")
+    ("Gainsboro" . "#DCDCDC")
+    ("GhostWhite" . "#F8F8FF")
+    ("Gold" . "#FFD700")
+    ("GoldenRod" . "#DAA520")
+    ("Gray" . "#808080")
+    ("Grey" . "#808080")
+    ("Green" . "#008000")
+    ("GreenYellow" . "#ADFF2F")
+    ("HoneyDew" . "#F0FFF0")
+    ("HotPink" . "#FF69B4")
+    ("IndianRed" . "#CD5C5C")
+    ("Indigo" . "#4B0082")
+    ("Ivory" . "#FFFFF0")
+    ("Khaki" . "#F0E68C")
+    ("Lavender" . "#E6E6FA")
+    ("LavenderBlush" . "#FFF0F5")
+    ("LawnGreen" . "#7CFC00")
+    ("LemonChiffon" . "#FFFACD")
+    ("LightBlue" . "#ADD8E6")
+    ("LightCoral" . "#F08080")
+    ("LightCyan" . "#E0FFFF")
+    ("LightGoldenRodYellow" . "#FAFAD2")
+    ("LightGray" . "#D3D3D3")
+    ("LightGrey" . "#D3D3D3")
+    ("LightGreen" . "#90EE90")
+    ("LightPink" . "#FFB6C1")
+    ("LightSalmon" . "#FFA07A")
+    ("LightSeaGreen" . "#20B2AA")
+    ("LightSkyBlue" . "#87CEFA")
+    ("LightSlateGray" . "#778899")
+    ("LightSlateGrey" . "#778899")
+    ("LightSteelBlue" . "#B0C4DE")
+    ("LightYellow" . "#FFFFE0")
+    ("Lime" . "#00FF00")
+    ("LimeGreen" . "#32CD32")
+    ("Linen" . "#FAF0E6")
+    ("Magenta" . "#FF00FF")
+    ("Maroon" . "#800000")
+    ("MediumAquaMarine" . "#66CDAA")
+    ("MediumBlue" . "#0000CD")
+    ("MediumOrchid" . "#BA55D3")
+    ("MediumPurple" . "#9370D8")
+    ("MediumSeaGreen" . "#3CB371")
+    ("MediumSlateBlue" . "#7B68EE")
+    ("MediumSpringGreen" . "#00FA9A")
+    ("MediumTurquoise" . "#48D1CC")
+    ("MediumVioletRed" . "#C71585")
+    ("MidnightBlue" . "#191970")
+    ("MintCream" . "#F5FFFA")
+    ("MistyRose" . "#FFE4E1")
+    ("Moccasin" . "#FFE4B5")
+    ("NavajoWhite" . "#FFDEAD")
+    ("Navy" . "#000080")
+    ("OldLace" . "#FDF5E6")
+    ("Olive" . "#808000")
+    ("OliveDrab" . "#6B8E23")
+    ("Orange" . "#FFA500")
+    ("OrangeRed" . "#FF4500")
+    ("Orchid" . "#DA70D6")
+    ("PaleGoldenRod" . "#EEE8AA")
+    ("PaleGreen" . "#98FB98")
+    ("PaleTurquoise" . "#AFEEEE")
+    ("PaleVioletRed" . "#D87093")
+    ("PapayaWhip" . "#FFEFD5")
+    ("PeachPuff" . "#FFDAB9")
+    ("Peru" . "#CD853F")
+    ("Pink" . "#FFC0CB")
+    ("Plum" . "#DDA0DD")
+    ("PowderBlue" . "#B0E0E6")
+    ("Purple" . "#800080")
+    ("Red" . "#FF0000")
+    ("RosyBrown" . "#BC8F8F")
+    ("RoyalBlue" . "#4169E1")
+    ("SaddleBrown" . "#8B4513")
+    ("Salmon" . "#FA8072")
+    ("SandyBrown" . "#F4A460")
+    ("SeaGreen" . "#2E8B57")
+    ("SeaShell" . "#FFF5EE")
+    ("Sienna" . "#A0522D")
+    ("Silver" . "#C0C0C0")
+    ("SkyBlue" . "#87CEEB")
+    ("SlateBlue" . "#6A5ACD")
+    ("SlateGray" . "#708090")
+    ("SlateGrey" . "#708090")
+    ("Snow" . "#FFFAFA")
+    ("SpringGreen" . "#00FF7F")
+    ("SteelBlue" . "#4682B4")
+    ("Tan" . "#D2B48C")
+    ("Teal" . "#008080")
+    ("Thistle" . "#D8BFD8")
+    ("Tomato" . "#FF6347")
+    ("Turquoise" . "#40E0D0")
+    ("Violet" . "#EE82EE")
+    ("Wheat" . "#F5DEB3")
+    ("White" . "#FFFFFF")
+    ("WhiteSmoke" . "#F5F5F5")
+    ("Yellow" . "#FFFF00")
+    ("YellowGreen" . "#9ACD32"))
   "Alist of HTML colors.
 Each entry should have the form (COLOR-NAME . HEXADECIMAL-COLOR)."
   :group 'rainbow)
@@ -257,36 +269,57 @@ will be enabled if a major mode has been detected from the
      (0 (rainbow-colorize-rgb)))
     ("{HTML}{\\([0-9A-Fa-f]\\{6\\}\\)}"
      (0 (rainbow-colorize-hexadecimal-without-sharp))))
-  "Font-lock keywords to add for X colors.")
+  "Font-lock keywords to add for LaTeX colors.")
 
 (defcustom rainbow-latex-colors-major-mode-list
   '(latex-mode)
-  "List of major mode where X colors are enabled when
+  "List of major mode where LaTeX colors are enabled when
 `rainbow-x-colors' is set to auto."
   :group 'rainbow)
 
 (defcustom rainbow-latex-colors 'auto
   "When to enable LaTeX colors.
 If set to t, the LaTeX colors will be enabled. If set to nil, the
-X colors will not be enabled.  If set to auto, the LaTeX colors
+LaTeX colors will not be enabled.  If set to auto, the LaTeX colors
 will be enabled if a major mode has been detected from the
 `rainbow-latex-colors-major-mode-list'."
   :group 'rainbow)
 
+;; Shell colors
+(defvar rainbow-ansi-colors-font-lock-keywords
+  '(("\\(\\\\[eE]\\|\\\\033\\|\\\\x1[bB]\\|\033\\)\\[\\([0-9;]*m\\)"
+     (0 (rainbow-colorize-ansi))))
+  "Font-lock keywords to add for ANSI colors.")
+
+(defcustom rainbow-ansi-colors-major-mode-list
+  '(sh-mode c-mode c++-mode)
+  "List of major mode where ANSI colors are enabled when
+`rainbow-ansi-colors' is set to auto."
+  :group 'rainbow)
+
+(defcustom rainbow-ansi-colors 'auto
+  "When to enable ANSI colors.
+If set to t, the ANSI colors will be enabled. If set to nil, the
+ANSI colors will not be enabled.  If set to auto, the ANSI colors
+will be enabled if a major mode has been detected from the
+`rainbow-ansi-colors-major-mode-list'."
+  :group 'rainbow)
+
 ;; Functions
-(defun rainbow-colorize-match (color)
+(defun rainbow-colorize-match (color &optional match)
   "Return a matched string propertized with a face whose
 background is COLOR. The foreground is computed using
 `rainbow-color-luminance', and is either white or black."
-  (put-text-property
-   (match-beginning 0) (match-end 0)
-   'face `((:foreground ,(if (> 128.0 (rainbow-x-color-luminance color))
-                             "white" "black"))
-           (:background ,color))))
+  (let ((match (or match 0)))
+    (put-text-property
+     (match-beginning match) (match-end match)
+     'face `((:foreground ,(if (> 0.5 (rainbow-x-color-luminance color))
+                               "white" "black"))
+             (:background ,color)))))
 
-(defun rainbow-colorize-itself ()
+(defun rainbow-colorize-itself (&optional match)
   "Colorize a match with itself."
-  (rainbow-colorize-match (match-string-no-properties 0)))
+  (rainbow-colorize-match (match-string-no-properties (or match 0)) match))
 
 (defun rainbow-colorize-hexadecimal-without-sharp ()
   "Colorize an hexadecimal colors and prepend # to it."
@@ -294,7 +327,8 @@ background is COLOR. The foreground is computed using
 
 (defun rainbow-colorize-by-assoc (assoc-list)
   "Colorize a match with its association from ASSOC-LIST."
-  (rainbow-colorize-match (cdr (assoc (match-string-no-properties 0) assoc-list))))
+  (rainbow-colorize-match (cdr (assoc-string (match-string-no-properties 0)
+                                             assoc-list t))))
 
 (defun rainbow-rgb-relative-to-absolute (number)
   "Convert a relative NUMBER to absolute. If NUMBER is absolute, return NUMBER.
@@ -305,26 +339,6 @@ This will convert \"80 %\" to 204, \"100 %\" to 255 but \"123\" to \"123\"."
         (/ (* (string-to-number (substring number 0 string-length)) 255) 100)
       (string-to-number number))))
 
-(defun rainbow-hue-to-rgb (x y h)
-  "Convert X Y H to RGB value."
-  (when (< h 0) (incf h))
-  (when (> h 1) (decf h))
-  (cond ((< h (/ 1 6.0)) (+ x (* (- y x) h 6)))
-        ((< h 0.5) y)
-        ((< h (/ 2.0 3.0)) (+ x (* (- y x) (- (/ 2.0 3.0) h) 6)))
-        (t x)))
-
-(defun rainbow-hsl-to-rgb-fractions (h s l)
-  "Convert H S L to fractional RGB values."
-  (let (m1 m2)
-    (if (<= l 0.5)
-        (setq m2 (* l (+ s 1)))
-        (setq m2 (- (+ l s) (* l s))))
-    (setq m1 (- (* l 2) m2))
-    (list (rainbow-hue-to-rgb m1 m2 (+ h (/ 1 3.0)))
-	  (rainbow-hue-to-rgb m1 m2 h)
-	  (rainbow-hue-to-rgb m1 m2 (- h (/ 1 3.0))))))
-
 (defun rainbow-colorize-hsl ()
   "Colorize a match with itself."
   (let ((h (/ (string-to-number (match-string-no-properties 1)) 360.0))
@@ -332,7 +346,7 @@ This will convert \"80 %\" to 204, \"100 %\" to 255 but \"123\" to \"123\"."
         (l (/ (string-to-number (match-string-no-properties 3)) 100.0)))
     (rainbow-colorize-match
      (multiple-value-bind (r g b)
-	 (rainbow-hsl-to-rgb-fractions h s l)
+	 (color-hsl-to-rgb h s l)
        (format "#%02X%02X%02X" (* r 255) (* g 255) (* b 255))))))
 
 (defun rainbow-colorize-rgb ()
@@ -349,16 +363,52 @@ This will convert \"80 %\" to 204, \"100 %\" to 255 but \"123\" to \"123\"."
         (b (* (string-to-number (match-string-no-properties 3)) 255.0)))
     (rainbow-colorize-match (format "#%02X%02X%02X" r g b))))
 
+(defun rainbow-colorize-ansi ()
+  "Return a matched string propertized with ansi color face."
+  (let ((xterm-color? (featurep 'xterm-color))
+        (string (match-string-no-properties 0))
+        color)
+    (save-match-data
+      (let* ((replaced (concat
+                        (replace-regexp-in-string
+                         "^\\(\\\\[eE]\\|\\\\033\\|\\\\x1[bB]\\)"
+                         "\033" string) "x"))
+             xterm-color-current
+             ansi-color-context
+             (applied (funcall (if xterm-color?
+                                   'xterm-color-filter
+                                 'ansi-color-apply)
+                               replaced))
+             (face-property (get-text-property
+                             0
+                             (if xterm-color? 'face 'font-lock-face)
+                             applied)))
+        (unless (listp (car face-property))
+          (setq face-property (list face-property)))
+        (setq color (funcall (if xterm-color? 'cadr 'cdr)
+                             (or (assq (if xterm-color?
+                                           :foreground
+                                         'foreground-color)
+                                       face-property)
+                                 (assq (if xterm-color?
+                                           :background
+                                         'background-color)
+                                       face-property))))))
+    (when color
+      (rainbow-colorize-match color))))
+
 (defun rainbow-color-luminance (red green blue)
-  "Calculate the luminance of color composed of RED, BLUE and GREEN."
-  (floor (+ (* .2126 red) (* .7152 green) (* .0722 blue)) 256))
+  "Calculate the luminance of color composed of RED, BLUE and GREEN.
+Return a value between 0 and 1."
+  (/ (+ (* .2126 red) (* .7152 green) (* .0722 blue)) 256))
 
 (defun rainbow-x-color-luminance (color)
-  "Calculate the luminance of a color string (e.g. \"#ffaa00\", \"blue\")."
+  "Calculate the luminance of a color string (e.g. \"#ffaa00\", \"blue\").
+Return a value between 0 and 1."
   (let* ((values (x-color-values color))
-	 (r (car values))
-	 (g (cadr values))
-	 (b (caddr values)))
+	 (r (/ (car values) 256.0))
+         (g (/ (cadr values) 256.0))
+	 (b (/ (caddr values) 256.0)))
     (rainbow-color-luminance r g b)))
 
 (defun rainbow-turn-on ()
@@ -377,6 +427,12 @@ This will convert \"80 %\" to 204, \"100 %\" to 255 but \"123\" to \"123\"."
                  (memq major-mode rainbow-latex-colors-major-mode-list)))
     (font-lock-add-keywords nil
                             rainbow-latex-rgb-colors-font-lock-keywords))
+  ;; Activate ANSI colors?
+  (when (or (eq rainbow-ansi-colors t)
+            (and (eq rainbow-ansi-colors 'auto)
+                 (memq major-mode rainbow-ansi-colors-major-mode-list)))
+    (font-lock-add-keywords nil
+                            rainbow-ansi-colors-font-lock-keywords))
   ;; Activate HTML colors?
   (when (or (eq rainbow-html-colors t)
             (and (eq rainbow-html-colors 'auto)
@@ -406,8 +462,8 @@ This will fontify with colors the string like \"#aabbcc\" or \"blue\"."
   (progn
     (if rainbow-mode
         (rainbow-turn-on)
-      (rainbow-turn-off))
-    ;; Turn on font lock
-    (font-lock-mode 1)))
+      (rainbow-turn-off))))
 
 (provide 'rainbow-mode)
+
+;;; rainbow-mode.el ends here

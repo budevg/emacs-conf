@@ -4,7 +4,7 @@
 (setq el-get-sources
       `((:name rainbow-mode
                :type git
-               :url "git://git.naquadah.org/rainbow.git"
+               :url "git://github.com/emacsmirror/rainbow-mode.git"
                :build (,(concat "cp rainbow-mode.el "
                                 (in-emacs-d "look_and_feel")))
                :after (lambda () (el-get-remove "rainbow-mode")))
