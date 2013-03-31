@@ -26,12 +26,6 @@
                :build (,(concat "cp el-get.el "
                                 (in-emacs-d "packages")))
                :after (lambda () (el-get-remove "el-get")))
-        (:name cssh
-               :type git
-               :url "git://github.com/dimitri/cssh.git"
-               :build (,(concat "cp cssh.el "
-                                (in-emacs-d "shell")))
-               :after (lambda () (el-get-remove "cssh")))
         (:name auto-complete
                :type git
                :url "https://github.com/auto-complete/auto-complete.git"
