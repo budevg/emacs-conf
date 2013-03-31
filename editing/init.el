@@ -70,11 +70,11 @@
 (setq make-backup-files nil)
 
 ; recentf - save history of recently visited files
-(autoload 'recentf-mode "recentf.el" nil t)
-(autoload 'recentf-save-list "recentf.el" nil t)
-(run-with-idle-timer (* 5 60) t 'recentf-save-list)
-(setq recentf-auto-cleanup 'never)
-(setq recentf-max-saved-items 1000)
+;;(autoload 'recentf-mode "recentf.el" nil t)
+;;(autoload 'recentf-save-list "recentf.el" nil t)
+;;(run-with-idle-timer (* 5 60) t 'recentf-save-list)
+;;(setq recentf-auto-cleanup 'never)
+;;(setq recentf-max-saved-items 1000)
 
 ;; disable autoencoding on <?xml version="1.0" encoding="UTF-16" ?> line
 (setq auto-coding-alist (append auto-coding-alist '(("\\.xml\\'" . no-conversion))))
