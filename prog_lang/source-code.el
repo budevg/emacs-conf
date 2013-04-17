@@ -1,6 +1,6 @@
 
 (setq-default indent-tabs-mode nil)
-(setq show-paren-style 'expression)
+(setq show-paren-style 'parenthesis)
 (setq show-paren-delay 0)
 (show-paren-mode)
 
@@ -25,4 +25,3 @@
 ;;(setq judge-indent-default-indent-width 2)
 ;;(setq judge-indent-default-tab-width 8)
 ;;(setq judge-indent-prefer-tabs-mode nil)
-
