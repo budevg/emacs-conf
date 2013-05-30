@@ -10,6 +10,7 @@
   (insert "
 ((nil . ((tab-width . 4)
          (tab-stop-list . (4 8 12 16 20 24 28 32 36 40 44 48 52 56 60))))
+ (asm-mode . ((comment-start . \"/\")))
  (c++-mode . ((tab-width . 4)
               (c-basic-offset . 4)
               (indent-tabs-mode . nil)))
