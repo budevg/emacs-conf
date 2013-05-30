@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ssh port forward
+# key: ssh
+# --
+ssh -L 5555:localhost:5555 $0

@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: pmem
+# key: pmem
+# --
+ps auxw --sort=-rss $0
