@@ -230,3 +230,6 @@ EMACS CONFIGURATION TUTORIAL
    C-x r t string-rectangle
 ** save mark where search started
    C-s ... then C-x
+* Performance
+** monitor load time
+   meta+x esup

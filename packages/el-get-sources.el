@@ -81,4 +81,10 @@
                :build (,(concat "cp *.el "
                                 (in-emacs-d "prog_lang/clojure")))
                :after (lambda () (el-get-remove "clojure-mode")))
+        (:name esup
+               :type git
+               :url "git://github.com/jschaf/esup.git"
+               :build (,(concat "cp *.el "
+                                (in-emacs-d "applications")))
+               :after (lambda () (el-get-remove "esup")))
 	))
