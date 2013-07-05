@@ -2,4 +2,4 @@
 # name: kvm -snapshot -net user
 # key: kvm
 # --
-kvm -snapshot -net user,hostfwd=tcp::5555-:22 -net nic,model=virtio -drive if=virtio,file=$0
+kvm -snapshot -net user,hostfwd=tcp::5555-:22,hostfwd=tcp::6666-:3389 -net nic,model=virtio -drive if=virtio,file=$0

@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: rdp
+# key: rdp
+# --
+rdesktop localhost:6666 -f -u ${1:wlocal} -p ${2:123456} -r disk:share=$0
