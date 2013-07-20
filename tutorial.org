@@ -149,6 +149,8 @@ EMACS CONFIGURATION TUTORIAL
    join lines (append current line to the line before it)
 ** select text and then ctr+d
    multiple cursor like in sublime
+** meta+o or met+O
+   open line before/after
 * Debugging:
 ** keypad-2
    step
