@@ -1,15 +1,14 @@
-;;; magit-blame.el --- blame support for magit
+;;; magit-blame.el --- blame support for Magit
 
-;; Copyright (C) 2012  Rüdiger Sonderfeld
-;; Copyright (C) 2012  Yann Hodique
-;; Copyright (C) 2011  byplayer
-;; Copyright (C) 2010  Alexander Prusov
-;; Copyright (C) 2009  Tim Moore
 ;; Copyright (C) 2008  Linh Dang
 ;; Copyright (C) 2008  Marius Vollmer
+;; Copyright (C) 2009  Tim Moore
+;; Copyright (C) 2010  Alexander Prusov
+;; Copyright (C) 2011  byplayer
+;; Copyright (C) 2012  Rüdiger Sonderfeld
+;; Copyright (C) 2012  Yann Hodique
 
 ;; Author: Yann Hodique <yann.hodique@gmail.com>
-;; Keywords:
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -26,13 +25,19 @@
 
 ;;; Commentary:
 
-;; This code has been backported from Egg (Magit fork) to Magit
+;; Control git-blame from Magit.
+;; This code has been backported from Egg (Magit fork) to Magit.
 
 ;;; Code:
 
 (eval-when-compile (require 'cl-lib))
 (require 'magit)
 (require 'easymenu)
+
+(defcustom magit-blame-ignore-whitespace t
+  "Ignore whitespace when determining blame information."
+  :group 'magit
+  :type 'boolean)
 
 (defface magit-blame-header
   '((t :inherit magit-header))
@@ -79,8 +84,7 @@
     "---"
     ["Quit" magit-blame-mode t]))
 
-(defvar magit-blame-buffer-read-only)
-(make-variable-buffer-local 'magit-blame-buffer-read-only)
+(defvar-local magit-blame-buffer-read-only nil)
 
 ;;;###autoload
 (define-minor-mode magit-blame-mode
@@ -119,9 +123,11 @@
     (with-current-buffer buffer
       (save-restriction
         (with-temp-buffer
-          (magit-git-insert (list "blame" "--porcelain" "--"
-                                  (file-name-nondirectory
-                                   (buffer-file-name buffer))))
+          (magit-git-insert (append
+                             (list "blame" "--porcelain")
+                             (and magit-blame-ignore-whitespace (list "-w"))
+                             (list "--" (file-name-nondirectory
+                                         (buffer-file-name buffer)))))
           (magit-blame-parse buffer (current-buffer)))))))
 
 (defun magit-blame-locate-commit (pos)
@@ -186,8 +192,8 @@ boundaries from BEG to END, the return value is nil."
 
 The second argument TZ can be used to add the timezone in (-)HHMM
 format to UNIXTIME.  UNIXTIME should be either a number
-containing seconds since epoch or Emacs's (HIGH LOW
-. IGNORED) format."
+containing seconds since epoch or Emacs's (HIGH LOW . IGNORED)
+format."
   (when (numberp tz)
     (unless (numberp unixtime)
       (setq unixtime (float-time unixtime)))
