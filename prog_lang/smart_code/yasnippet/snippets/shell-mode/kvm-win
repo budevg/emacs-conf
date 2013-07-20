@@ -2,4 +2,4 @@
 # name: kvm for windows
 # key: kvm
 # --
-kvm -snapshot -m 1G -net user,hostfwd=tcp::5555-:3389 -net nic -drive file=$0
+kvm -snapshot -m 1G -net user,hostfwd=tcp::5555-:3389 -net nic -drive file=`(expand-file-name "~/")`$0

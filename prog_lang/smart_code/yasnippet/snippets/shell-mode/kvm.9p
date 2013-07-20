@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: kvm 9p
+# key: kvm
+# --
+kvm -snapshot -fsdev local,security_model=passthrough,id=fsdev0,path=`(expand-file-name "~/scratch")` -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -net user,hostfwd=tcp::5555-:22 -net nic,model=virtio -drive if=virtio,file=`(expand-file-name "~/")`$0
