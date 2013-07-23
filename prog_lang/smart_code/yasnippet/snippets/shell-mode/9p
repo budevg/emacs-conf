@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: 9p
+# key: 9p
+# --
+sudo mount -t 9p -o trans=virtio hostshare ${1:data}$0
