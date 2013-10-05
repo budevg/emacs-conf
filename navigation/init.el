@@ -112,7 +112,7 @@
 
 (defun pycscope-index-files (top-directory)
   (interactive "DIndex files in directory: ")
-  (call-process (in-emacs-d "Navigation/pycscope.py") nil nil nil "-R"))
+  (call-process (in-emacs-d "navigation/pycscope.py") nil nil nil "-R"))
 
 
 ; ace-jump - quickly navigate to any character
