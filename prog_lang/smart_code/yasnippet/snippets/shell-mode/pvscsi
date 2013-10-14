@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: pvscsi
+# key: pvscsi
+# --
+-device pvscsi,id=pvscsi${1:0} -device scsi-disk,bus=pvscsi$1.0,drive=drive$1 -drive id=drive$1,if=none,file=$0
