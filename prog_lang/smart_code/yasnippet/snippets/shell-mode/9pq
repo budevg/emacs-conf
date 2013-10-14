@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: 9pq
+# key: 9pq
+# --
+-fsdev local,security_model=passthrough,id=fsdev0,path=/home/evgenyb/scratch -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare$0
