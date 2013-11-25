@@ -38,7 +38,7 @@ OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS))
 TARGET:= $(addprefix $(BUILD_DIR)/, $(TARGET))
 
 $(TARGET): $(OBJS)
-	$(LD) $(LDFALGS) $(LIBS) -o $@ $^
+	$(LD) $(LDFALGS) -o $@ $^ $(LIBS)
 
 $(TARGET).a: $(OBJS)
 	mkdir -p $(@D)
