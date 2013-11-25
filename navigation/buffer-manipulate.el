@@ -120,5 +120,7 @@
 (global-set-key (kbd "C-x C-b") 'ibuffer-other-window)
 
 ;; rotate buffers
-(global-set-key [(meta right)] 'next-buffer)
-(global-set-key [(meta left)]  'previous-buffer)
+(autoload 'swbuff-switch-to-next-buffer "swbuff" nil t)
+(autoload 'swbuff-switch-to-previous-buffer "swbuff" nil t)
+(global-set-key [(meta right)] 'swbuff-switch-to-next-buffer)
+(global-set-key [(meta left)]  'swbuff-switch-to-previous-buffer)
