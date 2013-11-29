@@ -1,6 +1,10 @@
 
 (eval-after-load "dired"
   '(progn
+     (autoload 'dired-details-install "dired-details" nil t)
+     (setq dired-details-hidden-string "")
+     (setq dired-details-initially-hide nil)
+     (dired-details-install)
      (defun my-dired-init ()
        ;; make dired reuse the current buffer instead of opening new buffer
        ;; for each directory
