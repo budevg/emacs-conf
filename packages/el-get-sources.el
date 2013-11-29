@@ -87,4 +87,10 @@
                :build (,(concat "cp *.el "
                                 (in-emacs-d "applications")))
                :after (lambda () (el-get-remove "esup")))
+        (:name zeal
+               :type git
+               :url "git://github.com/jinzhu/zeal-at-point"
+               :build (,(concat "cp *.el "
+                                (in-emacs-d "prog_lang/smart_code")))
+               :after (lambda () (el-get-remove "zeal")))
 	))
