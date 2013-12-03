@@ -35,7 +35,7 @@ EMACS CONFIGURATION TUTORIAL
 ** <meta>+x kernel-coding-style
    switch on/off kernel coding style for linux kernel programming
    (makes tab indentations and 8 chars tab width)
-** <super>+f1
+** <super>+1
    launch zeal the offline api finder
 * Syntax Highlighting:
 ** <ctrl>+<shift>+b
