@@ -14,9 +14,16 @@
                :build (,(concat "cp psvn.el "
                                 (in-emacs-d "source_control")))
                :after (lambda () (el-get-remove "psvn")))
+        (:name git-modes
+               :type git
+               :url "https://github.com/magit/git-modes.git"
+               :build (,(concat "cp *.el "
+                               (in-emacs-d "source_control/magit")))
+               :after (lambda () (el-get-remove "git-modes")))
         (:name magit
                :type git
                :url "http://github.com/magit/magit.git"
+               :depends (git-modes)
                :build (,(concat "cp *.el "
                                (in-emacs-d "source_control/magit")))
                :after (lambda () (el-get-remove "magit")))

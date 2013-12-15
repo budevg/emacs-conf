@@ -1,10 +1,11 @@
 (autoload 'magit-status "magit" nil t)
-(autoload 'rebase-mode "rebase-mode" nil t)
+(autoload 'rebase-mode "git-rebase-mode" nil t)
 (autoload 'magit-blame-mode "magit-blame" nil t)
 (add-to-list 'auto-mode-alist
-             '("git-rebase-todo" . rebase-mode))
+             '("/git-rebase-todo\\'" . git-rebase-mode))
 
 (setq magit-save-some-buffers nil)
+(setq magit-diff-use-overlays nil) ;; with overlays performance sucks
 (global-set-key [(meta m)] 'magit-status)
 
 (defun magit-toggle-section-new ()
