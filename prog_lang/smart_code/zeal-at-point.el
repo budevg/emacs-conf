@@ -87,7 +87,7 @@
     (php-mode . "php")
     (processing-mode . "processing")
     (puppet-mode . "puppet")
-    (python-mode . "python3")
+    (python-mode . "python")
     (ruby-mode . "ruby")
     (sass-mode . "sass")
     (scala-mode . "scala")
