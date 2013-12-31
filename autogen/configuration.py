@@ -43,8 +43,6 @@ navigation = [Node(path = "navigation/init.el",
                    msg = "enable show hide support"),
               Node(path = "navigation/symbols-navigate.el",
                    msg = "navigate symbols with ido mode"),
-              Node(path = "navigation/w3m/w3m-init.el",
-                   msg = "init w3m"),
               ]
 
 
