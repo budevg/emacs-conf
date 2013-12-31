@@ -117,7 +117,11 @@
 
 ;; move line up/or down
 (autoload 'drag-stuff-mode "drag-stuff" nil t)
-(global-set-key [(meta w)] 'drag-stuff-mode)
+(global-set-key [(meta w)]
+                (lambda () (interactive)
+                  (if mark-active
+                      (call-interactively 'indent-rigidly)
+                    (drag-stuff-mode))))
 
 ;; join lines
 (global-set-key (kbd "M-j")
