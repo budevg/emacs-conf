@@ -58,6 +58,7 @@
        (elscreen-get-screen-numbers-with-emphasis))
 
      (setq elscreen-display-tab nil)
+     (setq elscreen-prefix-key "\M-z")
 
      (global-set-key (kbd "M-[") 'elscreen-emph-prev)
      (global-set-key (kbd "M-]") 'elscreen-emph-next)
