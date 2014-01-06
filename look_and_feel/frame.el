@@ -8,6 +8,8 @@
 ;; Annoying cursor blinking
 (blink-cursor-mode -1)
 
+(setq make-pointer-invisible t)
+
 ;; zoom in/out
 
 (autoload 'zoom-frm-in "zoom-frm" "zoom-frm-in autoload" t)
