@@ -164,6 +164,8 @@ applications = [Node(path = "applications/init.el",
                      msg = "irc configration"),
                 Node(path = "applications/email/init.el",
                      msg = "Email configration"),
+                Node(path = "applications/prodigy-apps.el",
+                     msg = "Different services to run"),
                 ]
 
 packages = [Node(path = "packages/init.el",

@@ -3,7 +3,7 @@
 ;; Copyright (C) 2012 Magnar Sveen
 
 ;; Author: Magnar Sveen <magnars@gmail.com>
-;; Version: 1.3.0
+;; Version: 1.9.0
 ;; Keywords: strings
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -47,9 +47,16 @@
   "Convert all adjacent whitespace characters to a single space."
   (replace-regexp-in-string "[ \t\n\r]+" " " s))
 
+(defun s-split (separator s &optional omit-nulls)
+  "Split S into substrings bounded by matches for regexp SEPARATOR.
+If OMIT-NULLS is t, zero-length substrings are omitted.
+
+This is a simple wrapper around the built-in `split-string'."
+  (split-string s separator omit-nulls))
+
 (defun s-lines (s)
   "Splits S into a list of strings on newline characters."
-  (split-string s "\\(\r\n\\|[\n\r]\\)"))
+  (s-split "\\(\r\n\\|[\n\r]\\)" s))
 
 (defun s-join (separator strings)
   "Join all the strings in STRINGS with SEPARATOR in between."
@@ -138,7 +145,7 @@
   (s-chop-suffixes '("\n" "\r") s))
 
 (defun s-truncate (len s)
-  "If S is longer than LEN, cut it down and add ... at the end."
+  "If S is longer than LEN, cut it down to LEN - 3 and add ... at the end."
   (if (> (length s) len)
       (format "%s..." (substring s 0 (- len 3)))
     s))
@@ -158,6 +165,18 @@
      (make-string (ceiling extra 2) ? )
      s
      (make-string (floor extra 2) ? ))))
+
+(defun s-pad-left (len padding s)
+  "If S is shorter than LEN, pad it with PADDING on the left."
+  (let ((extra (max 0 (- len (length s)))))
+    (concat (make-string extra (string-to-char padding))
+            s)))
+
+(defun s-pad-right (len padding s)
+  "If S is shorter than LEN, pad it with PADDING on the right."
+  (let ((extra (max 0 (- len (length s)))))
+    (concat s
+            (make-string extra (string-to-char padding)))))
 
 (defun s-left (len s)
   "Returns up to the LEN first chars of S."
@@ -224,11 +243,20 @@ This is a simple wrapper around the built-in `string-equal'."
 
 (defalias 's-equals-p 's-equals?)
 
-(defun s-matches? (regexp s)
+(defun s-less? (s1 s2)
+  "Is S1 less than S2?
+
+This is a simple wrapper around the built-in `string-lessp'."
+  (string-lessp s1 s2))
+
+(defalias 's-less-p 's-less?)
+
+(defun s-matches? (regexp s &optional start)
   "Does REGEXP match S?
+If START is non-nil the search starts at that index.
 
 This is a simple wrapper around the built-in `string-match-p'."
-  (s--truthy? (string-match-p regexp s)))
+  (s--truthy? (string-match-p regexp s start)))
 
 (defalias 's-matches-p 's-matches?)
 
@@ -236,26 +264,54 @@ This is a simple wrapper around the built-in `string-match-p'."
   "Is S nil or the empty string?"
   (or (null s) (string= "" s)))
 
+(defun s-present? (s)
+  "Is S anything but nil or the empty string?"
+  (not (s-blank? s)))
+
+(defun s-presence (s)
+  "Return S if it's `s-present?', otherwise return nil."
+  (and (s-present? s) s))
+
 (defun s-lowercase? (s)
   "Are all the letters in S in lower case?"
   (let ((case-fold-search nil))
-    (not (string-match-p "[A-ZÆØÅ]" s))))
+    (not (string-match-p "[[:upper:]]" s))))
 
 (defun s-uppercase? (s)
   "Are all the letters in S in upper case?"
   (let ((case-fold-search nil))
-    (not (string-match-p "[a-zæøå]" s))))
+    (not (string-match-p "[[:lower:]]" s))))
 
 (defun s-mixedcase? (s)
   "Are there both lower case and upper case letters in S?"
   (let ((case-fold-search nil))
     (s--truthy?
-     (and (string-match-p "[a-zæøå]" s)
-          (string-match-p "[A-ZÆØÅ]" s)))))
+     (and (string-match-p "[[:lower:]]" s)
+          (string-match-p "[[:upper:]]" s)))))
+
+(defun s-capitalized? (s)
+  "In S, is the first letter upper case, and all other letters lower case?"
+  (let ((case-fold-search nil))
+    (s--truthy?
+     (string-match-p "^[[:upper:]][^[:upper:]]*$" s))))
+
+(defun s-numeric? (s)
+  "Is S a number?"
+  (s--truthy?
+   (string-match-p "^[0-9]+$" s)))
 
 (defun s-replace (old new s)
   "Replaces OLD with NEW in S."
   (replace-regexp-in-string (regexp-quote old) new s t t))
+
+(defun s--aget (alist key)
+  (cdr (assoc key alist)))
+
+(defun s-replace-all (replacements s)
+  "REPLACEMENTS is a list of cons-cells. Each `car` is replaced with `cdr` in S."
+  (replace-regexp-in-string (regexp-opt (mapcar 'car replacements))
+                            (lambda (it) (s--aget replacements it))
+                            s))
 
 (defun s-downcase (s)
   "Convert S to lower case.
@@ -304,27 +360,64 @@ attention to case differences."
   "Return the reverse of S."
   (apply 'string (nreverse (string-to-list s))))
 
-(defun s-match (regexp s)
+(defun s-match-strings-all (regex string)
+  "Return a list of matches for REGEX in STRING.
+
+Each element itself is a list of matches, as per
+`match-string'. Multiple matches at the same position will be
+ignored after the first."
+  (let ((all-strings ())
+        (i 0))
+    (while (and (< i (length string))
+                (string-match regex string i))
+      (setq i (1+ (match-beginning 0)))
+      (let (strings
+            (num-matches (/ (length (match-data)) 2))
+            (match 0))
+        (while (/= match num-matches)
+          (push (match-string match string) strings)
+          (setq match (1+ match)))
+        (push (nreverse strings) all-strings)))
+    (nreverse all-strings)))
+
+(defun s-match (regexp s &optional start)
   "When the given expression matches the string, this function returns a list
 of the whole matching string and a string for each matched subexpressions.
-If it did not match the returned value is an empty list (nil)."
-  (if (string-match regexp s)
-      (let ((match-data-list (match-data))
-            result)
-        (while match-data-list
-          (let ((beg (car match-data-list))
-                (end (cadr match-data-list)))
-            (setq result (cons (substring s beg end) result))
-            (setq match-data-list
-                  (cddr match-data-list))))
-        (nreverse result))))
+If it did not match the returned value is an empty list (nil).
+
+When START is non-nil the search will start at that index."
+  (save-match-data
+    (if (string-match regexp s start)
+        (let ((match-data-list (match-data))
+              result)
+          (while match-data-list
+            (let* ((beg (car match-data-list))
+                   (end (cadr match-data-list))
+                   (subs (if (and beg end) (substring s beg end) nil)))
+              (setq result (cons subs result))
+              (setq match-data-list
+                    (cddr match-data-list))))
+          (nreverse result)))))
+
+(defun s-slice-at (regexp s)
+  "Slices S up at every index matching REGEXP."
+  (save-match-data
+    (let (i)
+      (setq i (string-match regexp s 1))
+      (if i
+          (cons (substring s 0 i)
+                (s-slice-at regexp (substring s i)))
+        (list s)))))
 
 (defun s-split-words (s)
   "Split S into list of words."
-  (split-string
+  (s-split
+   "[^[:word:]0-9]+"
    (let ((case-fold-search nil))
-     (replace-regexp-in-string "\\([a-z]\\)\\([A-Z]\\)" "\\1 \\2" s))
-   "[^A-Za-z0-9]+" t))
+     (replace-regexp-in-string
+      "\\([[:lower:]]\\)\\([[:upper:]]\\)" "\\1 \\2"
+      (replace-regexp-in-string "\\([[:upper:]]\\)\\([[:upper:]][0-9[:lower:]]\\)" "\\1 \\2" s)))
+   t))
 
 (defun s--mapcar-head (fn-head fn-rest list)
   "Like MAPCAR, but applies a different function to the first element."
@@ -348,7 +441,7 @@ If it did not match the returned value is an empty list (nil)."
   (s-join "-" (mapcar 'downcase (s-split-words s))))
 
 (defun s-capitalized-words (s)
-  "Convert S to Capitalized Words."
+  "Convert S to Capitalized words."
   (let ((words (s-split-words s)))
     (s-join " " (cons (capitalize (car words)) (mapcar 'downcase (cdr words))))))
 
@@ -356,6 +449,10 @@ If it did not match the returned value is an empty list (nil)."
   "Convert S to Titleized Words."
   (s-join " " (mapcar 's-titleize (s-split-words s))))
 
+(defun s-word-initials (s)
+  "Convert S to its initials."
+  (s-join "" (mapcar (lambda (ss) (substring ss 0 1))
+                     (s-split-words s))))
 
 ;; Errors for s-format
 (progn
@@ -384,31 +481,76 @@ The REPLACER function may be used to do any other kind of
 transformation."
   (let ((saved-match-data (match-data)))
     (unwind-protect
-         (replace-regexp-in-string
-          "\\$\\({\\([^}]+\\)}\\|[0-9]+\\)"
-          (lambda (md)
-            (let ((var
-                   (let ((m (match-string 2 md)))
-                     (if m m
-                         (string-to-number (match-string 1 md)))))
-                  (replacer-match-data (match-data)))
-              (unwind-protect
-                   (let ((v
-                          (cond
-                            ((eq replacer 'gethash)
-                             (funcall replacer var extra))
-                            ((eq replacer 'aget)
-                             (funcall replacer extra var))
-                            ((eq replacer 'elt)
-                             (funcall replacer extra var))
-                            (t
-                             (set-match-data saved-match-data)
-                             (if extra
-                                 (funcall replacer var extra)
-                                 (funcall replacer var))))))
-                     (if v v (signal 's-format-resolve md)))
-                (set-match-data replacer-match-data)))) template)
+        (replace-regexp-in-string
+         "\\$\\({\\([^}]+\\)}\\|[0-9]+\\)"
+         (lambda (md)
+           (let ((var
+                  (let ((m (match-string 2 md)))
+                    (if m m
+                      (string-to-number (match-string 1 md)))))
+                 (replacer-match-data (match-data)))
+             (unwind-protect
+                 (let ((v
+                        (cond
+                         ((eq replacer 'gethash)
+                          (funcall replacer var extra))
+                         ((eq replacer 'aget)
+                          (funcall 's--aget extra var))
+                         ((eq replacer 'elt)
+                          (funcall replacer extra var))
+                         (t
+                          (set-match-data saved-match-data)
+                          (if extra
+                              (funcall replacer var extra)
+                            (funcall replacer var))))))
+                   (if v v (signal 's-format-resolve md)))
+               (set-match-data replacer-match-data)))) template
+               ;; Need literal to make sure it works
+               t t)
       (set-match-data saved-match-data))))
+
+(defvar s-lex-value-as-lisp nil
+  "If `t' interpolate lisp values as lisp.
+
+`s-lex-format' inserts values with (format \"%S\").")
+
+(defun s-lex-fmt|expand (fmt)
+  "Expand FMT into lisp."
+  (list 's-format fmt (quote 'aget)
+        (append '(list)
+                (mapcar
+                 (lambda (matches)
+                   (list
+                    'cons
+                    (cadr matches)
+                    `(format
+                      (if s-lex-value-as-lisp "%S" "%s")
+                      ,(intern (cadr matches)))))
+                 (s-match-strings-all "${\\([^}]+\\)}" fmt)))))
+
+(defmacro s-lex-format (format-str)
+  "`s-format` with the current environment.
+
+FORMAT-STR may use the `s-format' variable reference to refer to
+any variable:
+
+ (let ((x 1))
+   (s-lex-format \"x is: ${x}\"))
+
+The values of the variables are interpolated with \"%s\" unless
+the variable `s-lex-value-as-lisp' is `t' and then they are
+interpolated with \"%S\"."
+  (s-lex-fmt|expand format-str))
+
+(defun s-count-matches (regexp s &optional start end)
+  "Count occurrences of `regexp' in `s'.
+
+`start', inclusive, and `end', exclusive, delimit the part of `s'
+to match. "
+  (with-temp-buffer
+    (insert s)
+    (goto-char (point-min))
+    (count-matches regexp (or start 1) (or end (point-max)))))
 
 (provide 's)
 ;;; s.el ends here
