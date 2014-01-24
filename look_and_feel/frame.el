@@ -1,5 +1,7 @@
 
 (tool-bar-mode -1)
+(scroll-bar-mode -1)
+(menu-bar-mode -1)
 (setq inhibit-splash-screen t)
 
 ;; Prevent the annoying beep on errors
@@ -24,3 +26,7 @@
 ;; Font size
 (define-key global-map [(control kp-add)] 'text-scale-increase)
 (define-key global-map [(control kp-subtract)] 'text-scale-decrease)
+
+;; full screen
+
+(global-set-key [(super f)] 'toggle-frame-fullscreen)
