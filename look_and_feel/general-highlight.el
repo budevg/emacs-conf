@@ -69,11 +69,11 @@
 (define-key isearch-mode-map (kbd "M-h") 'isearch-highlight-regexp)
 (define-key isearch-mode-map (kbd "M-l") 'isearch-highlight-regexp-line)
 
-(autoload 'highlight-symbol-at-point "highlight-symbol" nil t)
+(autoload 'highlight-symbol-at-point2 "highlight-symbol" nil t)
 (autoload 'highlight-symbol-remove-all "highlight-symbol" nil t)
 
 
-(global-set-key [f7] 'highlight-symbol-at-point)
+(global-set-key [f7] 'highlight-symbol-at-point2)
 (global-set-key [(control f7)] 'highlight-symbol-remove-all)
 
 (autoload 'rainbow-mode "rainbow-mode" nil t)
@@ -90,4 +90,3 @@
   (highlight-lines-matching-regexp "[Ww][Aa][Rr][Nn]" 'hi-orange)
   (highlight-lines-matching-regexp "ERR" 'hi-red)
   (highlight-lines-matching-regexp "[Ee][Rr][Rr][Oo][Rr]" 'hi-red))
-
