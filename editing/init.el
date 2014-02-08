@@ -121,7 +121,7 @@
                 (lambda () (interactive)
                   (if mark-active
                       (call-interactively 'indent-rigidly)
-                    (drag-stuff-mode))))
+                    (call-interactively 'drag-stuff-mode))))
 
 ;; join lines
 (global-set-key (kbd "M-j")
