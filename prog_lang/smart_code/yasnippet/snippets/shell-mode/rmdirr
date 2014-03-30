@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: rmdirr
+# key: rmdirr
+# --
+mkdir /tmp/emptydir; rsync -a --delete /tmp/emptydir/ ${1:dstdir}/$0

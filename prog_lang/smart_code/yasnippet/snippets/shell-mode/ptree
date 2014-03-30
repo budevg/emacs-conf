@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ptree
+# key: ptree
+# --
+pstree -alp $0
