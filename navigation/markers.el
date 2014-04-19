@@ -66,3 +66,4 @@
 (global-set-key [(meta prior)] 'markers-switch-right)
 (global-set-key [(meta next)] 'markers-switch-left)
 
+;; latitude E6530 disable
