@@ -152,3 +152,19 @@
                 (ffip-create-pattern-file-finder "*.py"))
 (global-set-key (kbd "C-f e")
                 (ffip-create-pattern-file-finder "*.el"))
+
+;; ag
+(autoload 'ag "ag.el" nil t)
+(autoload 'ag-dired "ag.el" nil t)
+(autoload 'ag/dwim-at-point "ag.el" nil t)
+
+(defun ag-here (string)
+  (interactive (list (read-from-minibuffer "Search string: " (ag/dwim-at-point))))
+  (ag string default-directory))
+
+(defun ag-dired-here (pattern)
+  (interactive "sFile pattern: ")
+  (ag-dired default-directory pattern))
+
+(global-set-key (kbd "C-f s") 'ag-here)
+(global-set-key (kbd "C-f d") 'ag-dired-here)

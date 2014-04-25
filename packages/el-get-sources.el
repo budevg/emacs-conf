@@ -100,4 +100,10 @@
                :build (,(concat "cp *.el "
                                 (in-emacs-d "prog_lang/smart_code")))
                :after (lambda () (el-get-remove "zeal")))
+        (:name ag
+               :type git
+               :url "https://github.com/Wilfred/ag.el.git"
+               :build (,(concat "cp *.el "
+                                (in-emacs-d "navigation")))
+               :after (lambda () (el-get-remove "ag")))
 	))
