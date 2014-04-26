@@ -168,3 +168,10 @@
 
 (global-set-key (kbd "C-f s") 'ag-here)
 (global-set-key (kbd "C-f d") 'ag-dired-here)
+
+;; env
+
+(setenv "PATH"
+        (concat
+         (expand-file-name "~/tools/bin") ":"
+         (getenv "PATH")))
