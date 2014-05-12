@@ -33,7 +33,7 @@
 
 (setq-default
  gnus-group-line-format "%P%M%St%(%g%) (%y)\n"
- gnus-summary-line-format "%1{%U%R%z: %}%2{%&user-date;%}%5{ %[%4i%] %}%(%uj %4{%-24,24n%}%6{%-4,4ur%}%5{│ %}%1{%B%}%s%)\n"
+ gnus-summary-line-format "%1{%U%R%z: %}%2{%&user-date;%}%5{ %[%5k%] %}%(%uj %4{%-24,24n%}%6{%-4,4ur%}%5{│ %}%1{%B%}%s%)\n"
  gnus-user-date-format-alist '((t . "%d/%m/%Y %H:%M"))
  gnus-summary-thread-gathering-function 'gnus-gather-threads-by-references
  gnus-sum-thread-tree-root "● "
