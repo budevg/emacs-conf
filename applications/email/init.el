@@ -8,6 +8,10 @@
   "Best Regards,\n"
   "xxx yyy\n"))
 
+(defvar *user-mails*
+  "user@gmail\\.com\\|user2@gmail\\.com")
+
+
 (setq message-send-mail-function 'smtpmail-send-it
       smtpmail-stream-type 'starttls
       smtpmail-smtp-user user-mail-address
