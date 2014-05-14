@@ -11,7 +11,7 @@
 (defun shell-command-on-region-inplace ()
   (interactive)
   (let ((command (read-shell-command "Shell command on region: ")))
-    (shell-command-on-region (region-beginning) (region-end) command 1)))
+    (shell-command-on-region (region-beginning) (region-end) command t t)))
 
 (defun shell-change-to-current-dir ()
   (interactive)
