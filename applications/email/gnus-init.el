@@ -22,32 +22,61 @@
                       (nnimap-server-port 993)
                       (nnimap-stream ssl)))
 
-(setq mm-discouraged-alternatives '("text/html" "text/richtext"))
-(setq-default
+(setq
+
+ gnus-save-newsrc-file t
+ gnus-read-newsrc-file t
+ gnus-always-read-dribble-file t
+ gnus-always-save-dribble-file t
+ gnus-inhibit-startup-message t
+ gnus-play-startup-jingle nil
+ gnus-interactive-exit nil
+ gnus-treat-body-boundary nil
+ gnus-treat-buttonize t
+ gnus-treat-buttonize-head 'head
+ gnus-treat-date-original 'head
+ gnus-treat-display-smileys t
+ gnus-treat-emphasize t
+ gnus-treat-fill-long-lines nil
+ gnus-treat-from-picon 'head
+ gnus-treat-hide-boring-headers 'head
+ gnus-treat-highlight-citation t
+ gnus-treat-highlight-headers 'head
+ gnus-treat-highlight-signature 'last
+ gnus-treat-strip-cr t
+ gnus-treat-strip-leading-blank-lines t
+ gnus-treat-strip-trailing-blank-lines t
+ gnus-treat-strip-pem t
+ gnus-treat-translate t
+ gnus-auto-select-first nil
+ gnus-summary-same-subject ""
+ ;;gnus-dribble-directory "c:/temp"
+ ;;gnus-newsgroup-maximum-articles 300
+
+ mm-discouraged-alternatives '("text/html" "text/richtext")
+
  gnus-check-new-newsgroups nil
  gnus-ignored-newsgroups ""
+
  nnml-directory "~/.gmail"
  message-directory "~/.gmail"
-)
 
-
-(setq-default
- gnus-group-line-format "%P%M%St%(%g%) (%y)\n"
- gnus-summary-line-format "%1{%U%R%z: %}%2{%&user-date;%}%5{ %[%5k%] %}%(%uj %4{%-24,24n%}%6{%-4,4ur%}%5{│ %}%1{%B%}%s%)\n"
  gnus-user-date-format-alist '((t . "%d/%m/%Y %H:%M"))
- gnus-summary-thread-gathering-function 'gnus-gather-threads-by-references
+ gnus-group-line-format "%P%M%S\t%(%g%) (%y)\n"
+ gnus-summary-line-format "%1{%U%R%z: %}%2{%&user-date;%}%5{ %[%5k%] %}%(%uj %4{%-24,24n%}%6{%-4,4ur%}%5{│ %}%1{%B%}%s%)\n"
+ gnus-server-line-format "   {%(%h:%w%)} %s - %n\n"
+
+ ;; articles sorting by date (reverse)
+ gnus-thread-sort-functions '(lambda (t1 t2) (not (gnus-thread-sort-by-date t1 t2)))
+
  gnus-sum-thread-tree-root "● "
  gnus-sum-thread-tree-false-root "▷ "
  gnus-sum-thread-tree-single-indent ""
  gnus-sum-thread-tree-leaf-with-other "├─►"
  gnus-sum-thread-tree-vertical "│ "
- gnus-sum-thread-tree-single-leaf "└─►")
+ gnus-sum-thread-tree-single-leaf "└─►"
 
-(setq gnus-thread-sort-functions
-      '(
-        (not gnus-thread-sort-by-date)
-        (not gnus-thread-sort-by-number)
-        ))
+ )
 
 (defun my-gnus-group-list-subscribed-groups ()
   "List all subscribed groups with or without un-read messages"
@@ -108,12 +137,9 @@
 (setq gnus-face-5 'face-5)
 (setq gnus-face-6 'face-6)
 
-
-
 ;;
 ;; useful hooks
 ;;
-
 
 (add-hook 'message-mode-hook
           '(lambda()
