@@ -19,3 +19,15 @@
                                     (subword-mode +1)
                                     (turn-on-haskell-indentation)
                                     ))))
+
+(defun dot-ghci ()
+  (interactive)
+  (let ((config-file (expand-file-name "~/.ghc/ghci.conf"))
+        (config-dir (expand-file-name "~/.ghc")))
+    (make-directory config-dir t)
+    (comint-send-file
+     (in-emacs-d "prog_lang/haskell/ghci.conf")
+     config-file)
+    (chmod config-dir (string-to-number "700" 8))
+    (chmod config-file (string-to-number "700" 8))
+    ))
