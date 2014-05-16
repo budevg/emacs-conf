@@ -106,4 +106,10 @@
                :build (,(concat "cp *.el "
                                 (in-emacs-d "navigation")))
                :after (lambda () (el-get-remove "ag")))
+        (:name prodigy
+               :type git
+               :url "https://github.com/rejeep/prodigy.el.git"
+               :build (,(concat "cp *.el "
+                                (in-emacs-d "applications")))
+               :after (lambda () (el-get-remove "prodigy")))
 	))
