@@ -1,0 +1,13 @@
+# -*- mode: snippet -*-
+# name: document
+# key: doc
+# --
+\documentclass[a4paper,12pt]{article}
+
+\author{${1:Author}}
+\title{${2:Title}}
+\date{\today}
+
+\begin{document}
+$0
+\end{document}
