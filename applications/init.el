@@ -6,5 +6,5 @@
 
 
 ;; remember to run
-;; >> cd ~/tools/bin; ln -s /usr/bin/google-chrome-beta chromium
+;; >> cd ~/tools/bin; ln -s /usr/bin/google-chrome chromium
 (setq browse-url-browser-function 'browse-url-chromium)
