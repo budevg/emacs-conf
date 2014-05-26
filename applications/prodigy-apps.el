@@ -1,5 +1,5 @@
 (autoload 'prodigy "prodigy" nil t)
-
+(global-set-key [(meta p)] 'prodigy)
 (eval-after-load "prodigy"
   '(progn
      ;;(prodigy-define-service
