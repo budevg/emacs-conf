@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: fio
+# key: fio
+# --
+fio --name=test --norandommap --time_based --group_reporting --iodepth=32 --iodepth_batch=16 --iodepth_batch_complete=16 --runtime=300 --ramp_time=5 --filename=${1:/tmp/data} --directory=${2:/tmp/data} --rw=${3:write} --direct=${4:0} --bs=${5:1m} --numjobs=${6:10} --ioengine=${7:libaio}$0
