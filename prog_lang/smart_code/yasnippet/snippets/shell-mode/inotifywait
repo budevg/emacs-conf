@@ -2,4 +2,4 @@
 # name: inotifywait
 # key: ww
 # --
-while :; do inotifywait -e modify ${1:files}; ${2:make}; done$0
+while :; do inotifywait -e modify ${1:-r .}; ${2:make}; done$0
