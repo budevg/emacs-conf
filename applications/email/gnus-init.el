@@ -19,6 +19,7 @@
              `(nnimap "gmail"
                       (nnimap-user ,user-mail-address)
                       (nnimap-address "imap.gmail.com")
+                      ;;(nnimap-authinfo-file "~/.authinfo.gpg")
                       (nnimap-server-port 993)
                       (nnimap-stream ssl)))
 

@@ -20,6 +20,7 @@
       smtpmail-smtp-server "smtp.gmail.com"
       smtpmail-smtp-service 587)
 
+;;(setq smtpmail-auth-credentials "~/.authinfo.gpg")
 
 ;; don't keep message buffers around
 (setq message-kill-buffer-on-exit t)
