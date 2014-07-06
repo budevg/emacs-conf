@@ -141,3 +141,5 @@
 ;;(global-set-key (kbd "<C-prior>") 'kill-ring-save)
 ;;(global-set-key (kbd "<S-prior>") 'cua-paste)
 ;;(global-set-key (kbd "<S-next>") 'kill-region)
+
+(autoload 'math-symbols "unicode-abbrevs" nil t)
