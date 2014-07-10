@@ -36,3 +36,17 @@ This works on the current region."
                  (make-local-variable 'outline-regexp)
                  (setq outline-regexp "\\s *<\\([h][1-6]\\|html\\|body\\|head\\)\\b")))
      ))
+
+(autoload 'web-mode "web-mode" nil t)
+(add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
+
+(defun my-web-mode-hook ()
+  "Hooks for Web mode."
+  (setq web-mode-markup-indent-offset 2)
+  (define-key web-mode-map (kbd "M-3") 'web-mode-comment-or-uncomment)
+  (define-key web-mode-map (kbd "C-<down>") (lambda () (interactive) (web-mode-tag-match)))
+  (define-key web-mode-map (kbd "C-<up>") (lambda () (interactive) (web-mode-tag-match)))
+  (define-key web-mode-map (kbd "<backtab>")   'web-mode-fold-or-unfold)
+  (set (make-local-variable 'yas-extra-modes) 'html-mode)
+  )
+(add-hook 'web-mode-hook  'my-web-mode-hook)

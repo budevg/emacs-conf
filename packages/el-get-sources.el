@@ -112,4 +112,10 @@
                :build (,(concat "cp *.el "
                                 (in-emacs-d "applications")))
                :after (lambda () (el-get-remove "prodigy")))
+        (:name web-mode
+               :type git
+               :url "https://github.com/fxbois/web-mode.git"
+               :build (,(concat "cp *.el "
+                                (in-emacs-d "prog_lang/html")))
+               :after (lambda () (el-get-remove "web-mode")))
 	))
