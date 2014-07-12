@@ -1,0 +1,7 @@
+(:name esup
+       :description "ESUP - Emacs Start Up Profiler"
+       :type github
+       :pkgname "jschaf/esup"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications")))
+       )

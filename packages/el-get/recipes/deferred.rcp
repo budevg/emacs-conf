@@ -1,0 +1,4 @@
+(:name deferred
+       :description "Simple asynchronous functions for emacs lisp."
+       :type github
+       :pkgname "kiwanami/emacs-deferred")

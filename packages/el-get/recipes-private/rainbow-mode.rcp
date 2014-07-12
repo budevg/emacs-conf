@@ -1,0 +1,9 @@
+(:name rainbow-mode
+       :description "Colorize color names in buffers"
+       :minimum-emacs-version 24
+       :type github
+       :pkgname "emacsmirror/rainbow-mode"
+       :build `(,(concat "cp rainbow-mode.el "
+                         (in-emacs-d "look_and_feel")))
+
+       )

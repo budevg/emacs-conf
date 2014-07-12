@@ -1,0 +1,7 @@
+(:name zeal
+       :description "Search the word at point with Zeal"
+       :type github
+       :pkgname "jinzhu/zeal-at-point"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/smart_code")))
+       )

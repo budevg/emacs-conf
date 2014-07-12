@@ -1,0 +1,6 @@
+(:name mingus
+       :description "A client for the Music Player Daemon (MPD)."
+       :type github
+       :pkgname "pft/mingus"
+       :prepare (progn
+                  (autoload 'mingus "mingus-stays-home" nil t)))

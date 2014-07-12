@@ -1,0 +1,7 @@
+(:name scala-mode
+       :description "Major mode for editing Scala code."
+       :type git
+       :url "https://github.com/scala/scala-dist.git"
+       :build `(,(concat "cp tool-support/src/emacs/*.el "
+                         (in-emacs-d "prog_lang/scala")))
+       )

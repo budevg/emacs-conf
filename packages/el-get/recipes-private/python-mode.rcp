@@ -1,0 +1,10 @@
+(:name python-mode
+       :description "Major mode for editing Python programs"
+       :type http-tar
+       :options ("xzf")
+       :url "https://launchpad.net/python-mode/trunk/6.0.5/+download/python-mode.el-6.0.5.tar.gz"
+       :build `(,(concat "cp *.el test/*.el "
+                         (in-emacs-d "prog_lang/python"))
+                ,(concat "cp -r Pymacs "
+                         (in-emacs-d "prog_lang/python/pymacs-modules")))
+       )

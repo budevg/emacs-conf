@@ -168,10 +168,10 @@ applications = [Node(path = "applications/init.el",
                      msg = "Different services to run"),
                 ]
 
-packages = [Node(path = "packages/init.el",
+packages = [Node(path = "packages/el-get",
+                 msg = ""),
+            Node(path = "packages/init.el",
                  msg = "load elpa packages"),
-            Node(path = "packages/el-get-sources.el",
-                 msg = "load el-get packages")
             ]
 
 PACKAGES = [lisp_lib,

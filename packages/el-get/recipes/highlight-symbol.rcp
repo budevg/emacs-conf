@@ -1,0 +1,4 @@
+(:name highlight-symbol
+       :description "Quickly highlight a symbol throughout the buffer and cycle through its locations."
+       :type github
+       :pkgname "nschum/highlight-symbol.el")

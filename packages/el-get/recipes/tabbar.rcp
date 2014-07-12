@@ -1,0 +1,5 @@
+(:name tabbar
+       :description "Display a tab bar in the header line."
+       :type github
+       :pkgname "dholm/tabbar"
+       :lazy t)

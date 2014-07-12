@@ -1,0 +1,5 @@
+(:name lua-mode
+       :description "A major-mode for editing Lua scripts"
+       :depends (ample-regexps)
+       :type github
+       :pkgname "immerrr/lua-mode")

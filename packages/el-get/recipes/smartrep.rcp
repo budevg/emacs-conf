@@ -1,0 +1,8 @@
+(:name smartrep
+       :description "Support sequential operation which omitted prefix keys."
+       :website "http://sheephead.homelinux.org/2011/12/19/6930/"
+       :type github
+       :pkgname "myuhe/smartrep.el"
+       :prepare (progn
+                  (autoload 'smartrep-restore-original-position "smartrep" nil t)
+                  (autoload 'smartrep-map-internal "smartrep" nil t)))

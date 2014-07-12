@@ -1,0 +1,9 @@
+(:name magit
+       :website "https://github.com/magit/magit#readme"
+       :description "It's Magit! An Emacs mode for Git."
+       :type github
+       :pkgname "magit/magit"
+       :depends (cl-lib git-modes)
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "source_control/magit")))
+       )

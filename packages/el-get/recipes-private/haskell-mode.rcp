@@ -1,0 +1,7 @@
+(:name haskell-mode
+       :description "A Haskell editing mode"
+       :type github
+       :pkgname "haskell/haskell-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/haskell")))
+       )

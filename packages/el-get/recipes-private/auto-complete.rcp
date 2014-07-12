@@ -1,0 +1,9 @@
+(:name auto-complete
+       :website "https://github.com/auto-complete/auto-complete"
+       :description "The most intelligent auto-completion extension."
+       :type github
+       :pkgname "auto-complete/auto-complete"
+       :build `("git submodule update --init"
+                ,(concat "cp -r *.el lib/fuzzy/fuzzy.el lib/popup/popup.el dict "
+                         (in-emacs-d "prog_lang/smart_code/auto-complete")))
+       )

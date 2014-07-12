@@ -1,0 +1,7 @@
+(:name psvn
+       :description "Subversion interface for emacs"
+       :type http
+       :url "http://www.xsteve.at/prg/emacs/psvn.el"
+       :build `(,(concat "cp psvn.el "
+                         (in-emacs-d "source_control")))
+       )

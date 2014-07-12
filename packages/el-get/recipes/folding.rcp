@@ -1,0 +1,6 @@
+(:name folding
+       :description "A folding-editor-like minor mode."
+       :type github
+       :pkgname "jaalto/project-emacs--folding-mode"
+       :compile "\\.el$" ; ignore epackage/ subdir
+       :prepare (folding-mode-add-find-file-hook))

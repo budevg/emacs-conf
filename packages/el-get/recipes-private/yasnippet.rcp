@@ -1,0 +1,9 @@
+(:name yasnippet
+       :website "https://github.com/capitaomorte/yasnippet.git"
+       :description "YASnippet is a template system for Emacs."
+       :type github
+       :pkgname "capitaomorte/yasnippet"
+       :build `(("git" "submodule" "update" "--init" "--" "snippets")
+                ,(concat "cp -r *.el snippets "
+                         (in-emacs-d "prog_lang/smart_code/yasnippet")))
+       )
