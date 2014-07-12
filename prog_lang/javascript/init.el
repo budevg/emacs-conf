@@ -14,4 +14,4 @@
   '(progn
      (define-key js-mode-map "\C-m" 'newline-and-indent)
      (define-key js-mode-map [(meta ?.)] nil)
-     (setq js-indent-level 4)))
+     (setq js-indent-level 2)))
