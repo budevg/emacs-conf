@@ -118,4 +118,10 @@
                :build (,(concat "cp *.el "
                                 (in-emacs-d "prog_lang/html")))
                :after (lambda () (el-get-remove "web-mode")))
+        (:name go-mode
+               :type git
+               :url "https://github.com/dominikh/go-mode.el.git"
+               :build (,(concat "cp *.el "
+                                (in-emacs-d "prog_lang/go")))
+               :after (lambda () (el-get-remove "go-mode")))
 	))
