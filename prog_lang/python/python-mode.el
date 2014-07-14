@@ -6552,7 +6552,8 @@ Optional symbol SWITCH ('switch/'noswitch) precedes `py-shell-switch-buffers-on-
     ;; comint
     (if (not (equal (buffer-name) py-process-name))
         (set-buffer (get-buffer-create
-                     (apply 'make-comint py-process-name psn nil args)))
+                     (switch-to-buffer-other-window
+                      (apply 'make-comint py-process-name psn nil args))))
       (apply 'make-comint py-process-name psn nil args))
     (set (make-local-variable 'comint-prompt-regexp)
 	 (concat "\\("
