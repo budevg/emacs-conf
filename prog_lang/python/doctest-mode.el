@@ -1845,12 +1845,12 @@ Otherwise, call (do-auto-fill)."
                                       (or pos (point)))))))))
 
 ;; Backwards compatibility: process-live-p
-(cond ((fboundp 'process-live-p) ;; XEmacs
-       (defalias 'doctest-process-live-p 'process-live-p))
-      (t ;; Emacs
-       (defun doctest-process-live-p (process)
-         (and (processp process)
-              (equal (process-status process) 'run)))))
+;;(cond ((fboundp 'process-live-p) ;; XEmacs
+;;       (defalias 'doctest-process-live-p 'process-live-p))
+;;      (t ;; Emacs
+(defun doctest-process-live-p (process)
+  (and (processp process)
+       (equal (process-status process) 'run)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Doctest Results Mode (output of doctest-execute-buffer)

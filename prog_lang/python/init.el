@@ -71,7 +71,7 @@
     (insert (format "super(%s, self).%s()" classname methodname))
     (backward-char)))
 
-(eval-after-load "python-mode" '(define-key python-mode-map [(control ?x) ?p ?s] 'python-auto-super))
+(eval-after-load "python-mode" '(define-key py-mode-map [(control ?x) ?p ?s] 'python-auto-super))
 ;;(eval-after-load "python-mode" '(load-file (in-modes-d "virtualenv/virtualenv.el")))
 
 (setq pylookup-dir (in-emacs-d "prog_lang/python/pylookup"))
@@ -79,4 +79,4 @@
 (setq pylookup-db-file (concat pylookup-dir "/pylookup.db"))
 (add-to-list 'load-path pylookup-dir)
 (autoload 'pylookup-lookup "pylookup.el" nil t)
-(eval-after-load "python-mode" '(define-key python-mode-map [(control ?x) ?p ?l] 'pylookup-lookup))
+(eval-after-load "python-mode" '(define-key py-mode-map [(control ?x) ?p ?l] 'pylookup-lookup))

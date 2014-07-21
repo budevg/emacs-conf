@@ -25,26 +25,20 @@ acts as a server of Python facilities for that Emacs session, reading
 requests from standard input and writing replies on standard output.
 When used in this way, the program is called "the Pymacs helper".
 
-This module may also be usefully imported by other Python modules.
-See the Pymacs documentation (check `README') for more information.
+This module may also be usefully imported by those other Python modules.
+See the Pymacs documentation (in `README') for more information.
 """
 
 __metaclass__ = type
 import os, sys
-
-def fixup_icanon():
-    # otherwise sys.stdin.read hangs for large inputs in emacs 24
-    # see comment in emacs source code sysdep.c
-    import termios
-    a = termios.tcgetattr(1)
-    a[3] &= ~termios.ICANON
-    termios.tcsetattr(1, termios.TCSANOW, a)
 
 try:
     import signal
 except ImportError:
     # Jython does not have signal.
     signal = None
+
+old_style_exception = not isinstance(Exception, type)
 
 ## Python services for Emacs applications.
 
@@ -63,56 +57,54 @@ Debugging options:
 
 Arguments are added to the search path for Python modules.
 """
-
         # Decode options.
         arguments = (os.environ.get('PYMACS_OPTIONS', '').split()
                      + list(arguments))
         import getopt
-        options, arguments = getopt.getopt(arguments, 'fd:s:')
+        options, arguments = getopt.getopt(arguments, 'd:s:')
         for option, value in options:
             if option == '-d':
                 self.debug_file = value
             elif option == '-s':
                 self.signal_file = value
-            elif option == '-f':
-                try:
-                    fixup_icanon()
-                except:
-                    pass
-
         arguments.reverse()
         for argument in arguments:
             if os.path.isdir(argument):
                 sys.path.insert(0, argument)
-
-        # Inhibit signals.  The Interrupt signal is temporary enabled, however,
-        # while executing any Python code received from the Lisp side.
+        # Inhibit signals.
         if signal is not None:
-
-            # See the comment for IO_ERRORS_WITH_SIGNALS in p4config.py.
             self.original_handler = signal.signal(
                     signal.SIGINT, self.interrupt_handler)
+            for counter in range(1, signal.NSIG):
+                if counter == signal.SIGINT:
+                    self.original_handler = signal.signal(
+                            counter, self.interrupt_handler)
 
+                # The following few lines of code are reported to create IO
+                # problems within the Pymacs helper itself, so I merely comment
+                # them for now, until we know better.
+
+                #else:
+                #    try:
+                #        signal.signal(counter, self.generic_handler)
+                #    except RuntimeError:
+                #        pass
         self.inhibit_quit = True
-
-        # Re-open standard input and output in binary mode.
-        sys.stdin = os.fdopen(sys.stdin.fileno(), 'rb')
-        sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb')
-
         # Start protocol and services.
-        lisp._protocol.send('version', '"0.24-beta2"')
+        from Pymacs import __version__
+        lisp._protocol.send('version', '"%s"' % __version__)
         lisp._protocol.loop()
 
     def generic_handler(self, number, frame):
         if self.signal_file:
-            handle = open(self.signal_file, 'a')
+            handle = file(self.signal_file, 'a')
             handle.write('%d\n' % number)
             handle.close()
 
     def interrupt_handler(self, number, frame):
         if self.signal_file:
             star = (' *', '')[self.inhibit_quit]
-            handle = open(self.signal_file, 'a')
+            handle = file(self.signal_file, 'a')
             handle.write('%d%s\n' % (number, star))
             handle.close()
         if not self.inhibit_quit:
@@ -121,9 +113,13 @@ Arguments are added to the search path for Python modules.
 run = Main()
 main = run.main
 
-class error(Exception): pass
-class ProtocolError(error): pass
-class ZombieError(error): pass
+if old_style_exception:
+    ProtocolError = 'ProtocolError'
+    ZombieError = 'ZombieError'
+else:
+    class error(Exception): pass
+    class ProtocolError(error): pass
+    class ZombieError(error): pass
 
 class Protocol:
 
@@ -180,7 +176,8 @@ class Protocol:
                     action = 'raise'
                     value = 'Emacs: ' + text
                 else:
-
+                    if old_style_exception:
+                        raise ProtocolError, "Unknown action %r" % action
                     raise ProtocolError("Unknown action %r" % action)
             except KeyboardInterrupt:
                 if done:
@@ -205,17 +202,19 @@ class Protocol:
         # Receive a Python expression from Emacs, return (ACTION, TEXT).
         prefix = sys.stdin.read(3)
         if not prefix or prefix[0] != '>':
-
+            if old_style_exception:
+                raise ProtocolError, "`>' expected."
             raise ProtocolError("`>' expected.")
         while prefix[-1] != '\t':
             character = sys.stdin.read(1)
             if not character:
-
+                if old_style_exception:
+                    raise ProtocolError, "Empty stdin read."
                 raise ProtocolError("Empty stdin read.")
             prefix += character
         text = sys.stdin.read(int(prefix[1:-1]))
         if run.debug_file is not None:
-            handle = open(run.debug_file, 'a')
+            handle = file(run.debug_file, 'a')
             handle.write(prefix + text)
             handle.close()
         return text.split(None, 1)
@@ -231,7 +230,7 @@ class Protocol:
             text = '(%s %s)\n' % (action, text)
         prefix = '<%d\t' % len(text)
         if run.debug_file is not None:
-            handle = open(run.debug_file, 'a')
+            handle = file(run.debug_file, 'a')
             handle.write(prefix + text)
             handle.close()
         sys.stdout.write(prefix + text)
@@ -345,7 +344,8 @@ def zombie(*arguments):
     # such a function from Emacs will trigger a decipherable diagnostic.
     diagnostic = "Object vanished when the Pymacs helper was killed"
     if lisp.pymacs_dreadful_zombies.value():
-
+        if old_style_exception:
+            raise ZombieError, diagnostic
         raise ZombieError(diagnostic)
     lisp.message(diagnostic)
 
@@ -531,7 +531,8 @@ class List(Lisp):
     def __getitem__(self, key):
         value = lisp._eval('(nth %d %s)' % (key, self))
         if value is None and key >= len(self):
-
+            if old_style_exception:
+                raise IndexError, key
             raise IndexError(key)
         return value
 
@@ -598,13 +599,15 @@ class Lisp_Interface:
 
     def __getattr__(self, name):
         if name[0] == '_':
-
+            if old_style_exception:
+                raise AttributeError, name
             raise AttributeError(name)
         return self[name.replace('_', '-')]
 
     def __setattr__(self, name, value):
         if name[0] == '_':
-
+            if old_style_exception:
+                raise AttributeError, name
             raise AttributeError(name)
         self[name.replace('_', '-')] = value
 
