@@ -3254,15 +3254,20 @@ Affected by `py-dedent-keep-relative-column'. "
                 (current-indentation))
                ;; (py-in-triplequoted-string-p)
                ((and (nth 3 pps)(nth 8 pps))
-                (ignore-errors (goto-char (nth 2 pps)))
-                (if (< 1 (- origline (py-count-lines)))
-                        (progn
-                      (goto-char orig)
+                (if (eq origline (py-count-lines))
+                    (progn
+                      (forward-line -1)
+                      (end-of-line)
                       (skip-chars-backward " \t\r\n\f")
-                      (current-indentation))
-                  (goto-char (nth 2 pps))
+                      (if (ignore-errors (< (nth 2 (if (featurep 'xemacs)
+                                                       (parse-partial-sexp (point-min) (point))
+                                                     (syntax-ppss))) (line-beginning-position)))
+                          (current-indentation)
+                        (ignore-errors (goto-char (nth 2 pps)))
+                        (py-line-backward-maybe)
+                        (back-to-indentation)
+                        (py-compute-indentation orig origline closing)))
                   (current-indentation)))
-               ;; beginning of statement from before got beginning
                ((and (looking-at "\"\"\"\\|'''")(not (bobp)))
                 (py-beginning-of-statement)
                 (py-compute-indentation orig origline closing))
@@ -3381,6 +3386,11 @@ Affected by `py-dedent-keep-relative-column'. "
                (t (current-indentation))))
         (when (interactive-p) (message "%s" indent))
         indent))))
+
+(defun py-line-backward-maybe ()
+  (skip-chars-backward " \t\f" (line-beginning-position))
+  (when (< 0 (abs (skip-chars-backward " \t\r\n\f")))
+    (setq line t)))
 
 (defun py-fetch-previous-indent (orig)
   "Report the preceding indent. "
