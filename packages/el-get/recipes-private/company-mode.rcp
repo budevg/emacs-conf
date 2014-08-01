@@ -1,0 +1,7 @@
+(:name company-mode
+       :description "Modular in-buffer completion framework for Emacs"
+       :type github
+       :pkgname "company-mode/company-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/smart_code/company-mode")))
+       )
