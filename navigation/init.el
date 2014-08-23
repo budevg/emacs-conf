@@ -174,4 +174,5 @@
 (setenv "PATH"
         (concat
          (expand-file-name "~/tools/bin") ":"
+         (expand-file-name "~/.cabal/bin") ":"
          (getenv "PATH")))
