@@ -1,0 +1,9 @@
+(:name flycheck
+       :type github
+       :pkgname "flycheck/flycheck"
+       :description "On-the-fly syntax checking extension"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/smart_code/syntax_checking")))
+
+       ;;:depends (s dash cl-lib f pkg-info)
+       )

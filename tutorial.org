@@ -37,6 +37,8 @@ EMACS CONFIGURATION TUTORIAL
    (makes tab indentations and 8 chars tab width)
 ** <super>+1
    launch zeal the offline api finder
+** <ctrl>+O
+   start syntax checking of file
 * Syntax Highlighting:
 ** <ctrl>+<shift>+b
    highlight lines with more than 80 characters
