@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: end-of-headers
+# key: eoh
+# --
+--text follows this line--
