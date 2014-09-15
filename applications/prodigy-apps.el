@@ -15,16 +15,19 @@
       :nic-device "virtio"
       :disk-device "virtio"
       :mem "1G"
+      :extra-args '()
       :args
       (lambda (&rest args)
-        (list "-snapshot"
-              "-m" (prodigy-getp args :mem)
-              "-net" "user,hostfwd=tcp::5555-:22"
-              "-net" (format "nic,model=%s" (prodigy-getp args :nic-device))
-              "-drive" (format "if=%s,file=%s"
-                               (prodigy-getp args :disk-device)
-                               (prodigy-getp args :boot-disk))
-              ))
+        (append
+         (list "-snapshot"
+               "-m" (prodigy-getp args :mem)
+               "-net" "user,hostfwd=tcp::5555-:22"
+               "-net" (format "nic,model=%s" (prodigy-getp args :nic-device))
+               "-drive" (format "if=%s,file=%s"
+                                (prodigy-getp args :disk-device)
+                                (prodigy-getp args :boot-disk))
+               )
+         (prodigy-getp args :extra-args)))
       :cwd "~/scratch"
       :kill-process-buffer-on-stop t
       )
