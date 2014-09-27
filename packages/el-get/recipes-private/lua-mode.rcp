@@ -1,0 +1,9 @@
+(:name lua-mode
+       :description "A major-mode for editing Lua scripts"
+       :depends (ample-regexps)
+       :type github
+       :pkgname "immerrr/lua-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/lua")))
+
+       )

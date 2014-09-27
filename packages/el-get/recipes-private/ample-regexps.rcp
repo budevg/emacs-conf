@@ -1,0 +1,8 @@
+(:name ample-regexps
+       :description "Compose and reuse Emacs regular expressions with ease"
+       :type github
+       :pkgname "immerrr/ample-regexps.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib")))
+
+       )
