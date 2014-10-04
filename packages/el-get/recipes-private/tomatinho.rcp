@@ -1,0 +1,7 @@
+(:name tomatinho
+       :description "Pomodoro technique timer with a lean and usable interface."
+       :type github
+       :pkgname "konr/tomatinho"
+       :build `(,(concat "cp *.el *.wav "
+                         (in-emacs-d "applications")))
+)
