@@ -18,13 +18,13 @@
     (comint-send-eof)
     ))
 
-(defun message-notify (title msg)
+(defun message-notify (title msg &optional expiration-time)
   "Show a popup if we're on X, or echo it otherwise; TITLE is the title
  of the message, MSG is the context."
 
   (interactive)
-   (cond ((eq window-system 'x)
-          (cond ((executable-find "notify-send") (shell-command
-                                                  (format "notify-send -t 1800000 '%s' '%s'" title msg)))
-                ((message-box (concat title ": " msg)))))
-         (t (message (concat title ": " msg)))))
+  (cond ((and (eq window-system 'x) (executable-find "notify-send"))
+         (let ((time (if expiration-time expiration-time 1800000)))
+           (shell-command
+            (format "notify-send -t %d '%s' '%s'" time title msg))))
+        (t (message (concat title ": " msg)))))

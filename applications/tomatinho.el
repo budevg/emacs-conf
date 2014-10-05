@@ -117,9 +117,11 @@
 
 (defun play-sound-file-async (file)
   "Plys with some overhead, but at least doesn't freeze Emacs."
-  (let ((command (car command-line-args)))
-    (start-process "play-sound-file-async" nil command "-Q" "--batch" "--eval"
-                   (format "(play-sound-file \"%s\")" file))))
+  (when file
+      (message-notify "pomodoro" (if (equal file tomatinho-sound-tick) "tick" "tack") 10000)
+    (let ((command (car command-line-args)))
+      (start-process "play-sound-file-async" nil command "-Q" "--batch" "--eval"
+                     (format "(play-sound-file \"%s\")" file)))))
 
 (defun kill-current-buffer ()
   "Kills the current buffer."
