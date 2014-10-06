@@ -15,13 +15,15 @@
 ;; Delete a message from a folder  Remove that label from the message B DEL
 
 (setq gnus-select-method '(nntp "news.gmane.org"))
-(add-to-list 'gnus-secondary-select-methods
-             `(nnimap "gmail"
-                      (nnimap-user ,user-mail-address)
-                      (nnimap-address "imap.gmail.com")
-                      ;;(nnimap-authinfo-file "~/.authinfo.gpg")
-                      (nnimap-server-port 993)
-                      (nnimap-stream ssl)))
+(defun gmail-address (name mail)
+  (add-to-list 'gnus-secondary-select-methods
+               `(nnimap ,name
+                        (nnimap-user ,mail)
+                        (nnimap-address "imap.gmail.com")
+                        (nnimap-server-port 993)
+                        (nnimap-stream ssl))))
+
+(gmail-address "gmail" "user@gmail.com")
 
 (setq
 

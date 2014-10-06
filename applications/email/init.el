@@ -1,7 +1,8 @@
 
 ;; something about ourselves
 (setq
- user-mail-address "user@gmail.com"
+ email-send-addresses '("user@gmail.com")
+ auth-sources '("~/.authinfo.gpg")
  user-full-name  "xxx yyy"
  message-signature
  (concat
@@ -14,13 +15,21 @@
 
 (setq message-send-mail-function 'smtpmail-send-it
       smtpmail-stream-type 'starttls
-      smtpmail-smtp-user user-mail-address
-      smtpmail-auth-credentials '(("smtp.gmail.com" 587 user-mail-address nil))
       smtpmail-default-smtp-server "smtp.gmail.com"
       smtpmail-smtp-server "smtp.gmail.com"
       smtpmail-smtp-service 587)
 
-;;(setq smtpmail-auth-credentials "~/.authinfo.gpg")
+(defun email-send-switch (&optional email)
+  (interactive)
+  (let ((user-mail (or email
+                       (ido-completing-read
+                        "switch email to: " email-send-addresses))))
+    (setq user-mail-address user-mail
+          smtpmail-smtp-user user-mail
+          smtpmail-auth-credentials `(("smtp.gmail.com" 587 ,user-mail nil)))))
+
+;; by default first element in mail-addresses is used
+(email-send-switch (car email-send-addresses))
 
 ;; don't keep message buffers around
 (setq message-kill-buffer-on-exit t)
