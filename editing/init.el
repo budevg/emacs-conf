@@ -32,6 +32,8 @@
 (global-set-key [(meta /)] 'hippie-expand)
 (delete 'try-expand-line hippie-expand-try-functions-list)
 (delete 'try-expand-list hippie-expand-try-functions-list)
+(delete 'try-complete-lisp-symbol-partially hippie-expand-try-functions-list)
+(delete 'try-complete-lisp-symbol hippie-expand-try-functions-list)
 
 
 (defun delete-word (arg)
