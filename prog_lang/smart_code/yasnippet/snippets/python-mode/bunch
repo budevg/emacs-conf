@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: bunch
+# key: bunch
+# --
+class Bunch(dict):
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+    def __init__(self, *args, **kwargs):
+        super(Bunch, self).__init__(*args, **kwargs)
+$0

@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: tapq
+# key: tapq
+# --
+-net tap,ifname=tap0,script=no,downscript=no -net nic,model=virtio,macaddr=e0:69:95:4f:5b:00$0
