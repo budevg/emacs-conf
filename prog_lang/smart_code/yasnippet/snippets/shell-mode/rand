@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: rand
+# key: rand
+# --
+openssl rand -base64 128$0
