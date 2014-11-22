@@ -103,17 +103,16 @@
 
 (defun app-open-file-at-point ()
   (interactive)
-  (let ((file-path (ffap-file-at-point)))
-    (if file-path
-        (cond ((executable-find "gnome-open")
-               (call-process-shell-command (format "gnome-open '%s'" file-path) nil 0))
-              ((executable-find "xdg-open")
-               (call-process-shell-command (format "xdg-open '%s'" file-path) nil 0)))
-      (cond ((executable-find "nautilus")
-             (call-process-shell-command (format "nautilus '%s'" (expand-file-name default-directory)) nil 0))
-            ((executable-find "thunar")
-             (call-process-shell-command (format "thunar '%s'" (expand-file-name default-directory)) nil 0)))
-      )))
+  (let* ((file-path (ffap-file-at-point))
+        (open-exec (or (executable-find "xdg-open")
+                       (executable-find "gnome-open")
+                       (executable-find "nautilus")
+                       (executable-find "thunar")
+                       ))
+        (url-path (ffap-url-at-point)))
+    (cond
+     (url-path (browse-url url-path))
+     (file-path (call-process-shell-command (format "%s '%s'" open-exec file-path) nil 0)))))
 
 (define-key ctl-x-map "a" 'app-open-file-at-point)
 (define-key ctl-x-map "f" 'jump-to-file-at-point)
