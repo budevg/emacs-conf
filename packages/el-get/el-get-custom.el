@@ -33,7 +33,7 @@
 
 (defconst el-get-script (or load-file-name buffer-file-name))
 
-(defcustom el-get-dir (concat (file-name-as-directory user-emacs-directory) "el-get")
+(defcustom el-get-dir (expand-file-name "el-get" user-emacs-directory)
   "Path where to install the packages."
   :group 'el-get
   :type 'directory)
@@ -234,13 +234,6 @@ definition provided by `el-get' recipes locally.
     `package.el' (the implementation of ELPA) is part of Emacs 24
     but needs an external recipe for previous major versions.
 
-:pkgname
-
-    The name of the package for the underlying package management
-    system (`apt-get', `fink' or `pacman', also supported by
-    `github' and `emacsmirror'), which can be different from the
-    Emacs package name.
-
 :type
 
     The type of the package, currently el-get offers support for
@@ -262,6 +255,11 @@ definition provided by `el-get' recipes locally.
     `http' types.
 
 :pkgname
+
+    The name of the package for the underlying package management
+    system (`apt-get', `fink' or `pacman', also supported by
+    `github' and `emacsmirror'), which can be different from the
+    Emacs package name.
 
     For the `github' type, this specifies the repo name to clone
     from Github. For example, for el-get, the package name would
@@ -612,5 +610,11 @@ where `<system-type>' is the value of `system-type' on
 platforms where this recipe should apply"
                       )
               ,el-get-build-recipe-body))))))
+
+;; TODO: this should be nil; change at the next major version bump
+(defcustom el-get-allow-insecure t
+  "Allow packages to be installed over insecure connections."
+  :group 'el-get
+  :type 'boolean)
 
 (provide 'el-get-custom)

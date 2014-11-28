@@ -35,7 +35,6 @@ Test url: http://repo.or.cz/w/ShellArchive.git?a=blob_plain;hb=HEAD;f=ack.el"
                              url (car (cdr err)) (cdr (cdr err))))))
   (let* ((pdir   (el-get-package-directory package))
          (dest   (or dest (format "%s%s.el" (file-name-as-directory pdir) package)))
-         (part   (concat dest ".part"))
          (buffer-file-coding-system 'no-conversion)
          (require-final-newline nil))
     ;; prune HTTP headers before save
@@ -43,10 +42,7 @@ Test url: http://repo.or.cz/w/ShellArchive.git?a=blob_plain;hb=HEAD;f=ack.el"
     (or (re-search-forward "\r?\n\r?\n" nil t)
         (error (format "Failed to find end of headers in HTTP response from %s for package %s; see buffer %s"
                        url package (buffer-name))))
-    ;; we write to a temporary .part file first to avoid
-    ;; auto-compression
-    (write-region (point) (point-max) part)
-    (rename-file part dest t)
+    (write-region (point) (point-max) dest)
     (kill-buffer))
   (funcall post-install-fun package))
 
@@ -67,6 +63,7 @@ into the package :localname option or its `file-name-nondirectory' part."
          (dest   (or dest (el-get-http-dest-filename package url))))
     (unless (file-directory-p pdir)
       (make-directory pdir))
+    (el-get-insecure-check package url)
 
     (if (not el-get-default-process-sync)
         (url-retrieve url 'el-get-http-retrieve-callback
@@ -80,7 +77,9 @@ into the package :localname option or its `file-name-nondirectory' part."
   "Compute SHA1 of PACKAGE."
   (with-temp-buffer
     (insert-file-contents-literally (el-get-http-dest-filename package url))
-    (sha1 (current-buffer))))
+    ;; Note: don't pass buffer object, `sha1' tries (and sometimes
+    ;; fails) to encode it.
+    (sha1 (buffer-string))))
 
 (defun el-get-http-guess-website (package)
   (plist-get (el-get-package-def package) :url))

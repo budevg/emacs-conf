@@ -448,7 +448,13 @@ called by `el-get' (usually at startup) for each installed package."
                    postinit "post-init" package)
           (funcall maybe-lazy-eval `(el-get-load-package-user-init-file ',package))
           (funcall el-get-maybe-lazy-runsupp
-                   after "after" package)))
+                   after "after" package))
+        ;; if any elpa packages are installed they already `require'd
+        ;; `package'.
+        (when (featurep 'package)
+          ;; tell elpa that this package has been activated, so it
+          ;; doesn't try to activate it's own package instead.
+          (push (el-get-as-symbol package) package-activated-list)))
     (debug err
            (el-get-installation-failed package err)))
   ;; and call the global init hooks
@@ -458,6 +464,7 @@ called by `el-get' (usually at startup) for each installed package."
   package)
 
 
+;;;###autoload
 (defun el-get-install (package)
   "Cause the named PACKAGE to be installed after all of its
 dependencies (if any).
@@ -666,6 +673,7 @@ This variable exists because the function that it holds is a
 dynamically-generated lambda, but it needs to be able to refer to
 itself.")
 
+;;;###autoload
 (defun el-get-update (package)
   "Update PACKAGE."
   (interactive
@@ -762,6 +770,10 @@ result of an actual problem."
   (let ((el-get-default-process-sync t)
         (el-get-dir
          (expand-file-name ".." (file-name-directory el-get-script))))
+    ;; Delete elc files so bugs they contain won't persist.
+    (mapc #'delete-file
+          (nconc (directory-files (expand-file-name "el-get" el-get-dir) t "\\.elc\\'" t)
+                 (directory-files (expand-file-name "el-get/methods" el-get-dir) t "\\.elc\\'" t)))
     (el-get-update "el-get")))
 
 
@@ -771,6 +783,7 @@ result of an actual problem."
     (run-hook-with-args hooks package)
     (run-hook-with-args 'el-get-post-remove-hooks package)))
 
+;;;###autoload
 (defun el-get-remove (package &optional package-status-alist)
   "Remove any PACKAGE that is know to be installed or required."
   (interactive
@@ -802,6 +815,7 @@ result of an actual problem."
           (funcall remove package url 'el-get-post-remove)
           (message "el-get remove %s" package))))))
 
+;;;###autoload
 (defun el-get-reinstall (package)
   "Remove PACKAGE and then install it again."
   (interactive (list (el-get-read-package-name "Reinstall")))
@@ -847,14 +861,21 @@ explicitly declared in the user-init-file (.emacs)."
     ;; Filepath is dir/file
     (let ((filepath (format "%s/%s" dir filename)))
       (with-temp-file filepath
-        (insert (el-get-print-to-string source))))))
+        (emacs-lisp-mode)
+        (insert "(")
+        (loop for (prop val) on source by #'cddr
+              do (insert (format "%S %S\n" prop val)))
+        (delete-char -1) ; delete last \n
+        (insert ")\n")
+        (goto-char (point-min))
+        (indent-pp-sexp 'pretty)))))
 
 ;;;###autoload
 (defun el-get-make-recipes (&optional dir)
   "Loop over `el-get-sources' and write a recipe file for each
 entry which is not a symbol and is not already a known recipe."
   (interactive "Dsave recipes in directory: ")
-  (let* ((all (mapcar 'el-get-source-name (el-get-read-all-recipe-files)))
+  (let* ((all (el-get-read-all-recipe-names))
          (new (loop for r in el-get-sources
                     when (and (not (symbolp r))
                               (not (member (el-get-source-name r) all)))
@@ -882,6 +903,7 @@ entry which is not a symbol and is not already a known recipe."
           (kill-new checksum)
           checksum)))))
 
+;;;###autoload
 (defun el-get-self-checksum ()
   "Compute the checksum of the running version of el-get itself.
 
@@ -929,6 +951,7 @@ considered \"required\"."
     (loop for p in init-deps    do (el-get-do-init p)    collect p into done)
     done))
 
+;;;###autoload
 (defun el-get (&optional sync &rest packages)
   "Ensure that packages have been downloaded once and init them as needed.
 
