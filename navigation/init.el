@@ -112,7 +112,11 @@
         (url-path (ffap-url-at-point)))
     (cond
      (url-path (browse-url url-path))
-     (file-path (call-process-shell-command (format "%s '%s'" open-exec file-path) nil 0)))))
+     (file-path (call-process-shell-command
+                 (format "%s '%s'" open-exec (expand-file-name file-path))
+                 nil
+                 0))
+     )))
 
 (define-key ctl-x-map "a" 'app-open-file-at-point)
 (define-key ctl-x-map "f" 'jump-to-file-at-point)

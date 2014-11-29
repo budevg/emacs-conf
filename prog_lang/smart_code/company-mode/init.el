@@ -7,7 +7,7 @@
           company-semantic
           ;;company-clang
           company-xcode
-          company-ropemacs
+          ;;company-ropemacs
           company-cmake
           company-capf
           (company-dabbrev-code company-gtags company-etags company-keywords)
