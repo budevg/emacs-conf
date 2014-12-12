@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: rshark
+# key: rshark
+# --
+wireshark -k -i <(sudo tcpdump -i eth0 -U -w - port ${1:1234})$0
