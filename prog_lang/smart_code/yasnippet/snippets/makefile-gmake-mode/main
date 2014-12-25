@@ -3,15 +3,18 @@
 # key: main
 # expand-env: ((yas-indent-line 'nil))
 # --
-# $@ - Name of the target
+# $@ - Target file
+# $* - Target file with suffix cut off
 # $? - List of dependencies more recent than target
 # $^ - All dependencies without duplicates
 # $+ - All dependencies with duplicates
-# $< - First dependency
+# $< - Name of file that cause this target to get triggered
 # $(@D) - The directory part of the file name of the target
 # %  - Wildcard, matches text stored in $*
 # OBJ = $(SRC:.c=.o) - replace .c extension with .o
 # OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS)) - add prefix to list
+# make -p - show default rules
+# `pkg-config --cflags --libs <lib>` - specify lib compilation flags
 
 OBJS:= $0
 TARGET:=
