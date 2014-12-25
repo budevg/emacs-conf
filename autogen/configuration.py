@@ -43,6 +43,8 @@ navigation = [Node(path = "navigation/init.el",
                    msg = "enable show hide support"),
               Node(path = "navigation/symbols-navigate.el",
                    msg = "navigate symbols with ido mode"),
+              Node(path = "navigation/expand-region",
+                   msg = "expand region package"),
               ]
 
 

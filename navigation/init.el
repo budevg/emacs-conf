@@ -179,3 +179,6 @@
          (expand-file-name "~/tools/bin") ":"
          (expand-file-name "~/.cabal/bin") ":"
          (getenv "PATH")))
+
+(autoload 'er/expand-region "expand-region.el" nil t)
+(global-set-key (kbd "M-2") #'er/expand-region)

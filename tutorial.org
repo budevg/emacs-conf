@@ -117,6 +117,8 @@ EMACS CONFIGURATION TUTORIAL
    - e for elisp files
    - p for python files
    - c for c/c++ file
+** meta + 2
+   select region by expanding it more and more with each key press
 * Editing:
 ** <ctrl>+w
    backward kill word
