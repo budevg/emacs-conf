@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: clean
+# key: clean
+# expand-env: ((yas-indent-line 'nil))
+# --
+# Remove anything listed in the .gitignore file.
+# Remove empty directories because they cannot be versioned.
+clean:
+	find . -path ./.git -prune -o -print0 | \
+	git check-ignore -z --stdin | xargs -0 rm -f
+	find . -depth -mindepth 1 -type d -print0 | \
+	xargs -0 rmdir --ignore-fail-on-non-empty$0
