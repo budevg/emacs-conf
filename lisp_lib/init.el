@@ -28,3 +28,5 @@
            (shell-command
             (format "notify-send -t %d '%s' '%s'" time title msg))))
         (t (message (concat title ": " msg)))))
+
+(autoload 'defhydra "hydra" nil t)
