@@ -149,6 +149,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "init markdown mode"),
              Node(path = "prog_lang/haskell/init.el",
                   msg = "init haskell mode"),
+             Node(path = "prog_lang/docker/init.el",
+                  msg = "docker file mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",
