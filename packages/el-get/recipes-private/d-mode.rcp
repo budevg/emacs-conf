@@ -1,0 +1,8 @@
+(:name d-mode
+       :description "An Emacs major mode for editing D code."
+       :type github
+       :pkgname "Emacs-D-Mode-Maintainers/Emacs-D-Mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/D")))
+
+       )
