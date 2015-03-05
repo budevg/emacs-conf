@@ -159,6 +159,12 @@
 (autoload 'ag "ag.el" nil t)
 (autoload 'ag-dired "ag.el" nil t)
 (autoload 'ag/dwim-at-point "ag.el" nil t)
+(eval-after-load "ag"
+  '(progn
+     (setq ag-reuse-buffers t)
+     (define-key ag-mode-map (kbd "q")
+       '(lambda () (interactive)
+          (let (kill-buffer-query-functions) (kill-buffer))))))
 
 (defun ag-here (string)
   (interactive (list (read-from-minibuffer "Search string: " (ag/dwim-at-point))))
