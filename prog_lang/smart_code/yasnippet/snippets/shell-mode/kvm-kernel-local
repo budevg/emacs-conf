@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: kvm kernel local
+# key: kvm
+# --
+sudo kvm -snapshot -nographic -m 1G -kernel /boot/vmlinuz-\`uname -r\` -initrd /boot/initrd.img-\`uname -r\` -append "console=ttyS0 root=/dev/vda1" -serial stdio -monitor /dev/null -net user,hostfwd=tcp::5555-:22,hostfwd=tcp::6666-:3389 -net nic,model=virtio -drive if=virtio,file=`(expand-file-name "~/")`$0

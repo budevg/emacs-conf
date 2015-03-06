@@ -1,0 +1,13 @@
+# -*- mode: snippet -*-
+# name: argparse
+# key: argparse
+# --
+import argparse
+parser = argparse.ArgumentParser(description='cmd xxx')
+parser.add_argument('aaa', metavar='A', nargs='+', help='aaa help')
+parser.add_argument('--bbb', dest='bbb',help='bbb help')
+
+subparsers = parser.add_subparsers(help='sub-command help')
+cmda = subparsers.add_parser('cmda', help='cmda help')
+
+args = parser.parse_args()
