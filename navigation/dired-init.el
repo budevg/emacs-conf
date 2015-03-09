@@ -54,4 +54,12 @@
      (require 'dired-x)
      (setq dired-omit-extensions (append dired-omit-extensions
                                          '(".ko" ".ko.cmd" ".mod.c" ".mod.o.cmd" ".o.cmd" ".d") ))
-     (define-key dired-mode-map [(meta o)] 'dired-omit-mode)))
+     (define-key dired-mode-map [(meta o)] 'dired-omit-mode)
+     (defun sudired ()
+       (interactive)
+       (require 'tramp)
+       (let ((dir (expand-file-name default-directory)))
+         (if (string-match "^/sudo:" dir)
+             (user-error "Already in sudo")
+           (dired (concat "/sudo::" dir)))))
+     (define-key dired-mode-map "!" 'sudired)))
