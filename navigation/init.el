@@ -8,15 +8,36 @@
 
 (eval-after-load "ido"
   '(progn
+     (defun ido-occasional-completing-read
+         (prompt collection
+                 &optional predicate require-match initial-input
+                 hist def inherit-input-method)
+       "Use `ido-completing-read' if the collection isn't too large.
+Fall back to `completing-read' otherwise."
+       (let ((filtered-collection
+              (all-completions "" collection predicate)))
+         (if (<= (length filtered-collection) 30000)
+             (ido-completing-read
+              prompt filtered-collection nil
+              require-match initial-input hist
+              def nil)
+           (completing-read
+            prompt collection predicate
+            require-match initial-input hist
+            def inherit-input-method))))
+
+     (defmacro with-ido-completion (fun)
+       "Wrap FUN in another interactive function with ido completion."
+       `(defun ,(intern (concat (symbol-name fun) "/with-ido")) ()
+          ,(format "Forward to `%S' with ido completion." fun)
+          (interactive)
+          (let ((completing-read-function
+                 'ido-occasional-completing-read))
+            (call-interactively #',fun))))
+
      (global-set-key
       "\C-q"
-      (lambda ()
-        (interactive)
-        (call-interactively
-         (intern
-          (ido-completing-read
-           "M-x "
-           (all-completions "" obarray 'commandp))))))
+      (with-ido-completion execute-extended-command))
      ))
 
 (defun rename-frame ()
