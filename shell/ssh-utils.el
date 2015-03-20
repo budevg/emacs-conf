@@ -10,3 +10,11 @@
 
 (autoload 'remote-edit-file "remote-edit" nil t)
 (define-key ctl-x-map "F" 'remote-edit-file)
+
+(defun dot-ftrace ()
+  (interactive)
+  (let ((utils '("funccount"  "funcgraph"  "funcslower"  "functrace"  "kprobe")))
+    (dolist (util utils)
+      (let ((src (concat (in-emacs-d "shell/ftrace/") util))
+            (dst util))
+        (comint-send-file-base64 src dst "+x")))))

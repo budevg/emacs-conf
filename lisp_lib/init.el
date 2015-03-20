@@ -18,6 +18,22 @@
     (comint-send-eof)
     ))
 
+(defun comint-send-file-base64 (src-path dst-path perms)
+  (let* ((src-data (base64-encode-string
+                    (with-temp-buffer
+                      (insert-file-contents src-path)
+                      (buffer-string))
+                    t))
+         (current-proc (get-buffer-process (current-buffer)))
+         (cmd (format "echo %s | base64 -d > %s;%s"
+                      src-data
+                      dst-path
+                      (if perms
+                          (format " chmod %s %s; " perms dst-path)
+                        " "))))
+    (insert cmd)
+    ))
+
 (defun message-notify (title msg &optional expiration-time)
   "Show a popup if we're on X, or echo it otherwise; TITLE is the title
  of the message, MSG is the context."
