@@ -9,6 +9,8 @@
         ll = log --graph --date=short
         fp = format-patch -s
         fpp = format-patch -s --cover-letter
+        c = clean -fdxn
+        cc = clean -fdx
 
 [sendemail]
 	smtpserver = smtp.gmail.com
