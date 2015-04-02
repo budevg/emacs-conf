@@ -2,6 +2,7 @@
        :description "GNU Emacs modes for various Git-related files"
        :type github
        :pkgname "magit/git-modes"
+       :branch "master"
        :build `(,(concat "cp *.el "
                          (in-emacs-d "source_control/magit")))
        )

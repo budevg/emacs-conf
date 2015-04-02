@@ -1,10 +1,10 @@
 ;;; gitconfig-mode.el --- Major mode for editing .gitconfig files -*- lexical-binding: t; -*-
 
 ;; Copyright (c) 2012-2013  Sebastian Wiesner
+;; Copyright (C) 2012-2015  The Magit Project Developers
 
 ;; Author: Sebastian Wiesner <lunaryorn@gmail.com>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
-;; Version: 0.14.0
 ;; Homepage: https://github.com/magit/git-modes
 ;; Keywords: convenience vc git
 
@@ -33,41 +33,45 @@
 (require 'conf-mode)
 
 (defun gitconfig-line-indented-p ()
-  "Determine whether the current line is indented correctly.
-
-Return t if so, or nil otherwise."
+  "Return t if the current line is indented correctly."
   (save-excursion
     (beginning-of-line)
     (or (looking-at (rx line-start "["
                         symbol-start
                         (minimal-match (zero-or-more not-newline))
                         symbol-end "]"))
-        (looking-at (rx line-start "\t"
-                        symbol-start (or (syntax word)
-                                         (syntax symbol)))))))
+        (looking-at (concat (rx line-start)
+                            (gitconfig-indentation-string)
+                            (rx symbol-start (or (syntax word)
+                                                 (syntax symbol)))))
+        (looking-at (rx (zero-or-one "\t") (or "#" ";"))))))
 
 (defun gitconfig-point-in-indentation-p ()
-  "Determine whether the point is in the indentation of the current line.
-
-Return t if so, or nil otherwise."
+  "Return if the point is in the indentation of the current line."
   (save-excursion
     (let ((pos (point)))
       (back-to-indentation)
-      (< pos (point)))))
+      (<= pos (point)))))
 
 (defun gitconfig-indent-line ()
   "Indent the current line."
   (interactive)
-  (unless (gitconfig-line-indented-p)
+  (if (gitconfig-line-indented-p)
+      (when (gitconfig-point-in-indentation-p)
+        (back-to-indentation))
     (let ((old-point (point-marker))
           (was-in-indent (gitconfig-point-in-indentation-p)))
       (beginning-of-line)
       (delete-horizontal-space)
       (unless (equal (char-after) ?\[)
-        (insert-char ?\t 1))
+        (insert (gitconfig-indentation-string)))
       (if was-in-indent
           (back-to-indentation)
-        (goto-char (marker-position old-point))))))
+        (goto-char (marker-position old-point)))
+      (set-marker old-point nil))))
+
+(defun gitconfig-indentation-string ()
+  (if indent-tabs-mode "\t" (make-string tab-width ?\ )))
 
 (defvar gitconfig-mode-syntax-table
   (let ((table (make-syntax-table conf-unix-mode-syntax-table)))
@@ -118,9 +122,8 @@ Return t if so, or nil otherwise."
        'gitconfig-indent-line))
 
 ;;;###autoload
-(dolist (pattern (list (rx "/.gitconfig" string-end)
-                       (rx "/.git/config" string-end)
-                       (rx "/git/config" string-end)))
+(dolist (pattern '("/\\.gitconfig\\'" "/\\.git/config\\'"
+                   "/git/config\\'"   "/\\.gitmodules\\'"))
   (add-to-list 'auto-mode-alist (cons pattern 'gitconfig-mode)))
 
 (provide 'gitconfig-mode)

@@ -1,10 +1,9 @@
 ;;; gitattributes-mode.el --- Major mode for editing .gitattributes files -*- lexical-binding: t -*-
 
-;; Copyright (C) 2013 Rüdiger Sonderfeld
+;; Copyright (C) 2013-2015  The Magit Project Developers
 
 ;; Author: Rüdiger Sonderfeld <ruediger@c-plusplus.de>
-;; Created: 26 Aug 2013
-;; Version: 0.14.0
+;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 ;; Homepage: https://github.com/magit/git-modes
 ;; Keywords: convenience vc git
 
@@ -25,21 +24,17 @@
 
 ;;; Commentary:
 
-;; A major mode for editing gitattributes(5) files.  `eldoc-mode' is supported
-;; for known attributes.
-
-;;; Format:
-
-;; pattern attr1 attr2 ... attrN
-
-;; Pattern format is described in gitignore(5).
+;; A major mode for editing .gitattributes files.  See
+;; the gitattributes(5) manpage for more information.
+;; `eldoc-mode' is supported for known attributes.
 
 ;;; Code:
 
 (require 'easymenu)
+(require 'thingatpt)
 
 (defgroup gitattributes-mode nil
-  "Major mode for editing .gitattributes files"
+  "Edit .gitattributes files."
   :link '(url-link "https://github.com/magit/git-modes")
   :prefix "gitattributes-mode-"
   :group 'tools)
@@ -115,8 +110,6 @@ ALLOWED-STATE should be a list or single symbol or string of allowed values.
 t means the attribute can be Set or Unset.  `string' means the symbol value
 can be any string and `number' means the value should be a number.")
 
-(require 'thingatpt)
-
 (defun gitattributes-mode-eldoc (&optional no-state)
   "Support for `eldoc-mode'.
 If NO-STATE is non-nil then do not print state."
@@ -148,6 +141,8 @@ If NO-STATE is non-nil then do not print state."
      (let ((old-limit limit))
        (save-excursion
          (beginning-of-line)
+         (while (looking-at "^\\s-*$")
+           (forward-line))
          (when (re-search-forward "[[:space:]]" limit 'noerror)
            (setq limit (point))))
        (unless (< limit (point))
@@ -187,9 +182,7 @@ If ARG is omitted or nil, move point backward one field."
     (dotimes (_ (or arg 1))
       (re-search-backward "\\s-[!-]?\\<" nil 'move))))
 
-(defvar gitattributes-mode-map
-  (let ((map (make-sparse-keymap)))
-    map)
+(defvar gitattributes-mode-map (make-sparse-keymap)
   "Keymap for `gitattributes-mode'.")
 
 (easy-menu-define gitattributes-mode-menu
