@@ -23,6 +23,7 @@
      (define-key magit-mode-map (kbd "TAB") 'magit-toggle-section-new)
      (define-key magit-mode-map (kbd "<M-left>") nil)
      (define-key magit-status-mode-map (kbd "q") 'magit-quit-session)
+     (setq magit-key-mode-show-usage nil)
      ))
 
 (defadvice magit-status (around magit-fullscreen activate)
