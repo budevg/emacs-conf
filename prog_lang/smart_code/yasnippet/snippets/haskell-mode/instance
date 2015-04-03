@@ -1,8 +1,6 @@
 # -*- mode: snippet -*-
-# key: inst
 # name: instance
-# condition: (= (length "inst") (current-column))
-# contributor: Luke Hoersten <luke@hoersten.org>
+# key: ins
 # --
-instance ${1:Class} ${2:Data} where
-    ${3:f} = ${4:undefined}$0
+instance ${1:${2:(Show a)} => }${3:Ord} ${4:DataType} where
+$0

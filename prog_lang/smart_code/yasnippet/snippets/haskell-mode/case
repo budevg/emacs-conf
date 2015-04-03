@@ -1,9 +1,8 @@
 # -*- mode: snippet -*-
-# key: case
 # name: case
-# expand-env: ((yas-indent-line 'fixed))
-# contributor: Luke Hoersten <luke@hoersten.org>
+# key: case
 # --
-case ${1:x} of
-    ${2:Data} -> ${4:undefined}
-    ${3:Data} -> ${5:undefined}$0
+case ${1:var} of
+     ${2:cond} -> ${3:value}
+     $0
+     otherwise -> ${4:other}

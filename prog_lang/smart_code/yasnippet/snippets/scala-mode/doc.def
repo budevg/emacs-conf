@@ -1,7 +1,8 @@
-# Author: Anders Bach Nielsen <andersbach.nielsen@epfl.ch>
-# name: /** method name */
+# -*- mode: snippet -*-
+#Author : Anders Bach Nielsen <andersbach.nielsen@epfl.ch>
+#name : /** method name */
 # key: doc
 # --
-/** 
+/**
  * `(scala-mode-def-and-args-doc)`
- */ 
+ */

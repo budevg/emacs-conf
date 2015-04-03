@@ -1,7 +1,5 @@
 # -*- mode: snippet -*-
-# key: imp
-# name: simple import
-# condition: (= (length "imp") (current-column))
-# contributor: Luke Hoersten <luke@hoersten.org>
+# name: import
+# key: import
 # --
-import           ${1:Module} ${2:(${3:f})}
+import${1: qualified} ${2:Module${3:(symbols)}}${4: as ${5:alias}}
