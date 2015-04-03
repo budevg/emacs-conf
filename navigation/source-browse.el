@@ -18,7 +18,7 @@
 (defun cscope-update-indexer ()
   (interactive)
   (shell-command-to-string "cp /usr/bin/cscope-indexer ~/tools/bin/cscope-indexer")
-  (shell-command-to-string "sed -i 's/cc|hh/cc|hh|S/' ~/tools/bin/cscope-indexer"))
+  (shell-command-to-string "sed -i 's/cc|hh/cc|hh|S|go/' ~/tools/bin/cscope-indexer"))
 
 (setq cscope-do-not-update-database t)
 (define-key global-map [(meta f9)]  'cscope-find-this-symbol)
