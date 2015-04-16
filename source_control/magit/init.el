@@ -24,6 +24,7 @@
      (define-key magit-mode-map (kbd "<M-left>") nil)
      (define-key magit-status-mode-map (kbd "q") 'magit-quit-session)
      (setq magit-key-mode-show-usage nil)
+     (setq git-commit-mode-hook '(turn-on-auto-fill flyspell-mode))
      ))
 
 (defadvice magit-status (around magit-fullscreen activate)
