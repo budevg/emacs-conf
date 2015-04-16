@@ -13,8 +13,16 @@
 
 (defun dot-ftrace ()
   (interactive)
-  (let ((utils '("funccount"  "funcgraph"  "funcslower"  "functrace"  "kprobe")))
-    (dolist (util utils)
-      (let ((src (concat (in-emacs-d "shell/ftrace/") util))
-            (dst util))
-        (comint-send-file-base64 src dst "+x")))))
+  (let* ((util (ido-completing-read
+                "Ftrace utility: " '("execsnoop"
+                                     "funccount"
+                                     "funcgraph"
+                                     "funcslower"
+                                     "functrace"
+                                     "iolatency"
+                                     "iosnoop"
+                                     "kprobe"
+                                     "tpoint")))
+         (src (concat (in-emacs-d "shell/ftrace/") util))
+         (dst util))
+    (comint-send-file-base64 src dst "+x")))
