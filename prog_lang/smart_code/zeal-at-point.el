@@ -3,7 +3,7 @@
 ;; Copyright (C) 2013 Jinzhu
 ;; Author:  Jinzhu <wosmvp@gmail.com>
 ;; Created: 29 Nov 2013
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; URL: https://github.com/jinzhu/zeal-at-point
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -57,7 +57,10 @@
 
 ;;; Code:
 
-;;;###autoload
+(defgroup zeal-at-point nil
+  "Searching in Zeal for text at point"
+  :group 'external)
+
 (defcustom zeal-at-point-mode-alist
   '((actionscript-mode . "actionscript")
     (arduino-mode . "arduino")
@@ -70,6 +73,7 @@
     (css-mode . "css")
     (elixir-mode . "elixir")
     (emacs-lisp-mode . "emacs")
+    (enh-ruby-mode . "ruby")
     (erlang-mode . "erlang")
     (gfm-mode . "markdown")
     (go-mode . "go")
@@ -87,10 +91,11 @@
     (php-mode . "php")
     (processing-mode . "processing")
     (puppet-mode . "puppet")
-    (python-mode . "python")
+    (python-mode . "python 2")
     (ruby-mode . "ruby")
     (sass-mode . "sass")
     (scala-mode . "scala")
+    (tcl-mode . "tcl")
     (vim-mode . "vim"))
   "Alist which maps major modes to Zeal docset tags.
 Each entry is of the form (MAJOR-MODE . DOCSET-TAG) where
@@ -100,7 +105,6 @@ for one or more docsets in Zeal."
                        (string :tag "Docset tag")))
   :group 'zeal-at-point)
 
-;;;###autoload
 (defvar zeal-at-point-docsets (mapcar
                                (lambda (element)
                                  (cdr element))
@@ -111,7 +115,6 @@ is a collection of all the values from `zeal-at-point-mode-alist'.
 Setting or appending this variable can be used to add completion
 options to `zeal-at-point-with-docset'.")
 
-;;;###autoload
 (defvar zeal-at-point-docset nil
   "Variable used to specify the docset for the current buffer.
 Users can set this to override the default guess made using
@@ -124,6 +127,12 @@ code to `rinari-minor-mode-hook' or `ruby-on-rails-mode-hook'
 which sets this variable to \"allruby\" so that Zeal will search
 the combined docset.")
 (make-variable-buffer-local 'zeal-at-point-docset)
+
+(defvar zeal-at-point--docset-hitory nil)
+
+(unless (fboundp 'setq-local)
+  (defmacro setq-local (var val)
+    `(set (make-local-variable ',var) ,val)))
 
 (defun zeal-at-point-get-docset ()
   "Guess which docset suit to the current major mode."
@@ -139,9 +148,10 @@ the combined docset.")
 (defun zeal-at-point-run-search (search)
   (if (executable-find "zeal")
       (start-process "Zeal" nil "zeal" "--query" search)
-    (message "Zeal haven't been found, install it first http://zealdocs.org"))
+    (message "Zeal wasn't found, install it first http://zealdocs.org"))
   )
 
+;;;###autoload
 (defun zeal-at-point (&optional edit-search)
   "Search for the word at point in Zeal"
   (interactive "P")
@@ -152,10 +162,23 @@ the combined docset.")
          (read-string "Zeal search: " search)
        search))))
 
+(defun zeal-at-point--docset-candidates ()
+  (mapcar 'cdr zeal-at-point-mode-alist))
+
+(defun zeal-at-point--set-docset-prompt ()
+  (let ((default-docset (zeal-at-point-get-docset)))
+    (format "Zeal docset%s: " (if default-docset
+                                  (format "[Default: %s]" default-docset)
+                                ""))))
+
+;;;###autoload
 (defun zeal-at-point-set-docset ()
   "Set current buffer's docset."
   (interactive)
-  (setq-local zeal-at-point-docset (read-string "Zeal docset: " (zeal-at-point-get-docset)))
+  (setq-local zeal-at-point-docset
+              (completing-read (zeal-at-point--set-docset-prompt)
+                               (zeal-at-point--docset-candidates) nil nil nil
+                               'zeal-at-point--docset-hitory (zeal-at-point-get-docset)))
   )
 
 (provide 'zeal-at-point)
