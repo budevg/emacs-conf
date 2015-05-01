@@ -14,7 +14,7 @@
 # OBJ = $(SRC:.c=.o) - replace .c extension with .o
 # OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS)) - add prefix to list
 # make -p - show default rules
-# `pkg-config --cflags --libs <lib>` - specify lib compilation flags
+# \`pkg-config --cflags --libs <lib>\` - specify lib compilation flags
 
 OBJS:= $0
 TARGET:=
