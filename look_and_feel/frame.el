@@ -28,10 +28,10 @@
  (kbd "C-f z")
  (defhydra hydra-zoom ()
    "zoom"
-   ("j" text-scale-decrease "[-]" :color red)
-   ("k" text-scale-increase "[+]" :color red)
-   ("h" zoom-frm-out "-" :color red)
-   ("l" zoom-frm-in "+" :color red)
+   ("<up>" text-scale-decrease "[-]" :color red)
+   ("<down>" text-scale-increase "[+]" :color red)
+   ("<left>" zoom-frm-out "-" :color red)
+   ("<right>" zoom-frm-in "+" :color red)
    ("q" nil "cancel" :color blue)))
 
 ;; Font size
