@@ -5,5 +5,5 @@
      (setq
       deft-extension "org"
       deft-directory "~/.deft/"
+      deft-use-filename-as-title t
       deft-text-mode 'org-mode)))
-     
