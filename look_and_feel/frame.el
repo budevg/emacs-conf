@@ -34,6 +34,15 @@
    ("<right>" zoom-frm-in "+" :color red)
    ("q" nil "cancel" :color blue)))
 
+(global-set-key
+ (kbd "C-f w")
+ (defhydra hydra-windows ()
+   "windows"
+   ("<down>" balance-windows-area "balance windows" :color red)
+   ("<left>" rename-buffer "rename buffer" :color red)
+   ("<right>" rename-frame "rename frame" :color red)
+   ("q" nil "cancel" :color blue)))
+
 ;; Font size
 (define-key global-map [(control kp-add)] 'text-scale-increase)
 (define-key global-map [(control kp-subtract)] 'text-scale-decrease)
