@@ -1,43 +1,64 @@
 (autoload 'magit-status "magit" nil t)
-(autoload 'rebase-mode "git-rebase-mode" nil t)
-(autoload 'magit-blame-mode "magit-blame" nil t)
-(add-to-list 'auto-mode-alist
-             '("/git-rebase-todo\\'" . git-rebase-mode))
-
-(setq magit-save-some-buffers nil)
-(setq magit-diff-use-overlays nil) ;; with overlays performance sucks
 (global-set-key [(meta m)] 'magit-status)
 
-(defun magit-toggle-section-new ()
+(defun magit-section-toggle-new ()
   (interactive)
   (let ((file (ffap-file-at-point)))
     (if file
-        (git-setup-diff-buffer
-         (apply #'git-run-command-buffer "*git-diff*" "diff-index" "-p" "-M" "HEAD" "--" (list file)))
-      (magit-toggle-section))))
+        (magit-diff "HEAD" '() (list file))
+      (magit-section-toggle (magit-current-section)))))
 
 (eval-after-load "magit"
   '(progn
-     (autoload 'git-setup-diff-buffer "git" nil t)
-     (autoload 'git-run-command-buffer "git" nil t)
-     (define-key magit-mode-map (kbd "TAB") 'magit-toggle-section-new)
-     (define-key magit-mode-map (kbd "<M-left>") nil)
-     (define-key magit-status-mode-map (kbd "q") 'magit-quit-session)
-     (setq magit-key-mode-show-usage nil)
-     (setq git-commit-mode-hook '(turn-on-auto-fill flyspell-mode))
+     (setq magit-popup-show-common-commands nil)
+     (setq magit-diff-highlight-hunk-body nil)
+     (setq magit-save-repository-buffers nil)
+     (setq magit-revert-buffers 'silent)
+     (custom-set-faces
+      '(magit-section-highlight ((t (:inherit nil)))))
+     (setq magit-status-sections-hook
+           '(magit-insert-status-headers
+             magit-insert-merge-log
+             magit-insert-rebase-sequence
+             magit-insert-am-sequence
+             magit-insert-sequencer-sequence
+             magit-insert-bisect-output
+             magit-insert-bisect-rest
+             magit-insert-bisect-log
+             magit-insert-stashes
+             magit-insert-untracked-files
+             magit-insert-unstaged-changes
+             magit-insert-staged-changes
+             magit-insert-unpulled-commits
+             magit-insert-unpushed-commits))
+
+     (setq magit-status-headers-hook
+           '(magit-insert-head-header
+             magit-insert-upstream-header
+             magit-insert-tags-header
+             magit-insert-remote-header))
+
+     (setq git-commit-setup-hook
+           '(git-commit-save-message
+             git-commit-setup-changelog-support
+             git-commit-turn-on-auto-fill
+             git-commit-propertize-diff
+             with-editor-usage-message
+             git-commit-turn-on-flyspell
+             ))
+
+     (setq magit-diff-auto-show '())
+
+
+
+     (define-key magit-mode-map "\t" 'magit-section-toggle-new)
+     (define-key magit-mode-map [C-tab] nil)
+     (define-key magit-mode-map "q"
+       (lambda ()
+         (interactive)
+         (magit-mode-bury-buffer t)))
      ))
 
 (defadvice magit-status (around magit-fullscreen activate)
-  (window-configuration-to-register :magit-fullscreen)
   ad-do-it
   (delete-other-windows))
-
-(defun magit-quit-session ()
-  "Restores the previous window configuration and kills the magit
-buffer"
-  (interactive)
-  (kill-buffer)
-  (jump-to-register :magit-fullscreen))
-
-(custom-set-faces
- '(magit-item-highlight ((t (:inherit nil)))))
