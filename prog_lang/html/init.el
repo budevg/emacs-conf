@@ -47,6 +47,6 @@ This works on the current region."
   (define-key web-mode-map (kbd "C-<down>") (lambda () (interactive) (web-mode-tag-match)))
   (define-key web-mode-map (kbd "C-<up>") (lambda () (interactive) (web-mode-tag-match)))
   (define-key web-mode-map (kbd "<backtab>")   'web-mode-fold-or-unfold)
-  (set (make-local-variable 'yas-extra-modes) 'html-mode)
+  (set (make-local-variable 'yas--extra-modes) '(html-mode))
   )
 (add-hook 'web-mode-hook  'my-web-mode-hook)
