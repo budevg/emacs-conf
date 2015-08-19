@@ -38,6 +38,7 @@
  (kbd "C-f w")
  (defhydra hydra-windows ()
    "windows"
+   ("<up>" other-window "next window" :color red)
    ("<down>" balance-windows-area "balance windows" :color red)
    ("<left>" rename-buffer "rename buffer" :color red)
    ("<right>" rename-frame "rename frame" :color red)

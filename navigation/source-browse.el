@@ -36,5 +36,8 @@
   (message "tags built successfully"))
 
 (autoload 'etags-select-find-tag-at-point "etags-select" nil t)
+(eval-after-load "etags-select"
+  '(progn
+     (setq etags-select-highlight-tag-after-jump nil)))
 (global-set-key (kbd "M-.") 'etags-select-find-tag-at-point)
 (global-set-key (kbd "C->") 'pop-tag-mark)
