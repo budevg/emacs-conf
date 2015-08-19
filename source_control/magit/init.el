@@ -8,6 +8,8 @@
         (magit-diff "HEAD" '() (list file))
       (magit-section-toggle (magit-current-section)))))
 
+(setq magit-version "2.2.0")
+
 (eval-after-load "magit"
   '(progn
      (setq magit-push-always-verify nil)
@@ -50,7 +52,7 @@
 
      (setq magit-diff-auto-show '())
 
-
+     (setq git-commit-finish-query-functions '())
 
      (define-key magit-mode-map "\t" 'magit-section-toggle-new)
      (define-key magit-mode-map [C-tab] nil)
@@ -58,8 +60,7 @@
        (lambda ()
          (interactive)
          (magit-mode-bury-buffer t)))
+     (defadvice magit-status (around magit-fullscreen activate)
+       ad-do-it
+       (delete-other-windows))
      ))
-
-(defadvice magit-status (around magit-fullscreen activate)
-  ad-do-it
-  (delete-other-windows))
