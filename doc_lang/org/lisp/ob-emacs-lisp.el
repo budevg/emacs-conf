@@ -1,6 +1,6 @@
 ;;; ob-emacs-lisp.el --- org-babel functions for emacs-lisp code evaluation
 
-;; Copyright (C) 2009-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -27,13 +27,9 @@
 
 ;;; Code:
 (require 'ob)
-(eval-when-compile (require 'ob-comint))
 
-(defvar org-babel-default-header-args:emacs-lisp
-  '((:hlines . "yes") (:colnames . "no"))
+(defvar org-babel-default-header-args:emacs-lisp nil
   "Default arguments for evaluating an emacs-lisp source block.")
-
-(declare-function orgtbl-to-generic "org-table" (table params))
 
 (defun org-babel-expand-body:emacs-lisp (body params)
   "Expand BODY according to PARAMS, return the expanded body."
@@ -55,23 +51,26 @@
 (defun org-babel-execute:emacs-lisp (body params)
   "Execute a block of emacs-lisp code with Babel."
   (save-window-excursion
-    ((lambda (result)
-       (if (or (member "scalar" (cdr (assoc :result-params params)))
-	       (member "verbatim" (cdr (assoc :result-params params))))
-	   (let ((print-level nil)
-		 (print-length nil))
-	     (format "%S" result))
-	 (org-babel-reassemble-table
-	  result
-	  (org-babel-pick-name (cdr (assoc :colname-names params))
-			       (cdr (assoc :colnames params)))
-	  (org-babel-pick-name (cdr (assoc :rowname-names params))
-			       (cdr (assoc :rownames params))))))
-     (eval (read (format (if (member "output"
-				     (cdr (assoc :result-params params)))
-			     "(with-output-to-string %s)"
-			   "(progn %s)")
-			 (org-babel-expand-body:emacs-lisp body params)))))))
+    (let ((result
+           (eval (read (format (if (member "output"
+                                           (cdr (assoc :result-params params)))
+                                   "(with-output-to-string %s)"
+                                 "(progn %s)")
+                               (org-babel-expand-body:emacs-lisp
+                                body params))))))
+      (org-babel-result-cond (cdr (assoc :result-params params))
+	(let ((print-level nil)
+              (print-length nil))
+          (if (or (member "scalar" (cdr (assoc :result-params params)))
+                  (member "verbatim" (cdr (assoc :result-params params))))
+              (format "%S" result)
+            (format "%s" result)))
+	(org-babel-reassemble-table
+	 result
+         (org-babel-pick-name (cdr (assoc :colname-names params))
+                              (cdr (assoc :colnames params)))
+         (org-babel-pick-name (cdr (assoc :rowname-names params))
+                              (cdr (assoc :rownames params))))))))
 
 (provide 'ob-emacs-lisp)
 

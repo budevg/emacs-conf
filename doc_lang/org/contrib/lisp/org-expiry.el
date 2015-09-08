@@ -1,8 +1,8 @@
 ;;; org-expiry.el --- expiry mechanism for Org entries
 ;;
-;; Copyright 2007-2013 Free Software Foundation, Inc.
+;; Copyright 2007-2014 Free Software Foundation, Inc.
 ;;
-;; Author: bzg AT gnu DOT org
+;; Author: Bastien Guerry
 ;; Version: 0.2
 ;; Keywords: org expiry
 
@@ -19,8 +19,7 @@
 ;; GNU General Public License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 ;;
 ;;; Commentary:
 ;;
@@ -83,7 +82,7 @@
   :group 'org)
 
 (defcustom org-expiry-inactive-timestamps nil
-  "Insert inactive timestamps for the created and expired time properties"
+  "Insert inactive timestamps for created/expired properties."
   :type 'boolean
   :group 'org-expiry)
 
@@ -219,11 +218,12 @@ Return nil if the entry is not expired.  Otherwise return the
 amount of time between today and the expiry date.
 
 If there is no creation date, use `org-expiry-created-date'.
-If there is no expiry date, use `org-expiry-expiry-date'."
+If there is no expiry date, use `org-expiry-wait'."
   (let* ((ex-prop org-expiry-expiry-property-name)
 	 (cr-prop org-expiry-created-property-name)
 	 (ct (current-time))
-	 (cr (org-read-date nil t (or (org-entry-get (point) cr-prop t) "+0d")))
+	 (cr (org-read-date nil t (or (org-entry-get (point) cr-prop t)
+				      org-expiry-created-date)))
 	 (ex-field (or (org-entry-get (point) ex-prop t) org-expiry-wait))
 	 (ex (if (string-match "^[ \t]?[+-]" ex-field)
 		 (time-add cr (time-subtract (org-read-date nil t ex-field) ct))

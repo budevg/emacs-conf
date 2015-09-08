@@ -1,6 +1,6 @@
 ;;; org-gnus.el --- Support for links to Gnus groups and messages from within Org-mode
 
-;; Copyright (C) 2004-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2014 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;         Tassilo Horn <tassilo at member dot fsf dot org>
@@ -36,15 +36,16 @@
 (eval-when-compile (require 'gnus-sum))
 
 ;; Declare external functions and variables
+
 (declare-function message-fetch-field "message" (header &optional not-all))
 (declare-function message-narrow-to-head-1 "message" nil)
 (declare-function nnimap-group-overview-filename "nnimap" (group server))
-;; The following line suppresses a compiler warning stemming from gnus-sum.el
 (declare-function gnus-summary-last-subject "gnus-sum" nil)
+(declare-function nnvirtual-map-article "nnvirtual" (article))
+
 ;; Customization variables
 
-(when (fboundp 'defvaralias)
-  (defvaralias 'org-usenet-links-prefer-google 'org-gnus-prefer-web-links))
+(org-defvaralias 'org-usenet-links-prefer-google 'org-gnus-prefer-web-links)
 
 (defcustom org-gnus-prefer-web-links nil
   "If non-nil, `org-store-link' creates web links to Google groups or Gmane.
@@ -61,11 +62,17 @@ Normally, this translation is done by querying the IMAP server,
 which is usually very fast.  Unfortunately, some (maybe badly
 configured) IMAP servers don't support this operation quickly.
 So if following a link to a Gnus article takes ages, try setting
-this variable to `t'."
+this variable to t."
   :group 'org-link-store
   :version "24.1"
   :type 'boolean)
 
+(defcustom org-gnus-no-server nil
+  "Should Gnus be started using `gnus-no-server'?"
+  :group 'org-gnus
+  :version "24.4"
+  :package-version '(Org . "8.0")
+  :type 'boolean)
 
 ;; Install the link type
 (org-add-link-type "gnus" 'org-gnus-open)
@@ -165,6 +172,10 @@ If `org-store-link' was called with a prefix arg the meaning of
 	   (subject (copy-sequence (mail-header-subject header)))
 	   (to (cdr (assq 'To (mail-header-extra header))))
 	   newsgroups x-no-archive desc link)
+      (when (eq (car (gnus-find-method-for-group gnus-newsgroup-name))
+		  'nnvirtual)
+	(setq group (car (nnvirtual-map-article
+			  (gnus-summary-article-number)))))
       ;; Remove text properties of subject string to avoid Emacs bug
       ;; #3506
       (set-text-properties 0 (length subject) nil subject)
@@ -244,10 +255,8 @@ If `org-store-link' was called with a prefix arg the meaning of
   (require 'gnus)
   (funcall (cdr (assq 'gnus org-link-frame-setup)))
   (if gnus-other-frame-object (select-frame gnus-other-frame-object))
-  (when group
-    (setq group (org-no-properties group)))
-  (when article
-    (setq article (org-no-properties article)))
+  (setq group (org-no-properties group))
+  (setq article (org-no-properties article))
   (cond ((and group article)
 	 (gnus-activate-group group)
 	 (condition-case nil
@@ -287,7 +296,7 @@ If `org-store-link' was called with a prefix arg the meaning of
 
 (defun org-gnus-no-new-news ()
   "Like `M-x gnus' but doesn't check for new news."
-  (if (not (gnus-alive-p)) (gnus)))
+  (if (not (gnus-alive-p)) (if org-gnus-no-server (gnus-no-server) (gnus))))
 
 (provide 'org-gnus)
 

@@ -1,6 +1,6 @@
 ;;; ob-java.el --- org-babel functions for java evaluation
 
-;; Copyright (C) 2011-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2014 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -28,16 +28,27 @@
 
 ;;; Code:
 (require 'ob)
-(require 'ob-eval)
 
 (defvar org-babel-tangle-lang-exts)
 (add-to-list 'org-babel-tangle-lang-exts '("java" . "java"))
 
-(defvar org-babel-java-command "java"
-  "Name of the java command.")
+(defcustom org-babel-java-command "java"
+  "Name of the java command.
+May be either a command in the path, like java
+or an absolute path name, like /usr/local/bin/java
+parameters may be used, like java -verbose"
+  :group 'org-babel
+  :version "24.3"
+  :type 'string)
 
-(defvar org-babel-java-compiler "javac"
-  "Name of the java compiler.")
+(defcustom org-babel-java-compiler "javac"
+  "Name of the java compiler.
+May be either a command in the path, like javac
+or an absolute path name, like /usr/local/bin/javac
+parameters may be used, like javac -verbose"
+  :group 'org-babel
+  :version "24.3"
+  :type 'string)
 
 (defun org-babel-execute:java (body params)
   (let* ((classname (or (cdr (assoc :classname params))
@@ -56,19 +67,18 @@
     ;; created package-name directories if missing
     (unless (or (not packagename) (file-exists-p packagename))
       (make-directory packagename 'parents))
-    ((lambda (results)
-       (org-babel-reassemble-table
-	(if (member "vector" (cdr (assoc :result-params params)))
-	    (let ((tmp-file (org-babel-temp-file "c-")))
-	      (with-temp-file tmp-file (insert results))
-	      (org-babel-import-elisp-from-file tmp-file))
-	  (org-babel-read results))
-	(org-babel-pick-name
-	 (cdr (assoc :colname-names params)) (cdr (assoc :colnames params)))
-	(org-babel-pick-name
-	 (cdr (assoc :rowname-names params)) (cdr (assoc :rownames params)))))
-     (org-babel-eval (concat org-babel-java-command
-			     " " cmdline " " classname) ""))))
+    (let ((results (org-babel-eval (concat org-babel-java-command
+                                           " " cmdline " " classname) "")))
+      (org-babel-reassemble-table
+       (org-babel-result-cond (cdr (assoc :result-params params))
+	 (org-babel-read results)
+         (let ((tmp-file (org-babel-temp-file "c-")))
+           (with-temp-file tmp-file (insert results))
+           (org-babel-import-elisp-from-file tmp-file)))
+       (org-babel-pick-name
+        (cdr (assoc :colname-names params)) (cdr (assoc :colnames params)))
+       (org-babel-pick-name
+        (cdr (assoc :rowname-names params)) (cdr (assoc :rownames params)))))))
 
 (provide 'ob-java)
 

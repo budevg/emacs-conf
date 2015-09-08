@@ -1,6 +1,6 @@
 ;;; ob-js.el --- org-babel functions for Javascript
 
-;; Copyright (C) 2010-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research, js
@@ -39,9 +39,6 @@
 
 ;;; Code:
 (require 'ob)
-(require 'ob-ref)
-(require 'ob-comint)
-(require 'ob-eval)
 (eval-when-compile (require 'cl))
 
 (declare-function run-mozilla "ext:moz" (arg))
@@ -68,44 +65,47 @@ This function is called by `org-babel-execute-src-block'"
   (let* ((org-babel-js-cmd (or (cdr (assoc :cmd params)) org-babel-js-cmd))
          (result-type (cdr (assoc :result-type params)))
          (full-body (org-babel-expand-body:generic
-		     body params (org-babel-variable-assignments:js params))))
-    (org-babel-js-read
-     (if (not (string= (cdr (assoc :session params)) "none"))
-	 ;; session evaluation
-         (let ((session (org-babel-prep-session:js
-			 (cdr (assoc :session params)) params)))
-	   (nth 1
-		(org-babel-comint-with-output
-		    (session (format "%S" org-babel-js-eoe) t body)
-		  (mapc
-		   (lambda (line)
-		     (insert (org-babel-chomp line)) (comint-send-input nil t))
-		   (list body (format "%S" org-babel-js-eoe))))))
-       ;; external evaluation
-       (let ((script-file (org-babel-temp-file "js-script-")))
-         (with-temp-file script-file
-           (insert
-            ;; return the value or the output
-            (if (string= result-type "value")
-                (format org-babel-js-function-wrapper full-body)
-              full-body)))
-         (org-babel-eval
-	  (format "%s %s" org-babel-js-cmd
-		  (org-babel-process-file-name script-file)) ""))))))
+		     body params (org-babel-variable-assignments:js params)))
+	 (result (if (not (string= (cdr (assoc :session params)) "none"))
+		     ;; session evaluation
+		     (let ((session (org-babel-prep-session:js
+				     (cdr (assoc :session params)) params)))
+		       (nth 1
+			    (org-babel-comint-with-output
+				(session (format "%S" org-babel-js-eoe) t body)
+			      (mapc
+			       (lambda (line)
+				 (insert (org-babel-chomp line))
+				 (comint-send-input nil t))
+			       (list body (format "%S" org-babel-js-eoe))))))
+		   ;; external evaluation
+		   (let ((script-file (org-babel-temp-file "js-script-")))
+		     (with-temp-file script-file
+		       (insert
+			;; return the value or the output
+			(if (string= result-type "value")
+			    (format org-babel-js-function-wrapper full-body)
+			  full-body)))
+		     (org-babel-eval
+		      (format "%s %s" org-babel-js-cmd
+			      (org-babel-process-file-name script-file)) "")))))
+    (org-babel-result-cond (cdr (assoc :result-params params))
+      result (org-babel-js-read result))))
 
 (defun org-babel-js-read (results)
   "Convert RESULTS into an appropriate elisp value.
 If RESULTS look like a table, then convert them into an
 Emacs-lisp table, otherwise return the results as a string."
   (org-babel-read
-   (if (and (stringp results) (string-match "^\\[.+\\]$" results))
+   (if (and (stringp results) (string-match "^\\[[^\000]+\\]$" results))
        (org-babel-read
         (concat "'"
                 (replace-regexp-in-string
                  "\\[" "(" (replace-regexp-in-string
                             "\\]" ")" (replace-regexp-in-string
-                                       ", " " " (replace-regexp-in-string
-						 "'" "\"" results))))))
+                                       ",[[:space:]]" " "
+				       (replace-regexp-in-string
+					"'" "\"" results))))))
      results)))
 
 (defun org-babel-js-var-to-js (var)
@@ -114,7 +114,7 @@ Convert an elisp value into a string of js source code
 specifying a variable of the same value."
   (if (listp var)
       (concat "[" (mapconcat #'org-babel-js-var-to-js var ", ") "]")
-    (format "%S" var)))
+    (replace-regexp-in-string "\n" "\\\\n" (format "%S" var))))
 
 (defun org-babel-prep-session:js (session params)
   "Prepare SESSION according to the header arguments specified in PARAMS."

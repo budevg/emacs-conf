@@ -1,6 +1,6 @@
 ;;; ob-ruby.el --- org-babel functions for ruby evaluation
 
-;; Copyright (C) 2009-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -37,9 +37,6 @@
 
 ;;; Code:
 (require 'ob)
-(require 'ob-ref)
-(require 'ob-comint)
-(require 'ob-eval)
 (eval-when-compile (require 'cl))
 
 (declare-function run-ruby "ext:inf-ruby" (&optional command name))
@@ -52,6 +49,20 @@
 
 (defvar org-babel-ruby-command "ruby"
   "Name of command to use for executing ruby code.")
+
+(defcustom org-babel-ruby-hline-to "nil"
+  "Replace hlines in incoming tables with this when translating to ruby."
+  :group 'org-babel
+  :version "24.4"
+  :package-version '(Org . "8.0")
+  :type 'string)
+
+(defcustom org-babel-ruby-nil-to 'hline
+  "Replace nil in ruby tables with this before returning."
+  :group 'org-babel
+  :version "24.4"
+  :package-version '(Org . "8.0")
+  :type 'symbol)
 
 (defun org-babel-execute:ruby (body params)
   "Execute a block of Ruby code with Babel.
@@ -71,7 +82,9 @@ This function is called by `org-babel-execute-src-block'."
 		   (org-babel-ruby-evaluate
 		    session full-body result-type result-params))))
     (org-babel-reassemble-table
-     result
+     (org-babel-result-cond result-params
+       result
+       (org-babel-ruby-table-or-string result))
      (org-babel-pick-name (cdr (assoc :colname-names params))
 			  (cdr (assoc :colnames params)))
      (org-babel-pick-name (cdr (assoc :rowname-names params))
@@ -116,13 +129,20 @@ Convert an elisp value into a string of ruby source code
 specifying a variable of the same value."
   (if (listp var)
       (concat "[" (mapconcat #'org-babel-ruby-var-to-ruby var ", ") "]")
-    (format "%S" var)))
+    (if (equal var 'hline)
+	org-babel-ruby-hline-to
+      (format "%S" var))))
 
 (defun org-babel-ruby-table-or-string (results)
   "Convert RESULTS into an appropriate elisp value.
 If RESULTS look like a table, then convert them into an
 Emacs-lisp table, otherwise return the results as a string."
-  (org-babel-script-escape results))
+  (let ((res (org-babel-script-escape results)))
+    (if (listp res)
+        (mapcar (lambda (el) (if (equal el 'nil)
+                            org-babel-ruby-nil-to el))
+                res)
+      res)))
 
 (defun org-babel-ruby-initiate-session (&optional session params)
   "Initiate a ruby session.
@@ -181,56 +201,62 @@ return the value of the last statement in BODY, as elisp."
 			      org-babel-ruby-pp-wrapper-method
 			    org-babel-ruby-wrapper-method)
 			  body (org-babel-process-file-name tmp-file 'noquote)))
-		 ((lambda (raw)
-		    (if (or (member "code" result-params)
-			    (member "pp" result-params))
-			raw
-		      (org-babel-ruby-table-or-string raw)))
-		  (org-babel-eval-read-file tmp-file)))))
+		 (let ((raw (org-babel-eval-read-file tmp-file)))
+                   (if (or (member "code" result-params)
+                           (member "pp" result-params))
+                       raw
+                     (org-babel-ruby-table-or-string raw))))))
     ;; comint session evaluation
     (case result-type
       (output
-       (mapconcat
-	#'identity
-	(butlast
-	 (split-string
-	  (mapconcat
-	   #'org-babel-trim
-	   (butlast
-	    (org-babel-comint-with-output
-		(buffer org-babel-ruby-eoe-indicator t body)
-	      (mapc
-	       (lambda (line)
-		 (insert (org-babel-chomp line)) (comint-send-input nil t))
-	       (list body org-babel-ruby-eoe-indicator))
-	      (comint-send-input nil t)) 2)
-	   "\n") "[\r\n]")) "\n"))
+       (let ((eoe-string (format "puts \"%s\"" org-babel-ruby-eoe-indicator)))
+	 ;; Force the session to be ready before the actual session
+	 ;; code is run.  There is some problem in comint that will
+	 ;; sometimes show the prompt after the the input has already
+	 ;; been inserted and that throws off the extraction of the
+	 ;; result for Babel.
+	 (org-babel-comint-with-output
+	     (buffer org-babel-ruby-eoe-indicator t eoe-string)
+	   (insert eoe-string) (comint-send-input nil t))
+	 ;; Now we can start the evaluation.
+	 (mapconcat
+	  #'identity
+	  (butlast
+	   (split-string
+	    (mapconcat
+	     #'org-babel-trim
+	     (org-babel-comint-with-output
+		 (buffer org-babel-ruby-eoe-indicator t body)
+	       (mapc
+		(lambda (line)
+		  (insert (org-babel-chomp line)) (comint-send-input nil t))
+		(list "conf.echo=false;_org_prompt_mode=conf.prompt_mode;conf.prompt_mode=:NULL"
+		      body
+		      "conf.prompt_mode=_org_prompt_mode;conf.echo=true"
+		      eoe-string)))
+	     "\n") "[\r\n]") 4) "\n")))
       (value
-       ((lambda (results)
-	  (if (or (member "code" result-params) (member "pp" result-params))
-	      results
-	    (org-babel-ruby-table-or-string results)))
-	(let* ((tmp-file (org-babel-temp-file "ruby-"))
-	       (ppp (or (member "code" result-params)
-			(member "pp" result-params))))
-	  (org-babel-comint-with-output
-	      (buffer org-babel-ruby-eoe-indicator t body)
-	    (when ppp (insert "require 'pp';") (comint-send-input nil t))
-	    (mapc
-	     (lambda (line)
-	       (insert (org-babel-chomp line)) (comint-send-input nil t))
-	     (append
-	      (list body)
-	      (if (not ppp)
-		  (list (format org-babel-ruby-f-write
-				(org-babel-process-file-name tmp-file 'noquote)))
-		(list
-		 "results=_" "require 'pp'" "orig_out = $stdout"
-		 (format org-babel-ruby-pp-f-write
-			 (org-babel-process-file-name tmp-file 'noquote))))
-	      (list org-babel-ruby-eoe-indicator)))
-	    (comint-send-input nil t))
-	  (org-babel-eval-read-file tmp-file)))))))
+       (let* ((tmp-file (org-babel-temp-file "ruby-"))
+	      (ppp (or (member "code" result-params)
+		       (member "pp" result-params))))
+	 (org-babel-comint-with-output
+	     (buffer org-babel-ruby-eoe-indicator t body)
+	   (when ppp (insert "require 'pp';") (comint-send-input nil t))
+	   (mapc
+	    (lambda (line)
+	      (insert (org-babel-chomp line)) (comint-send-input nil t))
+	    (append
+	     (list body)
+	     (if (not ppp)
+		 (list (format org-babel-ruby-f-write
+			       (org-babel-process-file-name tmp-file 'noquote)))
+	       (list
+		"results=_" "require 'pp'" "orig_out = $stdout"
+		(format org-babel-ruby-pp-f-write
+			(org-babel-process-file-name tmp-file 'noquote))))
+	     (list org-babel-ruby-eoe-indicator)))
+	   (comint-send-input nil t))
+	 (org-babel-eval-read-file tmp-file))))))
 
 (defun org-babel-ruby-read-string (string)
   "Strip \\\"s from around a ruby string."

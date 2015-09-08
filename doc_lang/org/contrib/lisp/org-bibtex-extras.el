@@ -1,6 +1,6 @@
 ;;; org-bibtex-extras --- extras for working with org-bibtex entries
 
-;; Copyright (C) 2008-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2014 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte <eric dot schulte at gmx dot com>
 ;; Keywords: outlines, hypermedia, bibtex, d3
@@ -9,12 +9,12 @@
 
 ;; This file is not yet part of GNU Emacs.
 
-;; GNU Emacs is free software; you can redistribute it and/or modify
+;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation; either version 3, or (at your option)
 ;; any later version.
 
-;; GNU Emacs is distributed in the hope that it will be useful,
+;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
@@ -75,24 +75,13 @@ For example, to point to your `obe-bibtex-file' use the following.
   "Return all citations from `obe-bibtex-file'."
   (or obe-citations
       (save-window-excursion
-	(find-file obe-bibtex-file)
+	(find-file (or obe-bibtex-file
+		       (error "`obe-bibtex-file' has not been configured")))
 	(goto-char (point-min))
 	(while (re-search-forward "  :CUSTOM_ID: \\(.+\\)$" nil t)
-	  (push (org-babel-clean-text-properties (match-string 1))
+	  (push (org-no-properties (match-string 1))
 		obe-citations))
 	obe-citations)))
-
-(defun obe-goto-citation (&optional citation)
-  "Visit a citation given its ID."
-  (interactive)
-  (let ((citation (or citation
-		      (org-icompleting-read "Citation: "
-					    (obe-citations)))))
-    (find-file obe-bibtex-file)
-    (goto-char (point-min))
-    (when (re-search-forward (format "  :CUSTOM_ID: %s" citation) nil t)
-      (outline-previous-visible-heading 1)
-      t)))
 
 (defun obe-html-export-citations ()
   "Convert all \\cite{...} citations in the current file into HTML links."
@@ -104,15 +93,6 @@ For example, to point to your `obe-bibtex-file' use the following.
 	 (mapconcat (lambda (c) (format "[[%s#%s][%s]]" obe-html-link-base c c))
 		    (mapcar #'org-babel-trim
 			    (split-string (match-string 1) ",")) ", "))))))
-
-(defun obe-get-meta-data (citation)
-  "Collect meta-data for CITATION."
-  (save-excursion
-    (when (obe-goto-citation citation)
-      (let ((pt (point)))
-	`((:authors . ,(split-string (org-entry-get pt "AUTHOR") " and " t))
-	  (:title   . ,(org-babel-clean-text-properties (org-get-heading 1 1)))
-	  (:journal . ,(org-entry-get pt "JOURNAL")))))))
 
 (defun obe-meta-to-json (meta &optional fields)
   "Turn a list of META data from citations into a string of json."

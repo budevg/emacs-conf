@@ -1,6 +1,6 @@
 ;;; ob-R.el --- org-babel functions for R code evaluation
 
-;; Copyright (C) 2009-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;;	Dan Davison
@@ -28,9 +28,6 @@
 
 ;;; Code:
 (require 'ob)
-(require 'ob-ref)
-(require 'ob-comint)
-(require 'ob-eval)
 (eval-when-compile (require 'cl))
 
 (declare-function orgtbl-to-tsv "org-table" (table params))
@@ -38,8 +35,11 @@
 (declare-function inferior-ess-send-input "ext:ess-inf" ())
 (declare-function ess-make-buffer-current "ext:ess-inf" ())
 (declare-function ess-eval-buffer "ext:ess-inf" (vis))
+(declare-function ess-wait-for-process "ext:ess-inf"
+		  (proc &optional sec-prompt wait force-redisplay))
 (declare-function org-number-sequence "org-compat" (from &optional to inc))
 (declare-function org-remove-if-not "org" (predicate seq))
+(declare-function org-every "org" (pred seq))
 
 (defconst org-babel-header-args:R
   '((width		 . :any)
@@ -63,12 +63,25 @@
     (useDingbats	 . :any)
     (horizontal		 . :any)
     (results             . ((file list vector table scalar verbatim)
-			    (raw org html latex code pp wrap)
-			    (replace silent append prepend)
+			    (raw html latex org code pp drawer)
+			    (replace silent none append prepend)
 			    (output value graphics))))
   "R-specific header arguments.")
 
+(defconst ob-R-safe-header-args
+  (append org-babel-safe-header-args
+	  '(:width :height :bg :units :pointsize :antialias :quality
+		   :compression :res :type :family :title :fonts
+		   :version :paper :encoding :pagecentre :colormodel
+		   :useDingbats :horizontal))
+  "Header args which are safe for R babel blocks.
+
+See `org-babel-safe-header-args' for documentation of the format of
+this variable.")
+
 (defvar org-babel-default-header-args:R '())
+(put 'org-babel-default-header-args:R 'safe-local-variable
+     (org-babel-header-args-safe-fn ob-R-safe-header-args))
 
 (defcustom org-babel-R-command "R --slave --no-save"
   "Name of command to use for executing R code."
@@ -76,28 +89,67 @@
   :version "24.1"
   :type 'string)
 
-(defvar ess-local-process-name) ; dynamically scoped
+(defvar ess-current-process-name) ; dynamically scoped
+(defvar ess-local-process-name)   ; dynamically scoped
 (defun org-babel-edit-prep:R (info)
   (let ((session (cdr (assoc :session (nth 2 info)))))
     (when (and session (string-match "^\\*\\(.+?\\)\\*$" session))
       (save-match-data (org-babel-R-initiate-session session nil)))))
 
+;; The usage of utils::read.table() ensures that the command
+;; read.table() can be found even in circumstances when the utils
+;; package is not in the search path from R.
+(defconst ob-R-transfer-variable-table-with-header
+  "%s <- local({
+     con <- textConnection(
+       %S
+     )
+     res <- utils::read.table(
+       con,
+       header    = %s,
+       row.names = %s,
+       sep       = \"\\t\",
+       as.is     = TRUE
+     )
+     close(con)
+     res
+   })"
+  "R code used to transfer a table defined as a variable from org to R.
+
+This function is used when the table contains a header.")
+
+(defconst ob-R-transfer-variable-table-without-header
+  "%s <- local({
+     con <- textConnection(
+       %S
+     )
+     res <- utils::read.table(
+       con,
+       header    = %s,
+       row.names = %s,
+       sep       = \"\\t\",
+       as.is     = TRUE,
+       fill      = TRUE,
+       col.names = paste(\"V\", seq_len(%d), sep =\"\")
+     )
+     close(con)
+     res
+   })"
+  "R code used to transfer a table defined as a variable from org to R.
+
+This function is used when the table does not contain a header.")
+
 (defun org-babel-expand-body:R (body params &optional graphics-file)
   "Expand BODY according to PARAMS, return the expanded body."
-  (let ((graphics-file
-	 (or graphics-file (org-babel-R-graphical-output-file params))))
-    (mapconcat
-     #'identity
-     ((lambda (inside)
-	(if graphics-file
-	    (append
-	     (list (org-babel-R-construct-graphics-device-call
-		    graphics-file params))
-	     inside
-	     (list "dev.off()"))
-	  inside))
-      (append (org-babel-variable-assignments:R params)
-	      (list body))) "\n")))
+  (mapconcat 'identity
+	     (append
+	      (when (cdr (assoc :prologue params))
+		(list (cdr (assoc :prologue params))))
+	      (org-babel-variable-assignments:R params)
+	      (list body)
+	      (when (cdr (assoc :epilogue params))
+		(list (cdr (assoc :epilogue params)))))
+	     "\n"))
 
 (defun org-babel-execute:R (body params)
   "Execute a block of R code.
@@ -109,8 +161,20 @@ This function is called by `org-babel-execute-src-block'."
 		     (cdr (assoc :session params)) params))
 	   (colnames-p (cdr (assoc :colnames params)))
 	   (rownames-p (cdr (assoc :rownames params)))
-	   (graphics-file (org-babel-R-graphical-output-file params))
-	   (full-body (org-babel-expand-body:R body params graphics-file))
+	   (graphics-file (and (member "graphics" (assq :result-params params))
+			       (org-babel-graphical-output-file params)))
+	   (full-body
+	    (let ((inside
+		   (list (org-babel-expand-body:R body params graphics-file))))
+	      (mapconcat 'identity
+			 (if graphics-file
+			     (append
+			      (list (org-babel-R-construct-graphics-device-call
+				     graphics-file params))
+			      inside
+			      (list "},error=function(e){plot(x=-1:1, y=-1:1, type='n', xlab='', ylab='', axes=FALSE); text(x=0, y=0, labels=e$message, col='red'); paste('ERROR', e$message, sep=' : ')}); dev.off()"))
+			   inside)
+			 "\n")))
 	   (result
 	    (org-babel-R-evaluate
 	     session full-body result-type result-params
@@ -145,7 +209,7 @@ This function is called by `org-babel-execute-src-block'."
 
 (defun org-babel-variable-assignments:R (params)
   "Return list of R statements assigning the block's variables."
-  (let ((vars (mapcar #'cdr (org-babel-get-header params :var))))
+  (let ((vars (mapcar 'cdr (org-babel-get-header params :var))))
     (mapcar
      (lambda (pair)
        (org-babel-R-assign-elisp
@@ -170,36 +234,25 @@ This function is called by `org-babel-execute-src-block'."
 (defun org-babel-R-assign-elisp (name value colnames-p rownames-p)
   "Construct R code assigning the elisp VALUE to a variable named NAME."
   (if (listp value)
-      (let ((max (apply #'max (mapcar #'length (org-remove-if-not
-						#'sequencep value))))
-	    (min (apply #'min (mapcar #'length (org-remove-if-not
-						#'sequencep value))))
-	    (transition-file (org-babel-temp-file "R-import-")))
-        ;; ensure VALUE has an orgtbl structure (depth of at least 2)
+      (let* ((lengths (mapcar 'length (org-remove-if-not 'sequencep value)))
+	     (max (if lengths (apply 'max lengths) 0))
+	     (min (if lengths (apply 'min lengths) 0)))
+        ;; Ensure VALUE has an orgtbl structure (depth of at least 2).
         (unless (listp (car value)) (setq value (list value)))
-        (with-temp-file transition-file
-          (insert
-	   (orgtbl-to-tsv value '(:fmt org-babel-R-quote-tsv-field))
-	   "\n"))
-	(let ((file (org-babel-process-file-name transition-file 'noquote))
+	(let ((file (orgtbl-to-tsv value '(:fmt org-babel-R-quote-tsv-field)))
 	      (header (if (or (eq (nth 1 value) 'hline) colnames-p)
 			  "TRUE" "FALSE"))
 	      (row-names (if rownames-p "1" "NULL")))
 	  (if (= max min)
-	      (format "%s <- read.table(\"%s\",
-                      header=%s,
-                      row.names=%s,
-                      sep=\"\\t\",
-                      as.is=TRUE)" name file header row-names)
-	    (format "%s <- read.table(\"%s\",
-                   header=%s,
-                   row.names=%s,
-                   sep=\"\\t\",
-                   as.is=TRUE,
-                   fill=TRUE,
-                   col.names = paste(\"V\", seq_len(%d), sep =\"\"))"
+	      (format ob-R-transfer-variable-table-with-header
+		      name file header row-names)
+	    (format ob-R-transfer-variable-table-without-header
 		    name file header row-names max))))
-    (format "%s <- %s" name (org-babel-R-quote-tsv-field value))))
+    (cond ((integerp value) (format "%s <- %s" name (concat (number-to-string value) "L")))
+	  ((floatp   value) (format "%s <- %s" name value))
+	  ((stringp  value) (format "%s <- %S" name (org-no-properties value)))
+	  (t                (format "%s <- %S" name (prin1-to-string value))))))
+
 
 (defvar ess-ask-for-ess-directory) ; dynamically scoped
 (defun org-babel-R-initiate-session (session params)
@@ -207,12 +260,20 @@ This function is called by `org-babel-execute-src-block'."
   (unless (string= session "none")
     (let ((session (or session "*R*"))
 	  (ess-ask-for-ess-directory
-	   (and (and (boundp 'ess-ask-for-ess-directory) ess-ask-for-ess-directory)
+	   (and (boundp 'ess-ask-for-ess-directory)
+		ess-ask-for-ess-directory
 		(not (cdr (assoc :dir params))))))
       (if (org-babel-comint-buffer-livep session)
 	  session
 	(save-window-excursion
+	  (when (get-buffer session)
+	    ;; Session buffer exists, but with dead process
+	    (set-buffer session))
 	  (require 'ess) (R)
+	  (let ((R-proc (get-process (or ess-local-process-name
+					 ess-current-process-name))))
+	    (while (process-get R-proc 'callbacks)
+	      (ess-wait-for-process R-proc)))
 	  (rename-buffer
 	   (if (bufferp session)
 	       (buffer-name session)
@@ -229,36 +290,40 @@ current code buffer."
 	(process-name (get-buffer-process session)))
   (ess-make-buffer-current))
 
-(defun org-babel-R-graphical-output-file (params)
-  "Name of file to which R should send graphical output."
-  (and (member "graphics" (cdr (assq :result-params params)))
-       (cdr (assq :file params))))
+(defvar org-babel-R-graphics-devices
+  '((:bmp "bmp" "filename")
+    (:jpg "jpeg" "filename")
+    (:jpeg "jpeg" "filename")
+    (:tikz "tikz" "file")
+    (:tiff "tiff" "filename")
+    (:png "png" "filename")
+    (:svg "svg" "file")
+    (:pdf "pdf" "file")
+    (:ps "postscript" "file")
+    (:postscript "postscript" "file"))
+  "An alist mapping graphics file types to R functions.
+
+Each member of this list is a list with three members:
+1. the file extension of the graphics file, as an elisp :keyword
+2. the R graphics device function to call to generate such a file
+3. the name of the argument to this function which specifies the
+   file to write to (typically \"file\" or \"filename\")")
 
 (defun org-babel-R-construct-graphics-device-call (out-file params)
   "Construct the call to the graphics device."
-  (let ((devices
-	 '((:bmp . "bmp")
-	   (:jpg . "jpeg")
-	   (:jpeg . "jpeg")
-	   (:tex . "tikz")
-	   (:tiff . "tiff")
-	   (:png . "png")
-	   (:svg . "svg")
-	   (:pdf . "pdf")
-	   (:ps . "postscript")
-	   (:postscript . "postscript")))
-	(allowed-args '(:width :height :bg :units :pointsize
-			       :antialias :quality :compression :res
-			       :type :family :title :fonts :version
-			       :paper :encoding :pagecentre :colormodel
-			       :useDingbats :horizontal))
-	(device (and (string-match ".+\\.\\([^.]+\\)" out-file)
-		     (match-string 1 out-file)))
-	(extra-args (cdr (assq :R-dev-args params))) filearg args)
-    (setq device (or (and device (cdr (assq (intern (concat ":" device))
-					    devices))) "png"))
-    (setq filearg
-	  (if (member device '("pdf" "postscript" "svg" "tikz")) "file" "filename"))
+  (let* ((allowed-args '(:width :height :bg :units :pointsize
+				:antialias :quality :compression :res
+				:type :family :title :fonts :version
+				:paper :encoding :pagecentre :colormodel
+				:useDingbats :horizontal))
+	 (device (and (string-match ".+\\.\\([^.]+\\)" out-file)
+		      (match-string 1 out-file)))
+	 (device-info (or (assq (intern (concat ":" device))
+				org-babel-R-graphics-devices)
+                          (assq :png org-babel-R-graphics-devices)))
+        (extra-args (cdr (assq :R-dev-args params))) filearg args)
+    (setq device (nth 1 device-info))
+    (setq filearg (nth 2 device-info))
     (setq args (mapconcat
 		(lambda (pair)
 		  (if (member (car pair) allowed-args)
@@ -266,14 +331,43 @@ current code buffer."
 			      (substring (symbol-name (car pair)) 1)
 			      (cdr pair)) ""))
 		params ""))
-    (format "%s(%s=\"%s\"%s%s%s)"
+    (format "%s(%s=\"%s\"%s%s%s); tryCatch({"
 	    device filearg out-file args
 	    (if extra-args "," "") (or extra-args ""))))
 
-(defvar org-babel-R-eoe-indicator "'org_babel_R_eoe'")
-(defvar org-babel-R-eoe-output "[1] \"org_babel_R_eoe\"")
+(defconst org-babel-R-eoe-indicator "'org_babel_R_eoe'")
+(defconst org-babel-R-eoe-output "[1] \"org_babel_R_eoe\"")
 
-(defvar org-babel-R-write-object-command "{function(object,transfer.file){object;invisible(if(inherits(try({tfile<-tempfile();write.table(object,file=tfile,sep=\"\\t\",na=\"nil\",row.names=%s,col.names=%s,quote=FALSE);file.rename(tfile,transfer.file)},silent=TRUE),\"try-error\")){if(!file.exists(transfer.file))file.create(transfer.file)})}}(object=%s,transfer.file=\"%s\")")
+(defconst org-babel-R-write-object-command "{
+    function(object,transfer.file) {
+        object
+        invisible(
+            if (
+                inherits(
+                    try(
+                        {
+                            tfile<-tempfile()
+                            write.table(object, file=tfile, sep=\"\\t\",
+                                        na=\"nil\",row.names=%s,col.names=%s,
+                                        quote=FALSE)
+                            file.rename(tfile,transfer.file)
+                        },
+                        silent=TRUE),
+                    \"try-error\"))
+                {
+                    if(!file.exists(transfer.file))
+                        file.create(transfer.file)
+                }
+            )
+    }
+}(object=%s,transfer.file=\"%s\")"
+  "A template for an R command to evaluate a block of code and write the result to a file.
+
+Has four %s escapes to be filled in:
+1. Row names, \"TRUE\" or \"FALSE\"
+2. Column names, \"TRUE\" or \"FALSE\"
+3. The code to be run (must be an expression, not a statement)
+4. The name of the file to write to")
 
 (defun org-babel-R-evaluate
   (session body result-type result-params column-names-p row-names-p)
@@ -302,14 +396,15 @@ last statement in BODY, as elisp."
 			       (format "{function ()\n{\n%s\n}}()" body)
 			       (org-babel-process-file-name tmp-file 'noquote)))
        (org-babel-R-process-value-result
-	(if (or (member "scalar" result-params)
-		(member "verbatim" result-params))
-	    (with-temp-buffer
-	      (insert-file-contents tmp-file)
-	      (buffer-string))
+	(org-babel-result-cond result-params
+	  (with-temp-buffer
+	    (insert-file-contents tmp-file)
+	    (buffer-string))
 	  (org-babel-import-elisp-from-file tmp-file '(16)))
 	column-names-p)))
     (output (org-babel-eval org-babel-R-command body))))
+
+(defvar ess-eval-visibly-p)
 
 (defun org-babel-R-evaluate-session
   (session body result-type result-params column-names-p row-names-p)
@@ -335,16 +430,15 @@ last statement in BODY, as elisp."
 		  "FALSE")
 		".Last.value" (org-babel-process-file-name tmp-file 'noquote)))
        (org-babel-R-process-value-result
-	(if (or (member "scalar" result-params)
-		(member "verbatim" result-params))
-	    (with-temp-buffer
-	      (insert-file-contents tmp-file)
-	      (buffer-string))
+	(org-babel-result-cond result-params
+	  (with-temp-buffer
+	    (insert-file-contents tmp-file)
+	    (buffer-string))
 	  (org-babel-import-elisp-from-file tmp-file '(16)))
 	column-names-p)))
     (output
      (mapconcat
-      #'org-babel-chomp
+      'org-babel-chomp
       (butlast
        (delq nil
 	     (mapcar
@@ -356,7 +450,7 @@ last statement in BODY, as elisp."
 		     (substring line (match-end 1))
 		   line))
 	       (org-babel-comint-with-output (session org-babel-R-eoe-output)
-		 (insert (mapconcat #'org-babel-chomp
+		 (insert (mapconcat 'org-babel-chomp
 				    (list body org-babel-R-eoe-indicator)
 				    "\n"))
 		 (inferior-ess-send-input)))))) "\n"))))

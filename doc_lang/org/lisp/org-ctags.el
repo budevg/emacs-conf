@@ -1,6 +1,6 @@
 ;;; org-ctags.el - Integrate Emacs "tags" facility with org mode.
 ;;
-;; Copyright (C) 2007-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2014 Free Software Foundation, Inc.
 
 ;; Author: Paul Sexton <eeeickythump@gmail.com>
 
@@ -63,19 +63,19 @@
 ;; with the same name as the link; then, if unsuccessful, ask the user if
 ;; he/she wants to rebuild the 'TAGS' database and try again; then ask if
 ;; the user wishes to append 'tag' as a new toplevel heading at the end of
-;; the buffer; and finally, defer to org's default behaviour which is to
+;; the buffer; and finally, defer to org's default behavior which is to
 ;; search the entire text of the current buffer for 'tag'.
 ;;
-;; This behaviour can be modified by changing the value of
+;; This behavior can be modified by changing the value of
 ;; ORG-CTAGS-OPEN-LINK-FUNCTIONS. For example I have the following in my
-;; .emacs, which describes the same behaviour as the above paragraph with
+;; .emacs, which describes the same behavior as the above paragraph with
 ;; one difference:
 ;;
 ;; (setq org-ctags-open-link-functions
 ;;       '(org-ctags-find-tag
 ;;         org-ctags-ask-rebuild-tags-file-then-find-tag
 ;;         org-ctags-ask-append-topic
-;;         org-ctags-fail-silently))  ; <-- prevents org default behaviour
+;;         org-ctags-fail-silently))  ; <-- prevents org default behavior
 ;;
 ;;
 ;; Usage
@@ -131,7 +131,7 @@
 ;;
 ;;     (progn
 ;;       (message "-- rebuilding tags tables...")
-;;       (mapc 'org-create-tags tags-table-list))
+;;       (mapc 'org-ctags-create-tags tags-table-list))
 
 ;;; Code:
 
@@ -156,11 +156,8 @@ Format is: /REGEXP/TAGNAME/FLAGS,TAGTYPE/
 See the ctags documentation for more information.")
 
 (defcustom org-ctags-path-to-ctags
-  (case system-type
-    (windows-nt "ctags.exe")
-    (darwin "ctags-exuberant")
-    (t "ctags-exuberant"))
-  "Full path to the ctags executable file."
+  (if (executable-find "ctags-exuberant") "ctags-exuberant" "ctags")
+  "Name of the ctags executable file."
   :group 'org-ctags
   :version "24.1"
   :type 'file)

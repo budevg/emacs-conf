@@ -1,9 +1,27 @@
-;;; -*- coding: utf-8-unix -*-
+;; -*- coding: utf-8-unix -*-
 ;;; org-drill.el - Self-testing using spaced repetition
 ;;;
+;;; Copyright (C) 2010-2015  Paul Sexton
+;;;
 ;;; Author: Paul Sexton <eeeickythump@gmail.com>
-;;; Version: 2.3.6
+;;; Version: 2.4.7
+;;; Keywords: flashcards, memory, learning, memorization
 ;;; Repository at http://bitbucket.org/eeeickythump/org-drill/
+;;;
+;;; This file is not part of GNU Emacs.
+;;;
+;;; This program is free software; you can redistribute it and/or modify
+;;; it under the terms of the GNU General Public License as published by
+;;; the Free Software Foundation, either version 3 of the License, or
+;;; (at your option) any later version.
+;;;
+;;; This program is distaributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;; GNU General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU General Public License
+;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;;;
 ;;;
 ;;; Synopsis
@@ -26,9 +44,12 @@
 
 (eval-when-compile (require 'cl))
 (eval-when-compile (require 'hi-lock))
+(require 'cl-lib)
+(require 'hi-lock)
 (require 'org)
 (require 'org-id)
 (require 'org-learn)
+(require 'savehist)
 
 
 (defgroup org-drill nil
@@ -107,7 +128,7 @@ Possible values:
   but a warning message is printed when each leech item is
   presented."
   :group 'org-drill
-  :type '(choice (const 'warn) (const 'skip) (const nil)))
+  :type '(choice (const warn) (const skip) (const nil)))
 
 
 (defface org-drill-visible-cloze-face
@@ -173,9 +194,23 @@ during a drill session."
   :group 'org-drill
   :type 'color)
 
+(defcustom org-drill-left-cloze-delimiter
+  "["
+  "String used within org buffers to delimit cloze deletions."
+  :group 'org-drill
+  :type 'string)
+
+(defcustom org-drill-right-cloze-delimiter
+  "]"
+  "String used within org buffers to delimit cloze deletions."
+  :group 'org-drill
+  :type 'string)
+
 
 (setplist 'org-drill-cloze-overlay-defaults
-          '(display "[...]"
+          `(display ,(format "%s...%s"
+                             org-drill-left-cloze-delimiter
+                             org-drill-right-cloze-delimiter)
                     face org-drill-hidden-cloze-face
                     window t))
 
@@ -187,56 +222,101 @@ during a drill session."
                     face default
                     window t))
 
-
-(defvar org-drill-cloze-regexp
-  ;; ver 1   "[^][]\\(\\[[^][][^]]*\\]\\)"
-  ;; ver 2   "\\(\\[.*?\\]\\|^[^[[:cntrl:]]*?\\]\\|\\[.*?$\\)"
-  ;; ver 3!  "\\(\\[.*?\\]\\|\\[.*?[[:cntrl:]]+.*?\\]\\)"
-  "\\(\\[[[:cntrl:][:graph:][:space:]]*?\\)\\(\\||.+?\\)\\(\\]\\)")
+(add-hook 'org-font-lock-set-keywords-hook 'org-drill-add-cloze-fontification)
 
 
-(defvar org-drill-cloze-keywords
-  `((,org-drill-cloze-regexp
-     (1 'org-drill-visible-cloze-face nil)
-     (2 'org-drill-visible-cloze-hint-face t)
-     (3 'org-drill-visible-cloze-face nil)
-     )))
+(defvar org-drill-hint-separator "||"
+  "String which, if it occurs within a cloze expression, signifies that the
+rest of the expression after the string is a `hint', to be displayed instead of
+the hidden cloze during a test.")
+
+(defun org-drill--compute-cloze-regexp ()
+  (concat "\\("
+          (regexp-quote org-drill-left-cloze-delimiter)
+          "[[:cntrl:][:graph:][:space:]]+?\\)\\(\\|"
+          (regexp-quote org-drill-hint-separator)
+          ".+?\\)\\("
+          (regexp-quote org-drill-right-cloze-delimiter)
+          "\\)"))
+
+(defun org-drill--compute-cloze-keywords ()
+  (list (list (org-drill--compute-cloze-regexp)
+              (copy-list '(1 'org-drill-visible-cloze-face nil))
+              (copy-list '(2 'org-drill-visible-cloze-hint-face t))
+              (copy-list '(3 'org-drill-visible-cloze-face nil))
+              )))
+
+(defvar-local org-drill-cloze-regexp
+  (org-drill--compute-cloze-regexp))
+
+
+(defvar-local org-drill-cloze-keywords
+  (org-drill--compute-cloze-keywords))
+
+
+;; Variables defining what keys can be pressed during drill sessions to quit the
+;; session, edit the item, etc.
+(defvar org-drill--quit-key ?q
+  "If this character is pressed during a drill session, quit the session.")
+(defvar org-drill--edit-key ?e
+  "If this character is pressed during a drill session, suspend the session
+with the cursor at the current item..")
+(defvar org-drill--help-key ??
+  "If this character is pressed during a drill session, show help.")
+(defvar org-drill--skip-key ?s
+  "If this character is pressed during a drill session, skip to the next
+item.")
+(defvar org-drill--tags-key ?t
+  "If this character is pressed during a drill session, edit the tags for
+the current item.")
 
 
 (defcustom org-drill-card-type-alist
-  '((nil . org-drill-present-simple-card)
-    ("simple" . org-drill-present-simple-card)
-    ("twosided" . org-drill-present-two-sided-card)
-    ("multisided" . org-drill-present-multi-sided-card)
-    ("hide1cloze" . org-drill-present-multicloze-hide1)
-    ("hide2cloze" . org-drill-present-multicloze-hide2)
-    ("show1cloze" . org-drill-present-multicloze-show1)
-    ("show2cloze" . org-drill-present-multicloze-show2)
-    ("multicloze" . org-drill-present-multicloze-hide1)
-    ("hidefirst" . org-drill-present-multicloze-hide-first)
-    ("hidelast" . org-drill-present-multicloze-hide-last)
-    ("hide1_firstmore" . org-drill-present-multicloze-hide1-firstmore)
-    ("show1_lastmore" . org-drill-present-multicloze-show1-lastmore)
-    ("show1_firstless" . org-drill-present-multicloze-show1-firstless)
-    ("conjugate" org-drill-present-verb-conjugation
+  '((nil org-drill-present-simple-card)
+    ("simple" org-drill-present-simple-card)
+    ("twosided" org-drill-present-two-sided-card nil t)
+    ("multisided" org-drill-present-multi-sided-card nil t)
+    ("hide1cloze" org-drill-present-multicloze-hide1)
+    ("hide2cloze" org-drill-present-multicloze-hide2)
+    ("show1cloze" org-drill-present-multicloze-show1)
+    ("show2cloze" org-drill-present-multicloze-show2)
+    ("multicloze" org-drill-present-multicloze-hide1)
+    ("hidefirst" org-drill-present-multicloze-hide-first)
+    ("hidelast" org-drill-present-multicloze-hide-last)
+    ("hide1_firstmore" org-drill-present-multicloze-hide1-firstmore)
+    ("show1_lastmore" org-drill-present-multicloze-show1-lastmore)
+    ("show1_firstless" org-drill-present-multicloze-show1-firstless)
+    ("conjugate"
+     org-drill-present-verb-conjugation
      org-drill-show-answer-verb-conjugation)
-    ("spanish_verb" . org-drill-present-spanish-verb)
-    ("translate_number" org-drill-present-translate-number
-     org-drill-show-answer-translate-number))
-  "Alist associating card types with presentation functions. Each entry in the
-alist takes one of two forms:
-1. (CARDTYPE . QUESTION-FN), where CARDTYPE is a string or nil (for default),
-   and QUESTION-FN is a function which takes no arguments and returns a boolean
-   value.
-2. (CARDTYPE QUESTION-FN ANSWER-FN), where ANSWER-FN is a function that takes
-   one argument -- the argument is a function that itself takes no arguments.
-   ANSWER-FN is called with the point on the active item's
-   heading, just prior to displaying the item's 'answer'. It can therefore be
-   used to modify the appearance of the answer. ANSWER-FN must call its argument
-   before returning. (Its argument is a function that prompts the user and
-   performs rescheduling)."
+    ("decline_noun"
+     org-drill-present-noun-declension
+     org-drill-show-answer-noun-declension)
+    ("spanish_verb" org-drill-present-spanish-verb)
+    ("translate_number" org-drill-present-translate-number))
+  "Alist associating card types with presentation functions. Each
+entry in the alist takes the form:
+
+;;; (CARDTYPE QUESTION-FN [ANSWER-FN DRILL-EMPTY-P])
+
+Where CARDTYPE is a string or nil (for default), and QUESTION-FN
+is a function which takes no arguments and returns a boolean
+value.
+
+When supplied, ANSWER-FN is a function that takes one argument --
+that argument is a function of no arguments, which when called,
+prompts the user to rate their recall and performs rescheduling
+of the drill item. ANSWER-FN is called with the point on the
+active item's heading, just prior to displaying the item's
+'answer'. It can therefore be used to modify the appearance of
+the answer. ANSWER-FN must call its argument before returning.
+
+When supplied, DRILL-EMPTY-P is a boolean value, default nil.
+When non-nil, cards of this type will be presented during tests
+even if their bodies are empty."
   :group 'org-drill
-  :type '(alist :key-type (choice string (const nil)) :value-type function))
+  :type '(alist :key-type (choice string (const nil))
+                :value-type function))
 
 
 (defcustom org-drill-scope
@@ -262,10 +342,22 @@ directory            All files with the extension '.org' in the same
   ;; 'file-no-restriction' means current file/buffer, ignoring restrictions
   ;; 'directory' means all *.org files in current directory
   :group 'org-drill
-  :type '(choice (const 'file) (const 'tree) (const 'file-no-restriction)
-                 (const 'file-with-archives) (const 'agenda)
-                 (const 'agenda-with-archives) (const 'directory)
-                 list))
+  :type '(choice (const :tag "The current buffer, respecting the restriction if any." file)
+                 (const :tag "The subtree started with the entry at point" tree)
+                 (const :tag "The current buffer, without restriction" file-no-restriction)
+                 (const :tag "The current buffer, and any archives associated with it." file-with-archives)
+                 (const :tag "All agenda files" agenda)
+                 (const :tag "All agenda files with any archive files associated with them." agenda-with-archives)
+                 (const :tag "All files with the extension '.org' in the same directory as the current file (includes the current file if it is an .org file.)"  directory)
+                 (repeat :tag "List of files to scan for drill items." file)))
+
+
+(defcustom org-drill-match
+  nil
+  "If non-nil, a string specifying a tags/property/TODO query. During
+drill sessions, only items that match this query will be considered."
+  :group 'org-drill
+  :type '(choice (const nil) string))
 
 
 (defcustom org-drill-save-buffers-after-drill-sessions-p
@@ -290,21 +382,42 @@ Available choices are:
   adjusting intervals when items are reviewed early or late has been taken
   from SM11, a later version of the algorithm, and included in Simple8."
   :group 'org-drill
-  :type '(choice (const 'sm2) (const 'sm5) (const 'simple8)))
+  :type '(choice (const sm2) (const sm5) (const simple8)))
 
 
 (defcustom org-drill-optimal-factor-matrix
   nil
-  "DO NOT CHANGE THE VALUE OF THIS VARIABLE.
-
-Persistent matrix of optimal factors, used by the SuperMemo SM5 algorithm.
-The matrix is saved (using the 'customize' facility) at the end of each
-drill session.
-
-Over time, values in the matrix will adapt to the individual user's
-pace of learning."
+  "Obsolete and will be removed in future. The SM5 optimal factor
+matrix data is now stored in the variable
+`org-drill-sm5-optimal-factor-matrix'."
   :group 'org-drill
   :type 'sexp)
+
+
+(defvar org-drill-sm5-optimal-factor-matrix
+  nil
+  "DO NOT CHANGE THE VALUE OF THIS VARIABLE.
+
+Persistent matrix of optimal factors, used by the SuperMemo SM5
+algorithm. The matrix is saved at the end of each drill session.
+
+Over time, values in the matrix will adapt to the individual user's
+pace of learning.")
+
+
+(add-to-list 'savehist-additional-variables
+             'org-drill-sm5-optimal-factor-matrix)
+(unless savehist-mode
+  (savehist-mode 1))
+
+
+(defun org-drill--transfer-optimal-factor-matrix ()
+  (if (and org-drill-optimal-factor-matrix
+           (null org-drill-sm5-optimal-factor-matrix))
+      (setq org-drill-sm5-optimal-factor-matrix
+            org-drill-optimal-factor-matrix)))
+
+(add-hook 'after-init-hook 'org-drill--transfer-optimal-factor-matrix)
 
 
 (defcustom org-drill-sm5-initial-interval
@@ -419,6 +532,17 @@ exponential effect on inter-repetition spacing."
   :type 'float)
 
 
+(defvar drill-answer nil
+  "Global variable that can be bound to a correct answer when an
+item is being presented. If this variable is non-nil, the default
+presentation function will show its value instead of the default
+behaviour of revealing the contents of the drilled item.
+
+This variable is useful for card types that compute their answers
+-- for example, a card type that asks the student to translate a
+random number to another language. ")
+
+
 (defvar *org-drill-session-qualities* nil)
 (defvar *org-drill-start-time* 0)
 (defvar *org-drill-new-entries* nil)
@@ -447,6 +571,11 @@ for review unless they were already reviewed in the recent past?")
   '("LEARN_DATA" "DRILL_LAST_INTERVAL" "DRILL_REPEATS_SINCE_FAIL"
     "DRILL_TOTAL_REPEATS" "DRILL_FAILURE_COUNT" "DRILL_AVERAGE_QUALITY"
     "DRILL_EASE" "DRILL_LAST_QUALITY" "DRILL_LAST_REVIEWED"))
+(defvar org-drill--lapse-very-overdue-entries-p nil
+  "If non-nil, entries more than 90 days overdue are regarded as 'lapsed'.
+This means that when the item is eventually re-tested it will be
+treated as 'failed' (quality 2) for rescheduling purposes,
+regardless of whether the test was successful.")
 
 
 ;;; Make the above settings safe as file-local variables.
@@ -476,9 +605,13 @@ for review unless they were already reviewed in the recent past?")
 (put 'org-drill-overdue-interval-factor 'safe-local-variable 'floatp)
 (put 'org-drill-scope 'safe-local-variable
      '(lambda (val) (or (symbolp val) (listp val))))
+(put 'org-drill-match 'safe-local-variable
+     '(lambda (val) (or (stringp val) (null val))))
 (put 'org-drill-save-buffers-after-drill-sessions-p 'safe-local-variable 'booleanp)
 (put 'org-drill-cloze-text-weight 'safe-local-variable
      '(lambda (val) (or (null val) (integerp val))))
+(put 'org-drill-left-cloze-delimiter 'safe-local-variable 'stringp)
+(put 'org-drill-right-cloze-delimiter 'safe-local-variable 'stringp)
 
 
 ;;;; Utilities ================================================================
@@ -508,9 +641,9 @@ value."
   "Randomly permute the elements of LIST (all permutations equally likely)."
   ;; Adapted from 'shuffle-vector' in cookie1.el
   (let ((i 0)
-	j
-	temp
-	(len (length list)))
+        j
+        temp
+        (len (length list)))
     (while (< i len)
       (setq j (+ i (random* (- len i))))
       (setq temp (nth i list))
@@ -540,11 +673,22 @@ CMD is bound, or nil if it is not bound to a key."
    time))
 
 
-(defun org-map-drill-entries (func &optional scope &rest skip)
+(defun time-to-active-org-timestamp (time)
+  (format-time-string
+   (concat "<" (substring (cdr org-time-stamp-formats) 1 -1) ">")
+   time))
+
+
+(defun org-map-drill-entries (func &optional scope drill-match &rest skip)
   "Like `org-map-entries', but only drill entries are processed."
-  (let ((org-drill-scope (or scope org-drill-scope)))
+  (let ((org-drill-scope (or scope org-drill-scope))
+        (org-drill-match (or drill-match org-drill-match)))
     (apply 'org-map-entries func
-           (concat "+" org-drill-question-tag)
+           (concat "+" org-drill-question-tag
+                   (if (and (stringp org-drill-match)
+                            (not (member '(?+ ?- ?|) (elt org-drill-match 0))))
+                       "+" "")
+                   (or org-drill-match ""))
            (case org-drill-scope
              (file nil)
              (file-no-restriction 'file)
@@ -780,10 +924,10 @@ from the entry at point."
   (let ((a 0.047)
         (b 0.092)
         (p (- (random* 1.0) 0.5)))
-    (flet ((sign (n)
-                 (cond ((zerop n) 0)
-                       ((plusp n) 1)
-                       (t -1))))
+    (cl-flet ((sign (n)
+                    (cond ((zerop n) 0)
+                          ((plusp n) 1)
+                          (t -1))))
       (/ (+ 100 (* (* (/ -1 b) (log (- 1 (* (/ b a ) (abs p)))))
                    (sign p)))
          100.0))))
@@ -894,7 +1038,7 @@ Returns a list: (INTERVAL REPEATS EF FAILURES MEAN TOTAL-REPEATS OFMATRIX), wher
       ;; When an item is failed, its interval is reset to 0,
       ;; but its EF is unchanged
       (list -1 1 ef (1+ failures) meanq (1+ total-repeats)
-            org-drill-optimal-factor-matrix)
+            org-drill-sm5-optimal-factor-matrix)
     ;; else:
     (let* ((next-ef (modify-e-factor ef quality))
            (interval
@@ -918,7 +1062,7 @@ Returns a list: (INTERVAL REPEATS EF FAILURES MEAN TOTAL-REPEATS OFMATRIX), wher
             (1+ n)
             next-ef
             failures meanq (1+ total-repeats)
-            org-drill-optimal-factor-matrix))))
+            org-drill-sm5-optimal-factor-matrix))))
 
 
 ;;; SM5 Algorithm =============================================================
@@ -933,16 +1077,16 @@ Returns a list: (INTERVAL REPEATS EF FAILURES MEAN TOTAL-REPEATS OFMATRIX), wher
 (defun get-optimal-factor-sm5 (n ef of-matrix)
   (let ((factors (assoc n of-matrix)))
     (or (and factors
-	     (let ((ef-of (assoc ef (cdr factors))))
-	       (and ef-of (cdr ef-of))))
-	(initial-optimal-factor-sm5 n ef))))
+             (let ((ef-of (assoc ef (cdr factors))))
+               (and ef-of (cdr ef-of))))
+        (initial-optimal-factor-sm5 n ef))))
 
 
 (defun inter-repetition-interval-sm5 (last-interval n ef &optional of-matrix)
   (let ((of (get-optimal-factor-sm5 n ef (or of-matrix
-                                             org-drill-optimal-factor-matrix))))
+                                             org-drill-sm5-optimal-factor-matrix))))
     (if (= 1 n)
-	of
+        of
       (* of last-interval))))
 
 
@@ -954,7 +1098,7 @@ Returns a list: (INTERVAL REPEATS EF FAILURES MEAN TOTAL-REPEATS OFMATRIX), wher
   (assert (> n 0))
   (assert (and (>= quality 0) (<= quality 5)))
   (unless of-matrix
-    (setq of-matrix org-drill-optimal-factor-matrix))
+    (setq of-matrix org-drill-sm5-optimal-factor-matrix))
   (setq of-matrix (cl-copy-tree of-matrix))
 
   (setq meanq (if meanq
@@ -1118,9 +1262,9 @@ See the documentation for `org-drill-get-item-data' for a description of these."
   "If DAYS-AHEAD is supplied it must be a positive integer. The
 item will be scheduled exactly this many days into the future."
   (let ((delta-days (- (time-to-days (current-time))
-                   (time-to-days (or (org-get-scheduled-time (point))
-                                     (current-time)))))
-        (ofmatrix org-drill-optimal-factor-matrix)
+                       (time-to-days (or (org-get-scheduled-time (point))
+                                         (current-time)))))
+        (ofmatrix org-drill-sm5-optimal-factor-matrix)
         ;; Entries can have weights, 1 by default. Intervals are divided by the
         ;; item's weight, so an item with a weight of 2 will have all intervals
         ;; halved, meaning you will end up reviewing it twice as often.
@@ -1159,11 +1303,11 @@ item will be scheduled exactly this many days into the future."
                                    total-repeats meanq ease)
 
         (if (eql 'sm5 org-drill-spaced-repetition-algorithm)
-            (setq org-drill-optimal-factor-matrix new-ofmatrix))
+            (setq org-drill-sm5-optimal-factor-matrix new-ofmatrix))
 
         (cond
          ((= 0 days-ahead)
-          (org-schedule t))
+          (org-schedule '(4)))
          ((minusp days-ahead)
           (org-schedule nil (current-time)))
          (t
@@ -1189,7 +1333,7 @@ of QUALITY."
             (sm5 (determine-next-interval-sm5 last-interval repetitions
                                               ease quality failures
                                               meanq total-repeats
-                                              org-drill-optimal-factor-matrix))
+                                              org-drill-sm5-optimal-factor-matrix))
             (sm2 (determine-next-interval-sm2 last-interval repetitions
                                               ease quality failures
                                               meanq total-repeats))
@@ -1219,11 +1363,19 @@ of QUALITY."
   "Returns quality rating (0-5), or nil if the user quit."
   (let ((ch nil)
         (input nil)
-        (next-review-dates (org-drill-hypothetical-next-review-dates)))
+        (next-review-dates (org-drill-hypothetical-next-review-dates))
+        (key-prompt (format "(0-5, %c=help, %c=edit, %c=tags, %c=quit)"
+                            org-drill--help-key
+                            org-drill--edit-key
+                            org-drill--tags-key
+                            org-drill--quit-key)))
     (save-excursion
-      (while (not (memq ch '(?q ?e ?0 ?1 ?2 ?3 ?4 ?5)))
+      (while (not (memq ch (list org-drill--quit-key
+                                 org-drill--edit-key
+                                 7          ; C-g
+                                 ?0 ?1 ?2 ?3 ?4 ?5)))
         (setq input (read-key-sequence
-                     (if (eq ch ??)
+                     (if (eq ch org-drill--help-key)
                          (format "0-2 Means you have forgotten the item.
 3-5 Means you have remembered the item.
 
@@ -1234,11 +1386,12 @@ of QUALITY."
 4 - After a little bit of thought you remembered. (+%s days)
 5 - You remembered the item really easily. (+%s days)
 
-How well did you do? (0-5, ?=help, e=edit, t=tags, q=quit)"
+How well did you do? %s"
                                  (round (nth 3 next-review-dates))
                                  (round (nth 4 next-review-dates))
-                                 (round (nth 5 next-review-dates)))
-                       "How well did you do? (0-5, ?=help, e=edit, t=tags, q=quit)")))
+                                 (round (nth 5 next-review-dates))
+                                 key-prompt)
+                       (format "How well did you do? %s" key-prompt))))
         (cond
          ((stringp input)
           (setq ch (elt input 0)))
@@ -1255,36 +1408,38 @@ How well did you do? (0-5, ?=help, e=edit, t=tags, q=quit)"
           (case (car (elt input 0))
             (wheel-up (ignore-errors (mwheel-scroll (elt input 0))))
             (wheel-down (ignore-errors (mwheel-scroll (elt input 0)))))))
-        (if (eql ch ?t)
+        (if (eql ch org-drill--tags-key)
             (org-set-tags-command))))
     (cond
      ((and (>= ch ?0) (<= ch ?5))
       (let ((quality (- ch ?0))
             (failures (org-drill-entry-failure-count)))
-        (save-excursion
-          (org-drill-smart-reschedule quality
-                                      (nth quality next-review-dates)))
-        (push quality *org-drill-session-qualities*)
-        (cond
-         ((<= quality org-drill-failure-quality)
-          (when org-drill-leech-failure-threshold
-            ;;(setq failures (if failures (string-to-number failures) 0))
-            ;; (org-set-property "DRILL_FAILURE_COUNT"
-            ;;                   (format "%d" (1+ failures)))
-            (if (> (1+ failures) org-drill-leech-failure-threshold)
-                (org-toggle-tag "leech" 'on))))
-         (t
-          (let ((scheduled-time (org-get-scheduled-time (point))))
-            (when scheduled-time
-              (message "Next review in %d days"
-                       (- (time-to-days scheduled-time)
-                          (time-to-days (current-time))))
-              (sit-for 0.5)))))
-        (org-set-property "DRILL_LAST_QUALITY" (format "%d" quality))
-        (org-set-property "DRILL_LAST_REVIEWED"
-                          (time-to-inactive-org-timestamp (current-time)))
+        (unless *org-drill-cram-mode*
+          (save-excursion
+            (let ((quality (if (org-drill--entry-lapsed-p) 2 quality)))
+              (org-drill-smart-reschedule quality
+                                          (nth quality next-review-dates))))
+          (push quality *org-drill-session-qualities*)
+          (cond
+           ((<= quality org-drill-failure-quality)
+            (when org-drill-leech-failure-threshold
+              ;;(setq failures (if failures (string-to-number failures) 0))
+              ;; (org-set-property "DRILL_FAILURE_COUNT"
+              ;;                   (format "%d" (1+ failures)))
+              (if (> (1+ failures) org-drill-leech-failure-threshold)
+                  (org-toggle-tag "leech" 'on))))
+           (t
+            (let ((scheduled-time (org-get-scheduled-time (point))))
+              (when scheduled-time
+                (message "Next review in %d days"
+                         (- (time-to-days scheduled-time)
+                            (time-to-days (current-time))))
+                (sit-for 0.5)))))
+          (org-set-property "DRILL_LAST_QUALITY" (format "%d" quality))
+          (org-set-property "DRILL_LAST_REVIEWED"
+                            (time-to-inactive-org-timestamp (current-time))))
         quality))
-     ((= ch ?e)
+     ((= ch org-drill--edit-key)
       'edit)
      (t
       nil))))
@@ -1355,15 +1510,23 @@ the current topic."
               (apply 'format
                      (first fmt-and-args)
                      (rest fmt-and-args))
-            (concat "Press key for answer, "
-                    "e=edit, t=tags, s=skip, q=quit."))))
+            (format (concat "Press key for answer, "
+                            "%c=edit, %c=tags, %c=skip, %c=quit.")
+                    org-drill--edit-key
+                    org-drill--tags-key
+                    org-drill--skip-key
+                    org-drill--quit-key))))
     (setq prompt
           (format "%s %s %s %s %s %s"
                   (propertize
                    (char-to-string
-                    (case status
-                      (:new ?N) (:young ?Y) (:old ?o) (:overdue ?!)
-                      (:failed ?F) (t ??)))
+                    (cond
+                     ((eql status :failed) ?F)
+                     (*org-drill-cram-mode* ?C)
+                     (t
+                      (case status
+                        (:new ?N) (:young ?Y) (:old ?o) (:overdue ?!)
+                        (t ??)))))
                    'face `(:foreground
                            ,(case status
                               (:new org-drill-new-count-color)
@@ -1398,7 +1561,7 @@ You seem to be having a lot of trouble memorising this item.
 Consider reformulating the item to make it easier to remember.\n"
                                   'face '(:foreground "red"))
                       prompt)))
-    (while (memq ch '(nil ?t))
+    (while (memq ch '(nil org-drill--tags-key))
       (setq ch nil)
       (while (not (input-pending-p))
         (let ((elapsed (time-subtract (current-time) item-start-time)))
@@ -1409,12 +1572,12 @@ Consider reformulating the item to make it easier to remember.\n"
           (sit-for 1)))
       (setq input (read-key-sequence nil))
       (if (stringp input) (setq ch (elt input 0)))
-      (if (eql ch ?t)
+      (if (eql ch org-drill--tags-key)
           (org-set-tags-command)))
     (case ch
-      (?q nil)
-      (?e 'edit)
-      (?s 'skip)
+      (org-drill--quit-key nil)
+      (org-drill--edit-key 'edit)
+      (org-drill--skip-key 'skip)
       (otherwise t))))
 
 
@@ -1430,6 +1593,7 @@ visual overlay, or with the string TEXT if it is supplied."
   (let ((ovl (make-overlay beg end)))
     (overlay-put ovl 'category
                  'org-drill-hidden-text-overlay)
+    (overlay-put ovl 'priority 9999)
     (when (stringp text)
       (overlay-put ovl 'invisible nil)
       (overlay-put ovl 'face 'default)
@@ -1438,7 +1602,7 @@ visual overlay, or with the string TEXT if it is supplied."
 
 (defun org-drill-hide-heading-at-point (&optional text)
   (unless (org-at-heading-p)
-    (error "Point is not on a heading"))
+    (error "Point is not on a heading."))
   (save-excursion
     (let ((beg (point)))
       (end-of-line)
@@ -1462,29 +1626,38 @@ visual overlay, or with the string TEXT if it is supplied."
 (defun org-drill-hide-clozed-text ()
   (save-excursion
     (while (re-search-forward org-drill-cloze-regexp nil t)
-      ;; Don't hide org links, partly because they might contain inline
-      ;; images which we want to keep visible
+      ;; Don't hide:
+      ;; - org links, partly because they might contain inline
+      ;;   images which we want to keep visible.
+      ;; - LaTeX math fragments
+      ;; - the contents of SRC blocks
       (unless (save-match-data
-                (org-pos-in-regexp (match-beginning 0)
-                                   org-bracket-link-regexp 1))
+                (or (org-pos-in-regexp (match-beginning 0)
+                                       org-bracket-link-regexp 1)
+                    (org-in-src-block-p)
+                    (org-inside-LaTeX-fragment-p)))
         (org-drill-hide-matched-cloze-text)))))
 
 
 (defun org-drill-hide-matched-cloze-text ()
   "Hide the current match with a 'cloze' visual overlay."
-  (let ((ovl (make-overlay (match-beginning 0) (match-end 0))))
+  (let ((ovl (make-overlay (match-beginning 0) (match-end 0)))
+        (hint-sep-pos (string-match-p (regexp-quote org-drill-hint-separator)
+                                      (match-string 0))))
     (overlay-put ovl 'category
                  'org-drill-cloze-overlay-defaults)
-    (when (find ?| (match-string 0))
+    (overlay-put ovl 'priority 9999)
+    (when (and hint-sep-pos
+               (> hint-sep-pos 1))
       (let ((hint (substring-no-properties
                    (match-string 0)
-                   (1+ (position ?| (match-string 0)))
+                   (+ hint-sep-pos (length org-drill-hint-separator))
                    (1- (length (match-string 0))))))
         (overlay-put
          ovl 'display
          ;; If hint is like `X...' then display [X...]
          ;; otherwise display [...X]
-         (format (if (string-match-p "\\.\\.\\." hint) "[%s]" "[%s...]")
+         (format (if (string-match-p (regexp-quote "...") hint) "[%s]" "[%s...]")
                  hint))))))
 
 
@@ -1538,6 +1711,7 @@ Note: does not actually alter the item."
                              (save-excursion
                                (outline-next-heading)
                                (point)))))
+      (overlay-put ovl 'priority 9999)
       (overlay-put ovl 'category
                    'org-drill-replaced-text-overlay)
       (overlay-put ovl 'display text)))))
@@ -1566,6 +1740,7 @@ Note: does not actually alter the item."
                               (if (= i (1- (length replacements)))
                                   p-max
                                 (+ p-min (* 2 i) 1))))
+      (overlay-put ovl 'priority 9999)
       (overlay-put ovl 'category
                    'org-drill-replaced-text-overlay)
       (overlay-put ovl 'display (nth i replacements)))))
@@ -1601,13 +1776,26 @@ Note: does not actually alter the item."
       (substring-no-properties text))))
 
 
-(defun org-drill-entry-empty-p ()
-  (zerop (length (org-drill-get-entry-text))))
+;; (defun org-entry-empty-p ()
+;;   (zerop (length (org-drill-get-entry-text))))
 
+;; This version is about 5x faster than the old version, above.
+(defun org-entry-empty-p ()
+  (save-excursion
+    (org-back-to-heading t)
+    (let ((lim (save-excursion
+                 (outline-next-heading) (point))))
+      (if (fboundp 'org-end-of-meta-data-and-drawers)
+          (org-end-of-meta-data-and-drawers) ; function removed Feb 2015
+        (org-end-of-meta-data t))
+      (or (>= (point) lim)
+          (null (re-search-forward "[[:graph:]]" lim t))))))
+
+(defun org-drill-entry-empty-p () (org-entry-empty-p))
 
 
 ;;; Presentation functions ====================================================
-
+;;
 ;; Each of these is called with point on topic heading.  Each needs to show the
 ;; topic in the form of a 'question' or with some information 'hidden', as
 ;; appropriate for the card type. The user should then be prompted to press a
@@ -1615,11 +1803,13 @@ Note: does not actually alter the item."
 ;; topic, and should return t if the user chose to see the answer and rate their
 ;; recall, nil if they chose to quit.
 
+
 (defun org-drill-present-simple-card ()
   (with-hidden-comments
    (with-hidden-cloze-hints
     (with-hidden-cloze-text
      (org-drill-hide-all-subheadings-except nil)
+     (org-drill--show-latex-fragments)  ; overlay all LaTeX fragments with images
      (ignore-errors
        (org-display-inline-images t))
      (org-cycle-hide-drawers 'all)
@@ -1628,12 +1818,29 @@ Note: does not actually alter the item."
 
 
 (defun org-drill-present-default-answer (reschedule-fn)
-  (org-drill-hide-subheadings-if 'org-drill-entry-p)
-  (org-drill-unhide-clozed-text)
-  (ignore-errors
-    (org-display-inline-images t))
-  (with-hidden-cloze-hints
-   (funcall reschedule-fn)))
+  (cond
+   (drill-answer
+    (with-replaced-entry-text
+     (format "\nAnswer:\n\n  %s\n" drill-answer)
+     (prog1
+         (funcall reschedule-fn)
+       (setq drill-answer nil))))
+   (t
+    (org-drill-hide-subheadings-if 'org-drill-entry-p)
+    (org-drill-unhide-clozed-text)
+    (org-drill--show-latex-fragments)
+    (ignore-errors
+      (org-display-inline-images t))
+    (org-cycle-hide-drawers 'all)
+    (with-hidden-cloze-hints
+     (funcall reschedule-fn)))))
+
+
+(defun org-drill--show-latex-fragments ()
+  (org-remove-latex-fragment-image-overlays)
+  (if (fboundp 'org-toggle-latex-fragment)
+      (org-toggle-latex-fragment '(4))
+    (org-preview-latex-fragment '(4))))
 
 
 (defun org-drill-present-two-sided-card ()
@@ -1646,6 +1853,7 @@ Note: does not actually alter the item."
            (goto-char (nth (random* (min 2 (length drill-sections)))
                            drill-sections))
            (org-show-subtree)))
+       (org-drill--show-latex-fragments)
        (ignore-errors
          (org-display-inline-images t))
        (org-cycle-hide-drawers 'all)
@@ -1663,6 +1871,7 @@ Note: does not actually alter the item."
          (save-excursion
            (goto-char (nth (random* (length drill-sections)) drill-sections))
            (org-show-subtree)))
+       (org-drill--show-latex-fragments)
        (ignore-errors
          (org-display-inline-images t))
        (org-cycle-hide-drawers 'all)
@@ -1704,7 +1913,8 @@ items if FORCE-SHOW-FIRST or FORCE-SHOW-LAST is non-nil)."
           (let ((in-regexp? (save-match-data
                               (org-pos-in-regexp (match-beginning 0)
                                                  org-bracket-link-regexp 1))))
-            (unless in-regexp?
+            (unless (or in-regexp?
+                        (org-inside-LaTeX-fragment-p))
               (incf match-count)))))
       (if (minusp number-to-hide)
           (setq number-to-hide (+ match-count number-to-hide)))
@@ -1731,8 +1941,9 @@ items if FORCE-SHOW-FIRST or FORCE-SHOW-LAST is non-nil)."
             (setq cnt 0)
             (while (re-search-forward org-drill-cloze-regexp item-end t)
               (unless (save-match-data
-                        (org-pos-in-regexp (match-beginning 0)
-                                           org-bracket-link-regexp 1))
+                        (or (org-pos-in-regexp (match-beginning 0)
+                                               org-bracket-link-regexp 1)
+                            (org-inside-LaTeX-fragment-p)))
                 (incf cnt)
                 (if (memq cnt match-nums)
                     (org-drill-hide-matched-cloze-text)))))))
@@ -1742,6 +1953,7 @@ items if FORCE-SHOW-FIRST or FORCE-SHOW-LAST is non-nil)."
       ;;  while (org-pos-in-regexp (match-beginning 0)
       ;;                           org-bracket-link-regexp 1))
       ;; (org-drill-hide-matched-cloze-text)))))
+      (org-drill--show-latex-fragments)
       (ignore-errors
         (org-display-inline-images t))
       (org-cycle-hide-drawers 'all)
@@ -1771,7 +1983,8 @@ the second to last, etc."
           (let ((in-regexp? (save-match-data
                               (org-pos-in-regexp (match-beginning 0)
                                                  org-bracket-link-regexp 1))))
-            (unless in-regexp?
+            (unless (or in-regexp?
+                        (org-inside-LaTeX-fragment-p))
               (incf match-count)))))
       (if (minusp to-hide)
           (setq to-hide (+ 1 to-hide match-count)))
@@ -1785,11 +1998,16 @@ the second to last, etc."
           (setq cnt 0)
           (while (re-search-forward org-drill-cloze-regexp item-end t)
             (unless (save-match-data
-                      (org-pos-in-regexp (match-beginning 0)
-                                         org-bracket-link-regexp 1))
+                      ;; Don't consider this a cloze region if it is part of an
+                      ;; org link, or if it occurs inside a LaTeX math
+                      ;; fragment
+                      (or (org-pos-in-regexp (match-beginning 0)
+                                             org-bracket-link-regexp 1)
+                          (org-inside-LaTeX-fragment-p)))
               (incf cnt)
               (if (= cnt to-hide)
                   (org-drill-hide-matched-cloze-text)))))))
+      (org-drill--show-latex-fragments)
       (ignore-errors
         (org-display-inline-images t))
       (org-cycle-hide-drawers 'all)
@@ -1914,45 +2132,13 @@ pieces rather than one."
   (org-drill-present-multicloze-hide-n -2))
 
 
-;; (defun org-drill-present-multicloze-show1 ()
-;;   "Similar to `org-drill-present-multicloze-hide1', but hides all
-;; the pieces of text that are marked for cloze deletion, except for one
-;; piece which is chosen at random."
-;;   (with-hidden-comments
-;;    (with-hidden-cloze-hints
-;;     (let ((item-end nil)
-;;           (match-count 0)
-;;           (body-start (or (cdr (org-get-property-block))
-;;                           (point))))
-;;       (org-drill-hide-all-subheadings-except nil)
-;;       (save-excursion
-;;         (outline-next-heading)
-;;         (setq item-end (point)))
-;;       (save-excursion
-;;         (goto-char body-start)
-;;         (while (re-search-forward org-drill-cloze-regexp item-end t)
-;;           (incf match-count)))
-;;       (when (plusp match-count)
-;;         (let ((match-to-hide (random* match-count)))
-;;           (save-excursion
-;;             (goto-char body-start)
-;;             (dotimes (n match-count)
-;;               (re-search-forward org-drill-cloze-regexp
-;;                                  item-end t)
-;;               (unless (= n match-to-hide)
-;;                 (org-drill-hide-matched-cloze-text))))))
-;;       (org-display-inline-images t)
-;;       (org-cycle-hide-drawers 'all)
-;;       (prog1 (org-drill-presentation-prompt)
-;;         (org-drill-hide-subheadings-if 'org-drill-entry-p)
-;;         (org-drill-unhide-clozed-text))))))
-
-
 (defun org-drill-present-card-using-text (question &optional answer)
-  "Present the string QUESTION as the only visible content of the card."
+  "Present the string QUESTION as the only visible content of the card.
+If ANSWER is supplied, set the global variable `drill-answer' to its value."
+  (if answer (setq drill-answer answer))
   (with-hidden-comments
    (with-replaced-entry-text
-    question
+    (concat "\n" question)
     (org-drill-hide-all-subheadings-except nil)
     (org-cycle-hide-drawers 'all)
     (ignore-errors
@@ -1964,7 +2150,9 @@ pieces rather than one."
 (defun org-drill-present-card-using-multiple-overlays (replacements &optional answer)
   "TEXTS is a list of valid values for the 'display' text property.
 Present these overlays, in sequence, as the only
-visible content of the card."
+visible content of the card.
+If ANSWER is supplied, set the global variable `drill-answer' to its value."
+  (if answer (setq drill-answer answer))
   (with-hidden-comments
    (with-replaced-entry-text-multi
     replacements
@@ -1993,47 +2181,54 @@ See `org-drill' for more details."
   ;;  (error "Point is not inside a drill entry"))
   ;;(unless (org-at-heading-p)
   ;;  (org-back-to-heading))
-  (let ((card-type (org-entry-get (point) "DRILL_CARD_TYPE"))
+  (let ((card-type (org-entry-get (point) "DRILL_CARD_TYPE" t))
         (answer-fn 'org-drill-present-default-answer)
+        (present-empty-cards nil)
         (cont nil)
         ;; fontification functions in `outline-view-change-hook' can cause big
         ;; slowdowns, so we temporarily bind this variable to nil here.
         (outline-view-change-hook nil))
+    (setq drill-answer nil)
     (org-save-outline-visibility t
       (save-restriction
         (org-narrow-to-subtree)
         (org-show-subtree)
         (org-cycle-hide-drawers 'all)
 
-        (let ((presentation-fn (cdr (assoc card-type org-drill-card-type-alist))))
+        (let ((presentation-fn
+               (cdr (assoc card-type org-drill-card-type-alist))))
           (if (listp presentation-fn)
               (psetq answer-fn (or (second presentation-fn)
                                    'org-drill-present-default-answer)
+                     present-empty-cards (third presentation-fn)
                      presentation-fn (first presentation-fn)))
-          (cond
-           ((null presentation-fn)
-            (message "%s:%d: Unrecognised card type '%s', skipping..."
-                     (buffer-name) (point) card-type)
-            (sit-for 0.5)
-            'skip)
-           (t
-            (setq cont (funcall presentation-fn))
-            (cond
-             ((not cont)
-              (message "Quit")
-              nil)
-             ((eql cont 'edit)
-              'edit)
-             ((eql cont 'skip)
-              'skip)
-             (t
-              (save-excursion
-                (funcall answer-fn
-                         (lambda () (org-drill-reschedule)))))))))))))
+          (prog1
+              (cond
+               ((null presentation-fn)
+                (message "%s:%d: Unrecognised card type '%s', skipping..."
+                         (buffer-name) (point) card-type)
+                (sit-for 0.5)
+                'skip)
+               (t
+                (setq cont (funcall presentation-fn))
+                (cond
+                 ((not cont)
+                  (message "Quit")
+                  nil)
+                 ((eql cont 'edit)
+                  'edit)
+                 ((eql cont 'skip)
+                  'skip)
+                 (t
+                  (save-excursion
+                    (funcall answer-fn
+                             (lambda () (org-drill-reschedule))))))))
+            (org-remove-latex-fragment-image-overlays)))))))
 
 
 (defun org-drill-entries-pending-p ()
   (or *org-drill-again-entries*
+      *org-drill-current-item*
       (and (not (org-drill-maximum-item-count-reached-p))
            (not (org-drill-maximum-duration-reached-p))
            (or *org-drill-new-entries*
@@ -2045,7 +2240,8 @@ See `org-drill' for more details."
 
 
 (defun org-drill-pending-entry-count ()
-  (+ (length *org-drill-new-entries*)
+  (+ (if (markerp *org-drill-current-item*) 1 0)
+     (length *org-drill-new-entries*)
      (length *org-drill-failed-entries*)
      (length *org-drill-young-mature-entries*)
      (length *org-drill-old-mature-entries*)
@@ -2057,6 +2253,7 @@ See `org-drill' for more details."
   "Returns true if the current drill session has continued past its
 maximum duration."
   (and org-drill-maximum-duration
+       (not *org-drill-cram-mode*)
        *org-drill-start-time*
        (> (- (float-time (current-time)) *org-drill-start-time*)
           (* org-drill-maximum-duration 60))))
@@ -2066,6 +2263,7 @@ maximum duration."
   "Returns true if the current drill session has reached the
 maximum number of items."
   (and org-drill-maximum-items-per-session
+       (not *org-drill-cram-mode*)
        (>= (length *org-drill-done-entries*)
            org-drill-maximum-items-per-session)))
 
@@ -2157,6 +2355,7 @@ RESUMING-P is true if we are resuming a suspended drill session."
               (setq end-pos (point-marker))
               (return-from org-drill-entries nil))
              ((eql result 'skip)
+              (setq *org-drill-current-item* nil)
               nil)                      ; skip this item
              (t
               (cond
@@ -2166,7 +2365,8 @@ RESUMING-P is true if we are resuming a suspended drill session."
                           (shuffle-list *org-drill-again-entries*)))
                 (push-end m *org-drill-again-entries*))
                (t
-                (push m *org-drill-done-entries*))))))))))))
+                (push m *org-drill-done-entries*)))
+              (setq *org-drill-current-item* nil))))))))))
 
 
 
@@ -2176,7 +2376,8 @@ RESUMING-P is true if we are resuming a suspended drill session."
                                    (> qual org-drill-failure-quality))
                                  *org-drill-session-qualities*))
                 (max 1 (length *org-drill-session-qualities*))))
-        (prompt nil))
+        (prompt nil)
+        (max-mini-window-height 0.6))
     (setq prompt
           (format
            "%d items reviewed. Session duration %s.
@@ -2276,17 +2477,57 @@ all the markers used by Org-Drill will be freed."
     (free-marker m)))
 
 
+;;; overdue-data is a list of entries, each entry has the form (POS DUE AGE)
+;;; where POS is a marker pointing to the start of the entry, and
+;;; DUE is a number indicating how many days ago the entry was due.
+;;; AGE is the number of days elapsed since item creation (nil if unknown).
+;;; if age > lapse threshold (default 90), sort by age (oldest first)
+;;; if age < lapse threshold, sort by due (biggest first)
+
+
 (defun org-drill-order-overdue-entries (overdue-data)
-  (setq *org-drill-overdue-entries*
-        (mapcar 'car
-                (sort (shuffle-list overdue-data)
-                      (lambda (a b) (> (cdr a) (cdr b)))))))
+  (let* ((lapsed-days (if org-drill--lapse-very-overdue-entries-p
+                          90 most-positive-fixnum))
+         (not-lapsed (remove-if (lambda (a) (> (or (second a) 0) lapsed-days))
+                                overdue-data))
+         (lapsed (remove-if-not (lambda (a) (> (or (second a) 0)
+                                          lapsed-days)) overdue-data)))
+    (setq *org-drill-overdue-entries*
+          (mapcar 'first
+                  (append
+                   (sort (shuffle-list not-lapsed)
+                         (lambda (a b) (> (second a) (second b))))
+                   (sort lapsed
+                         (lambda (a b) (> (third a) (third b)))))))))
+
+
+(defun org-drill--entry-lapsed-p ()
+  (let ((lapsed-days 90))
+    (and org-drill--lapse-very-overdue-entries-p
+         (> (or (org-drill-entry-days-overdue) 0) lapsed-days))))
+
+
+
+
+(defun org-drill-entry-days-since-creation (&optional use-last-interval-p)
+  "If USE-LAST-INTERVAL-P is non-nil, and DATE_ADDED is missing, use the
+value of DRILL_LAST_INTERVAL instead (as the item's age must be at least
+that many days)."
+  (let ((timestamp (org-entry-get (point) "DATE_ADDED")))
+    (cond
+     (timestamp
+      (- (org-time-stamp-to-now timestamp)))
+     (use-last-interval-p
+      (+ (or (org-drill-entry-days-overdue) 0)
+         (read (or (org-entry-get (point) "DRILL_LAST_INTERVAL") "0"))))
+     (t nil))))
 
 
 (defun org-drill-entry-status ()
-  "Returns a list (STATUS DUE) where DUE is the number of days overdue,
-zero being due today, -1 being scheduled 1 day in the future. STATUS is
-one of the following values:
+  "Returns a list (STATUS DUE AGE) where DUE is the number of days overdue,
+zero being due today, -1 being scheduled 1 day in the future.
+AGE is the number of days elapsed since the item was created (nil if unknown).
+STATUS is one of the following values:
 - nil, if the item is not a drill entry, or has an empty body
 - :unscheduled
 - :future
@@ -2300,13 +2541,20 @@ one of the following values:
     (unless (org-at-heading-p)
       (org-back-to-heading))
     (let ((due (org-drill-entry-days-overdue))
+          (age (org-drill-entry-days-since-creation t))
           (last-int (org-drill-entry-last-interval 1)))
       (list
        (cond
         ((not (org-drill-entry-p))
          nil)
-        ((org-drill-entry-empty-p)
-         nil)                           ; skip -- item body is empty
+        ((and (org-entry-empty-p)
+              (let* ((card-type (org-entry-get (point) "DRILL_CARD_TYPE" nil))
+                    (dat (cdr (assoc card-type org-drill-card-type-alist))))
+                (or (null card-type)
+                    (not (third dat)))))
+         ;; body is empty, and this is not a card type where empty bodies are
+         ;; meaningful, so skip it.
+         nil)
         ((null due)                     ; unscheduled - usually a skipped leech
          :unscheduled)
         ;; ((eql -1 due)
@@ -2332,7 +2580,7 @@ one of the following values:
          :young)
         (t
          :old))
-       due))))
+       due age))))
 
 
 (defun org-drill-progress-message (collected scanned)
@@ -2341,14 +2589,58 @@ one of the following values:
            (sym1 (if (oddp (floor scanned (* 50 meter-width))) ?| ?.))
            (sym2 (if (eql sym1 ?.) ?| ?.)))
       (message "Collecting due drill items:%4d %s%s"
-              collected
-              (make-string (% (ceiling scanned 50) meter-width)
-                           sym2)
-              (make-string (- meter-width (% (ceiling scanned 50) meter-width))
-                           sym1)))))
+               collected
+               (make-string (% (ceiling scanned 50) meter-width)
+                            sym2)
+               (make-string (- meter-width (% (ceiling scanned 50) meter-width))
+                            sym1)))))
 
 
-(defun org-drill (&optional scope resume-p)
+(defun org-map-drill-entry-function ()
+  (org-drill-progress-message
+   (+ (length *org-drill-new-entries*)
+      (length *org-drill-overdue-entries*)
+      (length *org-drill-young-mature-entries*)
+      (length *org-drill-old-mature-entries*)
+      (length *org-drill-failed-entries*))
+   (incf cnt))
+  (cond
+   ((not (org-drill-entry-p))
+    nil)               ; skip
+   (t
+    (when (and (not warned-about-id-creation)
+               (null (org-id-get)))
+      (message (concat "Creating unique IDs for items "
+                       "(slow, but only happens once)"))
+      (sit-for 0.5)
+      (setq warned-about-id-creation t))
+    (org-id-get-create) ; ensure drill entry has unique ID
+    (destructuring-bind (status due age)
+        (org-drill-entry-status)
+      (case status
+        (:unscheduled
+         (incf *org-drill-dormant-entry-count*))
+        ;; (:tomorrow
+        ;;  (incf *org-drill-dormant-entry-count*)
+        ;;  (incf *org-drill-due-tomorrow-count*))
+        (:future
+         (incf *org-drill-dormant-entry-count*)
+         (if (eq -1 due)
+             (incf *org-drill-due-tomorrow-count*)))
+        (:new
+         (push (point-marker) *org-drill-new-entries*))
+        (:failed
+         (push (point-marker) *org-drill-failed-entries*))
+        (:young
+         (push (point-marker) *org-drill-young-mature-entries*))
+        (:overdue
+         (push (list (point-marker) due age) overdue-data))
+        (:old
+         (push (point-marker) *org-drill-old-mature-entries*))
+        )))))
+
+
+(defun org-drill (&optional scope drill-match resume-p)
   "Begin an interactive 'drill session'. The user is asked to
 review a series of topics (headers). Each topic is initially
 presented as a 'question', often with part of the topic content
@@ -2376,10 +2668,24 @@ SCOPE determines the scope in which to search for
 questions.  It accepts the same values as `org-drill-scope',
 which see.
 
+DRILL-MATCH, if supplied, is a string specifying a tags/property/
+todo query. Only items matching the query will be considered.
+It accepts the same values as `org-drill-match', which see.
+
 If RESUME-P is non-nil, resume a suspended drill session rather
 than starting a new one."
 
   (interactive)
+  ;; Check org version. Org 7.9.3f introduced a backwards-incompatible change
+  ;; to the arguments accepted by `org-schedule'. At the time of writing there
+  ;; are still lots of people using versions of org older than this.
+  (let ((majorv (first (mapcar 'string-to-number (split-string (org-release) "[.]")))))
+    (if (and (< majorv 8)
+             (not (string-match-p "universal prefix argument" (documentation 'org-schedule))))
+        (read-char-exclusive
+         (format "Warning: org-drill requires org mode 7.9.3f or newer. Scheduling of failed cards will not
+work correctly with older versions of org mode. Your org mode version (%s) appears to be older than
+7.9.3f. Please consider installing a more recent version of org mode." (org-release)))))
   (let ((end-pos nil)
         (overdue-data nil)
         (cnt 0))
@@ -2407,86 +2713,15 @@ than starting a new one."
               (let ((org-trust-scanner-tags t)
                     (warned-about-id-creation nil))
                 (org-map-drill-entries
-                 (lambda ()
-                   (org-drill-progress-message
-                    (+ (length *org-drill-new-entries*)
-                       (length *org-drill-overdue-entries*)
-                       (length *org-drill-young-mature-entries*)
-                       (length *org-drill-old-mature-entries*)
-                       (length *org-drill-failed-entries*))
-                    (incf cnt))
-                   (cond
-                    ((not (org-drill-entry-p))
-                     nil)               ; skip
-                    (t
-                     (when (and (not warned-about-id-creation)
-                                (null (org-id-get)))
-                       (message (concat "Creating unique IDs for items "
-                                        "(slow, but only happens once)"))
-                       (sit-for 0.5)
-                       (setq warned-about-id-creation t))
-                     (org-id-get-create) ; ensure drill entry has unique ID
-                     (destructuring-bind (status due) (org-drill-entry-status)
-                       (case status
-                         (:unscheduled
-                          (incf *org-drill-dormant-entry-count*))
-                         ;; (:tomorrow
-                         ;;  (incf *org-drill-dormant-entry-count*)
-                         ;;  (incf *org-drill-due-tomorrow-count*))
-                         (:future
-                          (incf *org-drill-dormant-entry-count*)
-                          (if (eq -1 due)
-                              (incf *org-drill-due-tomorrow-count*)))
-                         (:new
-                          (push (point-marker) *org-drill-new-entries*))
-                         (:failed
-                          (push (point-marker) *org-drill-failed-entries*))
-                         (:young
-                          (push (point-marker) *org-drill-young-mature-entries*))
-                         (:overdue
-                          (push (cons (point-marker) due) overdue-data))
-                         (:old
-                          (push (point-marker) *org-drill-old-mature-entries*)))))))
-                 scope)
-                ;; (let ((due (org-drill-entry-days-overdue))
-                ;;       (last-int (org-drill-entry-last-interval 1)))
-                ;;   (cond
-                ;;    ((org-drill-entry-empty-p)
-                ;;     nil)           ; skip -- item body is empty
-                ;;    ((or (null due) ; unscheduled - usually a skipped leech
-                ;;         (minusp due)) ; scheduled in the future
-                ;;     (incf *org-drill-dormant-entry-count*)
-                ;;     (if (eq -1 due)
-                ;;         (incf *org-drill-due-tomorrow-count*)))
-                ;;    ((org-drill-entry-new-p)
-                ;;     (push (point-marker) *org-drill-new-entries*))
-                ;;    ((<= (org-drill-entry-last-quality 9999)
-                ;;         org-drill-failure-quality)
-                ;;     ;; Mature entries that were failed last time are
-                ;;     ;; FAILED, regardless of how young, old or overdue
-                ;;     ;; they are.
-                ;;     (push (point-marker) *org-drill-failed-entries*))
-                ;;    ((org-drill-entry-overdue-p due last-int)
-                ;;     ;; Overdue status overrides young versus old
-                ;;     ;; distinction.
-                ;;     ;; Store marker + due, for sorting of overdue entries
-                ;;     (push (cons (point-marker) due) overdue-data))
-                ;;    ((<= (org-drill-entry-last-interval 9999)
-                ;;         org-drill-days-before-old)
-                ;;     ;; Item is 'young'.
-                ;;     (push (point-marker)
-                ;;           *org-drill-young-mature-entries*))
-                ;;    (t
-                ;;     (push (point-marker)
-                ;;           *org-drill-old-mature-entries*))))
-                ;; Order 'overdue' items so that the most overdue will tend to
-                ;; come up for review first, while keeping exact order random
+                 'org-map-drill-entry-function
+                 scope drill-match)
                 (org-drill-order-overdue-entries overdue-data)
                 (setq *org-drill-overdue-entry-count*
                       (length *org-drill-overdue-entries*))))
             (setq *org-drill-due-entry-count* (org-drill-pending-entry-count))
             (cond
-             ((and (null *org-drill-new-entries*)
+             ((and (null *org-drill-current-item*)
+                   (null *org-drill-new-entries*)
                    (null *org-drill-failed-entries*)
                    (null *org-drill-overdue-entries*)
                    (null *org-drill-young-mature-entries*)
@@ -2497,6 +2732,7 @@ than starting a new one."
               (message "Drill session finished!"))))
         (progn
           (unless end-pos
+            (setq *org-drill-cram-mode* nil)
             (org-drill-free-markers *org-drill-done-entries*)))))
     (cond
      (end-pos
@@ -2520,19 +2756,17 @@ than starting a new one."
 
 
 (defun org-drill-save-optimal-factor-matrix ()
-  (message "Saving optimal factor matrix...")
-  (customize-save-variable 'org-drill-optimal-factor-matrix
-                           org-drill-optimal-factor-matrix))
+  (savehist-autosave))
 
 
-(defun org-drill-cram (&optional scope)
+(defun org-drill-cram (&optional scope drill-match)
   "Run an interactive drill session in 'cram mode'. In cram mode,
 all drill items are considered to be due for review, unless they
 have been reviewed within the last `org-drill-cram-hours'
 hours."
   (interactive)
-  (let ((*org-drill-cram-mode* t))
-    (org-drill scope)))
+  (setq *org-drill-cram-mode* t)
+  (org-drill scope drill-match))
 
 
 (defun org-drill-tree ()
@@ -2549,12 +2783,13 @@ files in the same directory as the current file."
   (org-drill 'directory))
 
 
-(defun org-drill-again (&optional scope)
+(defun org-drill-again (&optional scope drill-match)
   "Run a new drill session, but try to use leftover due items that
 were not reviewed during the last session, rather than scanning for
 unreviewed items. If there are no leftover items in memory, a full
 scan will be performed."
   (interactive)
+  (setq *org-drill-cram-mode* nil)
   (cond
    ((plusp (org-drill-pending-entry-count))
     (org-drill-free-markers *org-drill-done-entries*)
@@ -2563,9 +2798,9 @@ scan will be performed."
     (setq *org-drill-start-time* (float-time (current-time))
           *org-drill-done-entries* nil
           *org-drill-current-item* nil)
-    (org-drill scope t))
+    (org-drill scope drill-match t))
    (t
-    (org-drill scope))))
+    (org-drill scope drill-match))))
 
 
 
@@ -2575,7 +2810,7 @@ exiting them with the `edit' or `quit' options."
   (interactive)
   (cond
    ((org-drill-entries-pending-p)
-    (org-drill nil t))
+    (org-drill nil nil t))
    ((and (plusp (org-drill-pending-entry-count))
          ;; Current drill session is finished, but there are still
          ;; more items which need to be reviewed.
@@ -2588,10 +2823,18 @@ need reviewing. Start a new drill session? "
     (message "You have finished the drill session."))))
 
 
+(defun org-drill-relearn-item ()
+  "Make the current item due for revision, and set its last interval to 0.
+Makes the item behave as if it has been failed, without actually recording a
+failure. This command can be used to 'reset' repetitions for an item."
+  (interactive)
+  (org-drill-smart-reschedule 4 0))
+
+
 (defun org-drill-strip-entry-data ()
   (dolist (prop org-drill-scheduling-properties)
     (org-delete-property prop))
-  (org-schedule t))
+  (org-schedule '(4)))
 
 
 (defun org-drill-strip-all-data (&optional scope)
@@ -2609,22 +2852,41 @@ values as `org-drill-scope'."
       ;; `org-delete-property-globally', which is faster.
       (dolist (prop org-drill-scheduling-properties)
         (org-delete-property-globally prop))
-      (org-map-drill-entries (lambda () (org-schedule t)) scope))
+      (org-map-drill-entries (lambda () (org-schedule '(4))) scope))
      (t
       (org-map-drill-entries 'org-drill-strip-entry-data scope)))
     (message "Done.")))
 
 
-
 (defun org-drill-add-cloze-fontification ()
+  ;; Compute local versions of the regexp for cloze deletions, in case
+  ;; the left and right delimiters are redefined locally.
+  (setq-local org-drill-cloze-regexp (org-drill--compute-cloze-regexp))
+  (setq-local org-drill-cloze-keywords (org-drill--compute-cloze-keywords))
   (when org-drill-use-visible-cloze-face-p
-    (font-lock-add-keywords 'org-mode
-                            org-drill-cloze-keywords
-                            nil)))
+    (add-to-list 'org-font-lock-extra-keywords
+                 (first org-drill-cloze-keywords))))
 
-(add-hook 'org-mode-hook 'org-drill-add-cloze-fontification)
 
-(org-drill-add-cloze-fontification)
+;; Can't add to org-mode-hook, because local variables won't have been loaded
+;; yet.
+
+;; (defun org-drill-add-cloze-fontification ()
+;;   (when (eql major-mode 'org-mode)
+;;     ;; Compute local versions of the regexp for cloze deletions, in case
+;;     ;; the left and right delimiters are redefined locally.
+;;     (setq-local org-drill-cloze-regexp (org-drill--compute-cloze-regexp))
+;;     (setq-local org-drill-cloze-keywords (org-drill--compute-cloze-keywords))
+;;     (when org-drill-use-visible-cloze-face-p
+;;       (font-lock-add-keywords nil       ;'org-mode
+;;                               org-drill-cloze-keywords
+;;                               nil))))
+
+;; XXX
+;; (add-hook 'hack-local-variables-hook
+;;           'org-drill-add-cloze-fontification)
+;;
+;; (org-drill-add-cloze-fontification)
 
 
 ;;; Synching card collections =================================================
@@ -2640,18 +2902,18 @@ the tag 'imported'."
     (save-excursion
       (let ((src (current-buffer))
             (m nil))
-        (flet ((paste-tree-here (&optional level)
-                                (org-paste-subtree level)
-                                (org-drill-strip-entry-data)
-                                (org-toggle-tag "imported" 'on)
-                                (org-map-drill-entries
-                                 (lambda ()
-                                   (let ((id (org-id-get)))
-                                     (org-drill-strip-entry-data)
-                                     (unless (gethash id *org-drill-dest-id-table*)
-                                       (puthash id (point-marker)
-                                                *org-drill-dest-id-table*))))
-                                 'tree)))
+        (cl-flet ((paste-tree-here (&optional level)
+                                   (org-paste-subtree level)
+                                   (org-drill-strip-entry-data)
+                                   (org-toggle-tag "imported" 'on)
+                                   (org-map-drill-entries
+                                    (lambda ()
+                                      (let ((id (org-id-get)))
+                                        (org-drill-strip-entry-data)
+                                        (unless (gethash id *org-drill-dest-id-table*)
+                                          (puthash id (point-marker)
+                                                   *org-drill-dest-id-table*))))
+                                    'tree)))
           (unless path
             (setq path (org-get-outline-path)))
           (org-copy-subtree)
@@ -2841,15 +3103,15 @@ the name of the tense.")
 
 (defun org-drill-present-verb-conjugation ()
   "Present a drill entry whose card type is 'conjugate'."
-  (flet ((tense-and-mood-to-string
-          (tense mood)
-          (cond
-           ((and tense mood)
-            (format "%s tense, %s mood" tense mood))
-           (tense
-            (format "%s tense" tense))
-           (mood
-            (format "%s mood" mood)))))
+  (cl-flet ((tense-and-mood-to-string
+             (tense mood)
+             (cond
+              ((and tense mood)
+               (format "%s tense, %s mood" tense mood))
+              (tense
+               (format "%s tense" tense))
+              (mood
+               (format "%s mood" mood)))))
     (destructuring-bind (infinitive inf-hint translation tense mood)
         (org-drill-get-verb-conjugation-info)
       (org-drill-present-card-using-text
@@ -2883,19 +3145,120 @@ returns its return value."
                (mood
                 (format "%s mood" mood))))
              infinitive translation)
+     (org-cycle-hide-drawers 'all)
+     (funcall reschedule-fn))))
+
+
+;;; `decline_noun' card type ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+(defvar org-drill-noun-gender-alist
+  '(("masculine" "dodgerblue")
+    ("masc" "dodgerblue")
+    ("male" "dodgerblue")
+    ("m" "dodgerblue")
+    ("feminine" "orchid")
+    ("fem" "orchid")
+    ("female" "orchid")
+    ("f" "orchid")
+    ("neuter" "green")
+    ("neutral" "green")
+    ("neut" "green")
+    ("n" "green")
+    ))
+
+
+(defun org-drill-get-noun-info ()
+  "Auxiliary function used by `org-drill-present-noun-declension' and
+`org-drill-show-answer-noun-declension'."
+  (let ((noun (org-entry-get (point) "NOUN" t))
+        (noun-hint (org-entry-get (point) "NOUN_HINT" t))
+        (noun-root (org-entry-get (point) "NOUN_ROOT" t))
+        (noun-gender (org-entry-get (point) "NOUN_GENDER" t))
+        (translation (org-entry-get (point) "NOUN_TRANSLATION" t))
+        (highlight-face nil))
+    (unless (and noun translation)
+      (error "Missing information for `decline_noun' card (%s, %s, %s, %s) at %s"
+             noun translation noun-hint noun-root (point)))
+    (setq noun-root (if noun-root (car (read-from-string noun-root)))
+          noun (car (read-from-string noun))
+          noun-gender (downcase (car (read-from-string noun-gender)))
+          noun-hint (if noun-hint (car (read-from-string noun-hint)))
+          translation (car (read-from-string translation)))
+    (setq highlight-face
+          (list :foreground
+                (or (second (assoc-string noun-gender
+                                          org-drill-noun-gender-alist t))
+                    "red")))
+    (setq noun (propertize noun 'face highlight-face))
+    (setq translation (propertize translation 'face highlight-face))
+    (list noun noun-root noun-gender noun-hint translation)))
+
+
+(defun org-drill-present-noun-declension ()
+  "Present a drill entry whose card type is 'decline_noun'."
+  (destructuring-bind (noun noun-root noun-gender noun-hint translation)
+      (org-drill-get-noun-info)
+    (let* ((props (org-entry-properties (point)))
+           (definite
+             (cond
+              ((assoc "DECLINE_DEFINITE" props)
+               (propertize (if (org-entry-get (point) "DECLINE_DEFINITE")
+                               "definite" "indefinite")
+                           'face 'warning))
+              (t nil)))
+           (plural
+            (cond
+             ((assoc "DECLINE_PLURAL" props)
+              (propertize (if (org-entry-get (point) "DECLINE_PLURAL")
+                              "plural" "singular")
+                          'face 'warning))
+             (t nil))))
+      (org-drill-present-card-using-text
+       (cond
+        ((zerop (random* 2))
+         (format "\nTranslate the noun\n\n%s (%s)\n\nand list its declensions%s.\n\n"
+                 noun noun-gender
+                 (if (or plural definite)
+                     (format " for the %s %s form" definite plural)
+                   "")))
+        (t
+         (format "\nGive the noun that means\n\n%s %s\n
+and list its declensions%s.\n\n"
+                 translation
+                 (if noun-hint (format "  [HINT: %s]" noun-hint) "")
+                 (if (or plural definite)
+                     (format " for the %s %s form" definite plural)
+                   ""))))))))
+
+
+(defun org-drill-show-answer-noun-declension (reschedule-fn)
+  "Show the answer for a drill item whose card type is 'decline_noun'.
+RESCHEDULE-FN must be a function that calls `org-drill-reschedule' and
+returns its return value."
+  (destructuring-bind (noun noun-root noun-gender noun-hint translation)
+      (org-drill-get-noun-info)
+    (with-replaced-entry-heading
+     (format "Declensions of %s (%s) ==> %s\n\n"
+             noun noun-gender translation)
+     (org-cycle-hide-drawers 'all)
      (funcall reschedule-fn))))
 
 
 ;;; `translate_number' card type ==============================================
 ;;; See spanish.org for usage
 
-(defvar *drilled-number* 0)
-(defvar *drilled-number-direction* 'to-english)
+
+(defun spelln-integer-in-language (n lang)
+  (let ((spelln-language lang))
+    (spelln-integer-in-words n)))
 
 (defun org-drill-present-translate-number ()
   (let ((num-min (read (org-entry-get (point) "DRILL_NUMBER_MIN")))
         (num-max (read (org-entry-get (point) "DRILL_NUMBER_MAX")))
         (language (read (org-entry-get (point) "DRILL_LANGUAGE" t)))
+        (drilled-number 0)
+        (drilled-number-direction 'to-english)
         (highlight-face 'font-lock-warning-face))
     (cond
      ((not (fboundp 'spelln-integer-in-words))
@@ -2908,46 +3271,49 @@ returns its return value."
       (if (> num-min num-max)
           (psetf num-min num-max
                  num-max num-min))
-      (setq *drilled-number*
+      (setq drilled-number
             (+ num-min (random* (abs (1+ (- num-max num-min))))))
-      (setq *drilled-number-direction*
+      (setq drilled-number-direction
             (if (zerop (random* 2)) 'from-english 'to-english))
-      (org-drill-present-card-using-text
-       (if (eql 'to-english *drilled-number-direction*)
-           (format "\nTranslate into English:\n\n%s\n"
-                   (let ((spelln-language language))
-                     (propertize
-                      (spelln-integer-in-words *drilled-number*)
-                      'face highlight-face)))
+      (cond
+       ((eql 'to-english drilled-number-direction)
+        (org-drill-present-card-using-text
+         (format "\nTranslate into English:\n\n%s\n"
+                 (propertize
+                  (spelln-integer-in-language drilled-number language)
+                  'face highlight-face))
+         (spelln-integer-in-language drilled-number 'english-gb)))
+       (t
+        (org-drill-present-card-using-text
          (format "\nTranslate into %s:\n\n%s\n"
                  (capitalize (format "%s" language))
-                 (let ((spelln-language 'english-gb))
-                   (propertize
-                    (spelln-integer-in-words *drilled-number*)
-                    'face highlight-face)))))))))
+                 (propertize
+                  (spelln-integer-in-language drilled-number 'english-gb)
+                  'face highlight-face))
+         (spelln-integer-in-language drilled-number language))))))))
 
 
-(defun org-drill-show-answer-translate-number (reschedule-fn)
-  (let* ((language (read (org-entry-get (point) "DRILL_LANGUAGE" t)))
-         (highlight-face 'font-lock-warning-face)
-         (non-english
-          (let ((spelln-language language))
-            (propertize (spelln-integer-in-words *drilled-number*)
-                        'face highlight-face)))
-         (english
-          (let ((spelln-language 'english-gb))
-            (propertize (spelln-integer-in-words *drilled-number*)
-                        'face 'highlight-face))))
-    (with-replaced-entry-text
-     (cond
-      ((eql 'to-english *drilled-number-direction*)
-       (format "\nThe English translation of %s is:\n\n%s\n"
-               non-english english))
-      (t
-       (format "\nThe %s translation of %s is:\n\n%s\n"
-               (capitalize (format "%s" language))
-               english non-english)))
-     (funcall reschedule-fn))))
+;; (defun org-drill-show-answer-translate-number (reschedule-fn)
+;;   (let* ((language (read (org-entry-get (point) "DRILL_LANGUAGE" t)))
+;;          (highlight-face 'font-lock-warning-face)
+;;          (non-english
+;;           (let ((spelln-language language))
+;;             (propertize (spelln-integer-in-words *drilled-number*)
+;;                         'face highlight-face)))
+;;          (english
+;;           (let ((spelln-language 'english-gb))
+;;             (propertize (spelln-integer-in-words *drilled-number*)
+;;                         'face 'highlight-face))))
+;;     (with-replaced-entry-text
+;;      (cond
+;;       ((eql 'to-english *drilled-number-direction*)
+;;        (format "\nThe English translation of %s is:\n\n%s\n"
+;;                non-english english))
+;;       (t
+;;        (format "\nThe %s translation of %s is:\n\n%s\n"
+;;                (capitalize (format "%s" language))
+;;                english non-english)))
+;;      (funcall reschedule-fn))))
 
 
 ;;; `spanish_verb' card type ==================================================
