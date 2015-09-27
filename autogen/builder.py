@@ -38,11 +38,20 @@ class ConfigBuilder(object):
 
     def _create(self):
         self._data = []
+        self._optimize_startup_time_start()
         self._gen_config_path()
         self._gen_load_packages()
         self._gen_frame_config()
+        self._optimize_startup_time_end()
         self._data.append("")
         self._write_init_file()
+
+    def _optimize_startup_time_start(self):
+        self._data.append('''
+(setq gc-cons-threshold 10000000)
+(let ((file-name-handler-alist nil))''')
+    def _optimize_startup_time_end(self):
+        self._data.append(''')''')
 
     def _gen_config_path(self):
         config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
