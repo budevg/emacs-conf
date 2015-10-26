@@ -12,7 +12,7 @@
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
-;; Package-Requires: ((emacs "24.4") (async "20150812") (dash "2.11.0"))
+;; Package-Requires: ((emacs "24.4") (async "20150909.2257") (dash "20151021.113"))
 ;; Keywords: bindings
 ;; Homepage: https://github.com/magit/magit
 
@@ -117,8 +117,8 @@ that without users being aware of it could lead to tears.
 `nil'      Ignore prefix arguments."
   :group 'magit-popup
   :type '(choice
-          (const :tag "Use default action, else show popup" default)
-          (const :tag "Show popup, else use default action" popup)
+          (const :tag "Call default action instead of showing popup" default)
+          (const :tag "Show popup instead of calling default action" popup)
           (const :tag "Ignore prefix argument" nil)
           (const :tag "Abort and show usage information" disabled)))
 
@@ -588,25 +588,34 @@ is then placed before or after AT, depending on PREPEND."
   (magit-define-popup-key popup :actions key
     (list desc command) at prepend))
 
+(defun magit-define-popup-sequence-action
+    (popup key desc command &optional at prepend)
+  "Like `magit-define-popup-action' but for `:sequence-action'."
+  (declare (indent defun))
+  (magit-define-popup-key popup :sequence-actions key
+    (list desc command) at prepend))
+
 (defconst magit-popup-type-plural-alist
   '((:switch . :switches)
     (:option . :options)
-    (:action . :actions)))
+    (:action . :actions)
+    (:sequence-action . :sequence-actions)))
 
 (defun magit-popup-pluralize-type (type)
   (or (cdr (assq type magit-popup-type-plural-alist))
       type))
 
-(defun magit-define-popup-key (popup type key def
-                                     &optional at prepend)
+(defun magit-define-popup-key
+    (popup type key def &optional at prepend)
   "In POPUP, define KEY as an action, switch, or option.
 It's better to use one of the specialized functions
   `magit-define-popup-action',
+  `magit-define-popup-sequence-action',
   `magit-define-popup-switch', or
   `magit-define-popup-option'."
   (declare (indent defun))
   (setq type (magit-popup-pluralize-type type))
-  (if (memq type '(:switches :options :actions))
+  (if (memq type '(:switches :options :actions :sequence-actions))
       (if (boundp popup)
           (let* ((plist (symbol-value popup))
                  (value (plist-get plist type))
@@ -641,8 +650,8 @@ It's better to use one of the specialized functions
 
 (defun magit-change-popup-key (popup type from to)
   "In POPUP, bind TO to what FROM was bound to.
-TYPE is one of `:action', `:switch', or `:option'.
-Bind TO and unbind FROM, both are characters."
+TYPE is one of `:action', `:sequence-action', `:switch', or
+`:option'.  Bind TO and unbind FROM, both are characters."
   (--if-let (assoc from (plist-get (symbol-value popup)
                                    (magit-popup-pluralize-type type)))
       (setcar it to)
@@ -651,8 +660,8 @@ Bind TO and unbind FROM, both are characters."
 (defun magit-remove-popup-key (popup type key)
   "In POPUP, remove KEY's binding of TYPE.
 POPUP is a popup command defined using `magit-define-popup'.
-TYPE is one of `:action', `:switch', or `:option'.
-KEY is the character which is to be unbound."
+TYPE is one of `:action', `:sequence-action', `:switch', or
+`:option'.  KEY is the character which is to be unbound."
   (setq type (magit-popup-pluralize-type type))
   (let* ((plist (symbol-value popup))
          (alist (plist-get plist type))
@@ -893,6 +902,7 @@ restored."
 
 (define-derived-mode magit-popup-mode fundamental-mode "MagitPopup"
   "Major mode for infix argument popups."
+  :mode 'magit-popup
   (setq buffer-read-only t)
   (setq-local scroll-margin 0)
   (setq-local magit-popup-show-common-commands magit-popup-show-common-commands)
@@ -921,6 +931,7 @@ no arguments, is used to determine whether to use the actions
 defined with regular `:actions' or those in `:sequence-actions'.
 When a sequence is in progress the arguments are not available
 in the popup."
+  :mode 'magit-popup
   (remove-hook 'magit-popup-setup-hook 'magit-popup-default-setup t)
   (add-hook    'magit-popup-setup-hook
                (lambda (val def)
@@ -941,7 +952,7 @@ in the popup."
     (setq magit-this-popup popup)
     (run-hook-with-args 'magit-popup-setup-hook val def))
   (magit-refresh-popup-buffer)
-  (fit-window-to-buffer))
+  (fit-window-to-buffer nil nil (line-number-at-pos (point-max))))
 
 (defun magit-popup-mode-display-buffer (buffer mode)
   (let ((winconf (current-window-configuration)))
@@ -950,6 +961,12 @@ in the popup."
     (switch-to-buffer buffer)
     (funcall mode)
     (setq magit-popup-previous-winconf winconf)))
+
+(defvar magit-refresh-popup-buffer-hook nil
+  "Hook run by `magit-refresh-popup-buffer'.
+The hook is run right after inserting the representation of the
+popup events but before optionally inserting the representation
+of events shared by all popups and before point is adjusted.")
 
 (defun magit-refresh-popup-buffer ()
   (let* ((inhibit-read-only t)
