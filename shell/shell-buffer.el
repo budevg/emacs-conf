@@ -2,6 +2,9 @@
 (setq kill-buffer-query-functions
       (remq 'process-kill-buffer-query-function kill-buffer-query-functions))
 
+(add-to-list 'display-buffer-alist
+             '("^\\*shell\\*" . (display-buffer-same-window)))
+
 (defun new-shell ()
   "create new shell"
   (interactive)
