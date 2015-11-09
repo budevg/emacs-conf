@@ -1,6 +1,7 @@
 
 ;grep
-(require 'wgrep)
+(autoload 'wgrep-setup "wgrep")
+(add-hook 'grep-setup-hook 'wgrep-setup)
 (setq grep-find-history '("find . -type f -print0 |xargs -0 -e grep -n"))
 (global-set-key [(control f9)] 'grep-find)
 

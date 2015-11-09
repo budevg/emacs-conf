@@ -180,6 +180,8 @@ Fall back to `completing-read' otherwise."
 (autoload 'ag "ag.el" nil t)
 (autoload 'ag-dired "ag.el" nil t)
 (autoload 'ag/dwim-at-point "ag.el" nil t)
+(autoload 'wgrep-ag-setup "wgrep-ag")
+(add-hook 'ag-mode-hook 'wgrep-ag-setup)
 (eval-after-load "ag"
   '(progn
      (setq ag-reuse-buffers t)
