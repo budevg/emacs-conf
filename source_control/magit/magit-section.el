@@ -1,6 +1,6 @@
-;;; magit-section.el --- section functionality
+;;; magit-section.el --- section functionality  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2015  The Magit Project Contributors
+;; Copyright (C) 2010-2016  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -43,7 +43,7 @@
   :group 'magit)
 
 (defcustom magit-section-show-child-count t
-  "Whether to append the number of childen to section headings."
+  "Whether to append the number of children to section headings."
   :package-version '(magit . "2.1.0")
   :group 'magit-section
   :type 'boolean)
@@ -83,7 +83,7 @@ until one of them returns non-nil."
   "Functions used to unhighlight the previously current section.
 Each function is run with the current section as only argument
 until one of them returns non-nil.  Most sections are properly
-unhighlighted without requiring a specialized unhighligher,
+unhighlighted without requiring a specialized unhighlighter,
 diff-related sections being the only exception."
   :package-version '(magit . "2.1.0")
   :group 'magit-section
@@ -91,16 +91,18 @@ diff-related sections being the only exception."
   :options '(magit-diff-unhighlight))
 
 (defcustom magit-section-set-visibility-hook
-  '(magit-diff-expansion-threshold magit-revision-set-visibility)
+  '(magit-diff-expansion-threshold
+    magit-section-set-visibility-from-cache)
   "Hook used to set the initial visibility of a section.
 Stop at the first function that returns non-nil.  The value
 should be `show' or `hide'.  If no function returns non-nil
 determine the visibility as usual, i.e. use the hardcoded
 section specific default (see `magit-insert-section')."
-  :package-version '(magit . "2.1.0")
+  :package-version '(magit . "2.4.0")
   :group 'magit-section
   :type 'hook
-  :options '(magit-diff-expansion-threshold magit-revision-set-visibility))
+  :options '(magit-diff-expansion-threshold
+             magit-section-set-visibility-from-cache))
 
 (defface magit-section-highlight
   '((((class color) (background light)) :background "grey95")
@@ -163,6 +165,10 @@ IDENT has to be a list as returned by `magit-section-ident'."
                          (magit-section-children section))))
         (pop ident))
       section)))
+
+(defvar magit-insert-section--current nil "For internal use only.")
+(defvar magit-insert-section--parent  nil "For internal use only.")
+(defvar magit-insert-section--oldroot nil "For internal use only.")
 
 ;;; Commands
 ;;;; Movement
@@ -268,23 +274,23 @@ It the SECTION has a different type, then do nothing."
   (when (eq (magit-section-type section) 'hunk)
     (magit-section-set-window-start section)))
 
-(defmacro magit-define-section-jumper (sym title &optional value)
-  "Define an interactive function to go to section SYM.
-TITLE is the displayed title of the section."
-  (let ((fun (intern (format "magit-jump-to-%s" sym))))
-    `(progn
-       (defun ,fun (&optional expand) ,(format "\
-Jump to section '%s'.
-With a prefix argument also expand it." title)
-         (interactive "P")
-         (--if-let (magit-get-section
-                    (cons '(,sym . ,value) (magit-section-ident magit-root-section)))
-             (progn (goto-char (magit-section-start it))
-                    (when expand
-                      (with-local-quit (magit-section-show it))
-                      (recenter 0)))
-           (message ,(format "Section '%s' wasn't found" title))))
-       (put ',fun 'definition-name ',sym))))
+(defmacro magit-define-section-jumper (name heading type &optional value)
+  "Define an interactive function to go some section.
+Together TYPE and VALUE identify the section.
+HEADING is the displayed heading of the section."
+  (declare (indent defun))
+  `(defun ,name (&optional expand) ,(format "\
+Jump to the section \"%s\".
+With a prefix argument also expand it." heading)
+     (interactive "P")
+     (--if-let (magit-get-section
+                (cons (cons ',type ,value)
+                      (magit-section-ident magit-root-section)))
+         (progn (goto-char (magit-section-start it))
+                (when expand
+                  (with-local-quit (magit-section-show it))
+                  (recenter 0)))
+       (message ,(format "Section \"%s\" wasn't found" heading)))))
 
 ;;;; Visibility
 
@@ -307,6 +313,7 @@ With a prefix argument also expand it." title)
     (magit-section-update-highlight))
   (-when-let (beg (magit-section-content section))
     (remove-overlays beg (magit-section-end section) 'invisible t))
+  (magit-section-update-visibility-cache section)
   (dolist (child (magit-section-children section))
     (if (magit-section-hidden child)
         (magit-section-hide child)
@@ -590,7 +597,7 @@ section at point.  If no clause succeeds or if there is no
 section at point return nil.
 
 See `magit-section-match' for the forms CONDITION can take.
-Additionall a CONDITION of t is allowed in the final clause, and
+Additionally a CONDITION of t is allowed in the final clause, and
 matches if no other CONDITION match, even if there is no section
 at point."
   (declare (indent 0)
@@ -605,10 +612,6 @@ at point."
                            ,@(cdr clause)))
                        clauses)))))
 ;;; Create
-
-(defvar magit-insert-section--current nil "For internal use only.")
-(defvar magit-insert-section--parent  nil "For internal use only.")
-(defvar magit-insert-section--oldroot nil "For internal use only.")
 
 (defvar magit-insert-section-hook nil
   "Hook run after `magit-insert-section's BODY.
@@ -733,7 +736,7 @@ inside any of these strings, then insert all of them unchanged.
 Otherwise use the `magit-section-heading' face for all inserted
 text.
 
-The `content' property of the secton struct is the end of the
+The `content' property of the section struct is the end of the
 heading (which lasts from `start' to `content') and the beginning
 of the the body (which lasts from `content' to `end').  If the
 value of `content' is nil, then the section has no heading and
@@ -745,10 +748,9 @@ insert a newline character if necessary."
   (declare (indent defun))
   (when args
     (let ((heading (apply #'concat args)))
-      (magit-insert
-       (if (next-single-property-change 0 'face (concat "0" heading))
-           heading
-         (propertize heading 'face 'magit-section-heading)))))
+      (insert (if (next-single-property-change 0 'face (concat "0" heading))
+                  heading
+                (propertize heading 'face 'magit-section-heading)))))
   (unless (bolp)
     (insert ?\n))
   (setf (magit-section-content magit-insert-section--current) (point-marker)))
@@ -795,52 +797,6 @@ evaluated its BODY.  Admittedly that's a bit of a hack."
         (goto-char (- content 2))
         (insert (format " (%s)" count))
         (delete-char 1)))))
-
-(defun magit-insert (string &optional face &rest args)
-  "Insert the strings STRING and ARGS at point.
-
-First insert STRING, possibly doing some crazy things as
-described below; then insert ARGS as is, in a totally sane
-fashion.
-
-This function owes its existence to the fact that Emacs does
-not implement negative overlay priorities, and that some time
-in the past it was decided that this is not acceptable and that
-such negative prioritize have to be faked.  I wish we had shown
-some restrain, but here we are.  At least this madness is now
-contained in this function and `magit-put-face-property'.
-
-Insert STRING and then create an overlay on the inserted text,
-which sets the `face' property.  If optional FACE is non-nil,
-then use that face.  Otherwise use the first `face' property
-found in STRING."
-  (if face
-      (let ((start (point)))
-        (insert string)
-        (magit-put-face-property start (point) face))
-    (let ((buf (current-buffer))
-          (offset (1- (point))))
-      (with-temp-buffer
-        (save-excursion (insert string))
-        (while (not (eobp))
-          (let* ((beg (point))
-                 (end (or (next-single-property-change beg 'face)
-                          (point-max)))
-                 (face (get-text-property beg 'face))
-                 (text (buffer-substring-no-properties beg end)))
-            (with-current-buffer buf
-              (insert text)
-              (when face
-                (magit-put-face-property (+ beg offset)
-                                         (+ end offset) face)))
-            (goto-char end))))))
-  (apply #'insert args))
-
-(defun magit-put-face-property (start end face)
-  (let ((ov (make-overlay start end nil t)))
-    (overlay-put ov 'face face)
-    (overlay-put ov 'evaporate t)
-    ov))
 
 ;;; Update
 
@@ -979,6 +935,48 @@ invisible."
         (or (magit-get-section (magit-section-ident it))
             (magit-section-goto-successor-1 it)))))
 
+;;; Visibility
+
+(defvar-local magit-section-visibility-cache nil)
+(put 'magit-section-visibility-cache 'permanent-local t)
+
+(defun magit-section-set-visibility-from-cache (section)
+  "Set SECTION's visibility to the cached value.
+Currently the cache can only be used to remember that a section's
+body should be collapsed, not that it should be expanded.  Return
+either `hide' or nil."
+  (and (member (magit-section-visibility-ident section)
+               magit-section-visibility-cache)
+       'hide))
+
+(cl-defun magit-section-cache-visibility
+    (&optional (section magit-insert-section--current))
+  (let ((ident (magit-section-visibility-ident section)))
+    (if (magit-section-hidden section)
+        (cl-pushnew ident magit-section-visibility-cache :test #'equal)
+      (setq magit-section-visibility-cache
+            (delete ident magit-section-visibility-cache)))))
+
+(defun magit-section-update-visibility-cache (section)
+  (setq magit-section-visibility-cache
+        (delete (magit-section-visibility-ident section)
+                magit-section-visibility-cache)))
+
+(defun magit-section-visibility-ident (section)
+  (let ((type  (magit-section-type  section))
+        (value (magit-section-value section)))
+    (cons type
+          (cond ((not (memq type '(unpulled unpushed))) value)
+                ((string-match-p "@{upstream}" value) value)
+                ;; Unfortunately Git chokes on "@{push}" when the
+                ;; value of `push.default' does not allow a 1:1
+                ;; mapping.  But collapsed logs of unpushed and
+                ;; unpulled commits in the status buffer should
+                ;; remain invisible after changing branches.
+                ;; So we have to pretend the value is constant.
+                ((string-match-p "\\`\\.\\." value) "..@{push}")
+                (t "@{push}..")))))
+
 ;;; Utilities
 
 (cl-defun magit-section-selected-p (section &optional (selection nil sselection))
@@ -1090,10 +1088,13 @@ Add FUNCTION at the beginning of the hook list unless optional
 APPEND is non-nil, in which case FUNCTION is added at the end.
 If FUNCTION already is a member then move it to the new location.
 
-If optional AT is non-nil and a member of the hook list, then add
-FUNCTION next to that instead.  Add before or after AT depending
-on APPEND.  If only FUNCTION is a member of the list, then leave
-it where ever it already is.
+If optional AT is non-nil and a member of the hook list, then
+add FUNCTION next to that instead.  Add before or after AT, or
+replace AT with FUNCTION depending on APPEND.  If APPEND is the
+symbol `replace', then replace AT with FUNCTION.  For any other
+non-nil value place FUNCTION right after AT.  If nil, then place
+FUNCTION right before AT.  If FUNCTION already is a member of the
+list but AT is not, then leave FUNCTION where ever it already is.
 
 If optional LOCAL is non-nil, then modify the hook's buffer-local
 value rather than its global value.  This makes the hook local by
@@ -1119,15 +1120,20 @@ again use `remove-hook'."
     (if at
         (when (setq at (member at value))
           (setq value (delq function value))
-          (if append
-              (push function (cdr at))
-            (push (car at) (cdr at))
-            (setcar at function)))
+          (cond ((eq append 'replace)
+                 (setcar at function))
+                (append
+                 (push function (cdr at)))
+                (t
+                 (push (car at) (cdr at))
+                 (setcar at function))))
       (setq value (delq function value)))
     (unless (member function value)
       (setq value (if append
                       (append value (list function))
                     (cons function value))))
+    (when (eq append 'replace)
+      (setq value (delq at value)))
     (if local
         (set hook value)
       (set-default hook value))))

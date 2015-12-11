@@ -8,7 +8,7 @@
         (magit-diff "HEAD" '() (list file))
       (magit-section-toggle (magit-current-section)))))
 
-(setq magit-version "2.2.0")
+(setq magit-version "2.4.0")
 
 (eval-after-load "magit"
   '(progn
@@ -23,6 +23,7 @@
       '(magit-section-highlight ((t (:inherit nil)))))
      (setq magit-status-sections-hook
            '(magit-insert-status-headers
+             magit-insert-stashes
              magit-insert-merge-log
              magit-insert-rebase-sequence
              magit-insert-am-sequence
@@ -30,16 +31,20 @@
              magit-insert-bisect-output
              magit-insert-bisect-rest
              magit-insert-bisect-log
-             magit-insert-stashes
              magit-insert-untracked-files
              magit-insert-unstaged-changes
              magit-insert-staged-changes
-             magit-insert-unpulled-commits
-             magit-insert-unpushed-commits))
+             magit-insert-unpulled-from-upstream
+             magit-insert-unpulled-from-pushremote
+             magit-insert-unpushed-to-upstream
+             magit-insert-unpushed-to-pushremote))
 
      (setq magit-status-headers-hook
-           '(magit-insert-head-header
-             magit-insert-upstream-header
+           '(magit-insert-error-header
+             magit-insert-diff-filter-header
+             magit-insert-head-branch-header
+             magit-insert-upstream-branch-header
+             magit-insert-push-branch-header
              magit-insert-tags-header
              magit-insert-remote-header))
 

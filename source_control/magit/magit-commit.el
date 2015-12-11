@@ -1,6 +1,6 @@
-;;; magit-commit.el --- create Git commits
+;;; magit-commit.el --- create Git commits  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2015  The Magit Project Contributors
+;; Copyright (C) 2008-2016  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -103,9 +103,9 @@ an error while using those is harder to recover from."
                (?n "Bypass git hooks"                       "--no-verify")
                (?s "Add Signed-off-by line"                 "--signoff")
                (?R "Claim authorship and reset author date" "--reset-author"))
-    :options  ((?A "Override the author"  "--author="        read-from-minibuffer)
-               (?S "Sign using gpg"       "--gpg-sign="      magit-read-gpg-secret-key)
-               (?C "Reuse commit message" "--reuse-message=" read-from-minibuffer))
+    :options  ((?A "Override the author"  "--author=")
+               (?S "Sign using gpg"       "--gpg-sign=" magit-read-gpg-secret-key)
+               (?C "Reuse commit message" "--reuse-message="))
     :actions  ((?c "Commit"         magit-commit)
                (?e "Extend"         magit-commit-extend)
                (?f "Fixup"          magit-commit-fixup)
@@ -126,7 +126,8 @@ an error while using those is harder to recover from."
     magit-commit-arguments))
 
 (defun magit-commit-message-buffer ()
-  (let ((topdir (magit-toplevel)))
+  (let* ((find-file-visit-truename t) ; git uses truename of COMMIT_EDITMSG
+         (topdir (magit-toplevel)))
     (--first (equal topdir (with-current-buffer it
                              (and git-commit-mode (magit-toplevel))))
              (append (buffer-list (selected-frame))
@@ -259,7 +260,7 @@ depending on the value of option `magit-commit-squash-confirm'."
                 (substring option 2)))
       (when magit-commit-show-diff
         (let ((magit-display-buffer-noselect t))
-          (magit-diff-staged))))))
+          (apply #'magit-diff-staged nil (magit-diff-arguments)))))))
 
 (defun magit-commit-assert (args &optional strict)
   (cond
@@ -313,7 +314,7 @@ depending on the value of option `magit-commit-squash-confirm'."
 
 (defvar magit-gpg-secret-key-hist nil)
 
-(defun magit-read-gpg-secret-key (prompt &optional initial-input)
+(defun magit-read-gpg-secret-key (prompt &optional _initial-input)
   (require 'epa)
   (let ((keys (--map (list (epg-sub-key-id (car (epg-key-sub-key-list it)))
                            (-when-let (id-obj (car (epg-key-user-id-list it)))

@@ -1,6 +1,6 @@
 ;;; with-editor.el --- Use the Emacsclient as $EDITOR -*- lexical-binding: t -*-
 
-;; Copyright (C) 2014-2015  The Magit Project Contributors
+;; Copyright (C) 2014-2016  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -128,7 +128,7 @@ please see https://github.com/magit/magit/wiki/Emacsclient."))
                               (setq v (mapconcat #'identity (reverse v) "."))
                               (list v (concat "-" v) (concat ".emacs" v)))
                             (reverse version-lst))
-                 (list "")))
+                 (list "" "-snapshot")))
          (lambda (exec)
            (ignore-errors
              (string-match-p version-reg
@@ -235,11 +235,14 @@ not a good idea to change such entries.")
 
 (defvar with-editor-pre-finish-hook nil)
 (defvar with-editor-pre-cancel-hook nil)
+(defvar with-editor-post-finish-hook nil)
+(defvar with-editor-post-finish-hook-1 nil)
 (defvar with-editor-post-cancel-hook nil)
 (defvar with-editor-post-cancel-hook-1 nil)
 (defvar with-editor-cancel-alist nil)
 (put 'with-editor-pre-finish-hook 'permanent-local t)
 (put 'with-editor-pre-cancel-hook 'permanent-local t)
+(put 'with-editor-post-finish-hook 'permanent-local t)
 (put 'with-editor-post-cancel-hook 'permanent-local t)
 
 (defvar with-editor-show-usage t)
@@ -259,8 +262,12 @@ not a good idea to change such entries.")
   (interactive "P")
   (when (run-hook-with-args-until-failure
          'with-editor-finish-query-functions force)
-    (run-hooks 'with-editor-pre-finish-hook)
-    (with-editor-return nil)))
+    (let ((with-editor-post-finish-hook-1
+           (ignore-errors (delq t with-editor-post-finish-hook))))
+      (run-hooks 'with-editor-pre-finish-hook)
+      (with-editor-return nil)
+      (accept-process-output nil 0.1)
+      (run-hooks 'with-editor-post-finish-hook-1))))
 
 (defun with-editor-cancel (force)
   "Cancel the current edit session."
@@ -334,7 +341,7 @@ not a good idea to change such entries.")
     (error "With-Editor mode cannot be turned off"))
   (add-hook 'kill-buffer-query-functions
             'with-editor-kill-buffer-noop nil t)
-  ;; `server-excecute' displays a message which is not
+  ;; `server-execute' displays a message which is not
   ;; correct when using this mode.
   (when with-editor-show-usage
     (with-editor-usage-message)))
@@ -405,7 +412,8 @@ ENVVAR is provided then bind that environment variable instead.
                          with-editor-server-window-alist)))
       server-window))
 
-(defadvice server-switch-buffer (around with-editor activate)
+(defun server-switch-buffer--with-editor-server-window-alist
+    (fn &optional next-buffer killed-one filepos)
   "Honor `with-editor-server-window-alist' (which see)."
   (let ((server-window (with-current-buffer
                            (or next-buffer (current-buffer))
@@ -413,9 +421,13 @@ ENVVAR is provided then bind that environment variable instead.
                            (setq with-editor-previous-winconf
                                  (current-window-configuration)))
                          (with-editor-server-window))))
-    ad-do-it))
+    (funcall fn next-buffer killed-one filepos)))
 
-(defadvice start-file-process (around with-editor activate)
+(advice-add 'server-switch-buffer :around
+            'server-switch-buffer--with-editor-server-window-alist)
+
+(defun start-file-process--with-editor-process-filter
+    (fn name buffer program &rest program-args)
   "When called inside a `with-editor' form and the Emacsclient
 cannot be used, then give the process the filter function
 `with-editor-process-filter'.  To avoid overriding the filter
@@ -425,22 +437,21 @@ instead of `set-process-filter' inside `with-editor' forms.
 When the `default-directory' is located on a remote machine,
 then also manipulate PROGRAM and PROGRAM-ARGS in order to set
 the appropriate editor environment variable."
-  ;; (fn NAME BUFFER PROGRAM &rest PROGRAM-ARGS)
   (if (not with-editor--envvar)
-      ad-do-it
+      (apply fn name buffer program program-args)
     (when (file-remote-p default-directory)
-      (let ((prog (ad-get-arg  2))
-            (args (ad-get-args 3)))
-        (unless (equal program "env")
-          (push prog args)
-          (setq prog "env"))
-        (push (concat with-editor--envvar "=" with-editor-sleeping-editor) args)
-        (ad-set-arg  2 prog)
-        (ad-set-args 3 args)))
-    (let ((process ad-do-it))
+      (unless (equal program "env")
+        (push program program-args)
+        (setq program "env"))
+      (push (concat with-editor--envvar "=" with-editor-sleeping-editor)
+            program-args))
+    (let ((process (apply fn name buffer program program-args)))
       (set-process-filter process 'with-editor-process-filter)
       (process-put process 'default-dir default-directory)
       process)))
+
+(advice-add 'start-file-process :around
+            'start-file-process--with-editor-process-filter)
 
 (defun with-editor-set-process-filter (process filter)
   "Like `set-process-filter' but keep `with-editor-process-filter'.
@@ -616,25 +627,32 @@ else like the former."
           shell-command-default-error-buffer
           (and async current-prefix-arg (with-editor-read-envvar)))))
 
-(defadvice shell-command (around with-editor activate)
+(defun shell-command--shell-command-with-editor-mode
+    (fn command &optional output-buffer error-buffer)
   (cond ((or (not (or with-editor--envvar shell-command-with-editor-mode))
-             (not (string-match-p "&$" (ad-get-arg 0))))
-         ad-do-it)
+             (not (string-match-p "&\\'" command)))
+         (funcall fn command output-buffer error-buffer))
         ((and with-editor-emacsclient-executable
               (not (file-remote-p default-directory)))
-         (with-editor ad-do-it))
+         (with-editor (funcall fn command output-buffer error-buffer)))
         (t
-         (ad-set-arg
-          0 (format "%s=%s %s"
-                    (or with-editor--envvar "EDITOR")
-                    (shell-quote-argument with-editor-sleeping-editor)
-                    (ad-get-arg 0)))
-         (let ((process ad-do-it))
-           (set-process-filter
-            process (lambda (proc str)
-                      (comint-output-filter proc str)
-                      (with-editor-process-filter proc str t)))
-           process))))
+         (apply fn (format "%s=%s %s"
+                           (or with-editor--envvar "EDITOR")
+                           (shell-quote-argument with-editor-sleeping-editor)
+                           command)
+                output-buffer error-buffer)
+         (ignore-errors
+           (let ((process (get-buffer-process
+                           (or output-buffer
+                               (get-buffer "*Async Shell Command*")))))
+             (set-process-filter
+              process (lambda (proc str)
+                        (comint-output-filter proc str)
+                        (with-editor-process-filter proc str t)))
+             process)))))
+
+(advice-add 'shell-command :around
+            'shell-command--shell-command-with-editor-mode)
 
 ;;; with-editor.el ends soon
 
