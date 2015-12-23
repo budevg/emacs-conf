@@ -1,0 +1,7 @@
+(:name org-reveal
+       :description "Exports Org-mode contents to Reveal.js HTML presentation."
+       :type github
+       :pkgname "yjwen/org-reveal"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "doc_lang/org/lisp")))
+       )
