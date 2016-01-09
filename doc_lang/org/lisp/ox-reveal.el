@@ -907,7 +907,9 @@ contextual information."
            (code (if (not use-highlight)
                      (org-html-format-code src-block info)
                    (cl-letf (((symbol-function 'org-html-htmlize-region-for-paste)
-                              #'buffer-substring))
+                              #'(lambda (beg end)
+                                  (htmlize-attr-escape
+                                   (buffer-substring beg end)))))
                      (org-html-format-code src-block info))))
            (frag (org-export-read-attribute :attr_reveal src-block :frag))
            (label (let ((lbl (org-element-property :name src-block)))
