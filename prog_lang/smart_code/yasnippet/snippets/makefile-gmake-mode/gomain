@@ -1,0 +1,26 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gomain
+# key: gomain
+# expand-env: ((yas-indent-line 'nil))
+# --
+GOPATH := $(shell readlink -f gopath)
+GO := GOPATH=$(GOPATH) go
+NAME := ${1:TODO}
+SRC := $(wildcard *.go) $(wildcard */*.go)
+
+.PHONY: all
+all: $(GOPATH)/done $(NAME)
+
+$(GOPATH)/done:
+	mkdir -p $(GOPATH)/src; (cd $(GOPATH)/src; test -d $(NAME) || ln -s ../../ $(NAME))
+	#$(GO) get todo
+	touch $@
+
+$(NAME): $(SRC)
+	$(GO) build -o $(NAME) main.go
+
+.PHONY: distclean
+distclean:
+	rm -rf $(GOPATH)
+	rm -rf $(NAME)
+$0
