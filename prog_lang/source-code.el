@@ -32,6 +32,7 @@
  (c++-mode . ((tab-width . 4)
               (c-basic-offset . 4)
               (indent-tabs-mode . nil)
+              (eval . (c-set-offset 'innamespace 0))
               ))
 
  (python-mode . ((py-indent-offset . 4)
