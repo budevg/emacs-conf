@@ -80,8 +80,6 @@ If N is negative, search forwards for the -Nth following match."
                      )))
        (add-hook 'term-mode-hook (lambda () (cua-mode t)))))
 
-(setq exec-path (append (list (expand-file-name "~/tools/bin")) exec-path))
-
 (defun dot-dircolors ()
   (interactive)
   (comint-send-file

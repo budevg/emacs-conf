@@ -3,6 +3,7 @@ import sys
 import argparse
 from configuration import Node, PACKAGES, FRAME
 import os
+import re
 
 def out(msg):
     print msg
@@ -40,6 +41,7 @@ class ConfigBuilder(object):
         self._data = []
         self._optimize_startup_time_start()
         self._gen_config_path()
+        self._gen_exec_path()
         self._gen_load_packages()
         self._gen_frame_config()
         self._optimize_startup_time_end()
@@ -60,6 +62,28 @@ class ConfigBuilder(object):
 (defun in-emacs-d (path)
   (concat EMACS-CONFIG-PATH "/" path))
 ''')
+
+    def _gen_exec_path(self):
+        bashrc = os.path.expanduser("~/.bashrc")
+        if not os.path.exists(bashrc):
+            return
+
+        with open(bashrc) as f:
+            for line in f:
+                m = re.match("^PATH=(.*):\$PATH$", line)
+                if not m:
+                    continue
+                path_elements = m.group(1).split(":")
+                self._data.append('''
+(setq exec-path (append (list %s) exec-path))
+''' % " ".join('"%s"' % e for e in path_elements))
+                self._data.append('''
+(setenv "PATH"
+        (concat "%s"
+         (getenv "PATH")))
+''' % ":".join(path_elements))
+
+
     def _gen_load_packages(self):
         for pkg_dir in self._enum_dirs():
             self._data.append('''
