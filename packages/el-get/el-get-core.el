@@ -14,7 +14,7 @@
 
 ;;; Commentary:
 ;;
-;; el-get-core provides basic el-get API, intended for developpers of el-get
+;; el-get-core provides basic el-get API, intended for developers of el-get
 ;; and its methods.  See the methods directory for implementation of them.
 ;;
 
@@ -40,6 +40,17 @@ the original object."
 
 (defun el-get-verbose-message (format &rest arguments)
   (when el-get-verbose (apply 'message format arguments)))
+
+(defmacro el-get-with-errors-as-warnings (prefix &rest body)
+  (declare (indent 1) (debug t))
+  (let ((error-var (make-symbol "err")))
+    `(condition-case ,error-var
+         (progn ,@body)
+       ((debug error)
+        (display-warning 'el-get
+                         (concat ,prefix (error-message-string ,error-var))
+                         :error)
+        nil))))
 
 (defsubst el-get-plist-keys (plist)
   "Return a list of all keys in PLIST.
@@ -129,11 +140,13 @@ already-defined method DERIVED-FROM-NAME."
 ;; interface to write such structures as raw elisp.
 ;;
 ;;;  "Fuzzy" data structure conversion utilities
-(defun el-get-as-string (symbol-or-string)
-  "If STRING-OR-SYMBOL is already a string, return it.  Otherwise
-convert it to a string and return that."
-  (if (stringp symbol-or-string) symbol-or-string
-    (symbol-name symbol-or-string)))
+(defun el-get-as-string (obj)
+  "Return OBJ as a string."
+  (cond
+   ((stringp obj) obj)
+   ((symbolp obj) (symbol-name obj))
+   ((numberp obj) (number-to-string obj))
+   (t (error "Can't convert %S to string." obj))))
 
 (defun el-get-as-symbol (string-or-symbol)
   "If STRING-OR-SYMBOL is already a symbol, return it.  Otherwise
@@ -184,16 +197,43 @@ entry."
     (when post-remove-fun
       (funcall post-remove-fun package))))
 
+(defconst el-get-no-shell-quote "\\`[-,./_[:alnum:]]+\\'"
+  "Regular expression matching arguments that don't shell quoting.")
+
 (defun el-get-shell-quote-program (program-name)
   "Like `shell-quote-argument' but needs special treatment on Windows."
-  (if (fboundp 'w32-short-file-name)
-      ;; If program is really a bat file, putting double quotes around
-      ;; it will lead to problems if subsequent arguments are also
-      ;; quoted. Use the short 8.3 name instead of quoting. See
-      ;; http://debbugs.gnu.org/cgi/bugreport.cgi?bug=18745 for
-      ;; details.
-      (w32-short-file-name (executable-find program-name))
-    (shell-quote-argument program-name)))
+  (or (when (string-match-p el-get-no-shell-quote program-name) program-name)
+      (when (fboundp 'w32-short-file-name)
+        ;; If program is really a bat file, putting double quotes around
+        ;; it will lead to problems if subsequent arguments are also
+        ;; quoted. Use the short 8.3 name instead of quoting. See
+        ;; http://debbugs.gnu.org/cgi/bugreport.cgi?bug=18745 for
+        ;; details.
+        (let (exe (executable-find program-name))
+          (when exe (w32-short-file-name exe))))
+      (shell-quote-argument program-name)))
+
+(defun el-get-maybe-shell-quote-argument (arg)
+  "`shell-quote-argument', if necessary."
+  (if (string-match-p el-get-no-shell-quote arg) arg
+    (shell-quote-argument arg)))
+
+(defun el-get-read-from-file (filename)
+  "Read given FILENAME and return its content (a valid sexp is expected)."
+  (condition-case err
+      (with-temp-buffer
+        (insert-file-contents filename)
+        (read (current-buffer)))
+    ((debug error)
+     (error "Error reading file %s: %S" filename err))))
+
+(defun el-get-package-is-installed (package)
+  "Return true if PACKAGE is installed"
+  (and (file-directory-p (el-get-package-directory package))
+       (string= "installed"
+                (el-get-read-package-status package))))
+
+(defalias 'el-get-package-installed-p #'el-get-package-is-installed)
 
 
 ;;
@@ -215,6 +255,10 @@ entry."
   (if (listp arg)
       (apply 'append (mapcar 'el-get-flatten arg))
     (list arg)))
+
+(defun el-get-unquote (arg)
+  "Remote quote from ARG, if there is one."
+  (if (eq (car arg) 'quote) (nth 1 arg) arg))
 
 (defun el-get-load-path (package)
   "Return the list of absolute directory names to be added to
@@ -281,20 +325,18 @@ fail."
 ;;
 ;; el-get-reload API functions
 ;;
-(defun el-get-package-files (package)
-  "Return a list of files loaded from PACKAGE's directory."
-  (loop with pdir = (file-truename (el-get-package-directory package))
-        with regexp = (format "^%s" (regexp-quote (file-name-as-directory (expand-file-name pdir))))
+(defun el-get-package-files (pdir)
+  "Return a list of files loaded from directory PDIR."
+  (loop with regexp = (format "^%s" (regexp-quote (file-name-as-directory (file-truename pdir))))
         for (f . nil) in load-history
         when (and (stringp f) (string-match-p regexp (file-truename f)))
         collect (if (string-match-p "\\.elc?$" f)
                     (file-name-sans-extension f)
                   f)))
 
-(defun el-get-package-features (package)
-  "Return a list of features provided by files in PACKAGE."
-  (loop with pdir = (file-truename (el-get-package-directory package))
-        with regexp = (format "^%s" (regexp-quote (file-name-as-directory (expand-file-name pdir))))
+(defun el-get-package-features (pdir)
+  "Return a list of features provided by files in PDIR."
+  (loop with regexp = (format "^%s" (regexp-quote (file-name-as-directory (expand-file-name pdir))))
         for (f . l) in load-history
         when (and (stringp f) (string-match-p regexp (file-truename f)))
         nconc (loop for i in l
@@ -416,7 +458,7 @@ makes it easier to conditionally splice a command into the list.
                               (el-get-shell-quote-program (plist-get c :program))
                             (plist-get c :program)))
                  (args    (if shell
-                              (mapcar #'shell-quote-argument (plist-get c :args))
+                              (mapcar #'el-get-maybe-shell-quote-argument (plist-get c :args))
                             (plist-get c :args)))
                  (sync    (el-get-plist-get-with-default c :sync
                             el-get-default-process-sync))

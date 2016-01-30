@@ -17,7 +17,7 @@
 ;; el-get-recipes provides the API to manage the el-get recipes.
 ;;
 
-;; el-get-core provides basic el-get API, intended for developpers of el-get
+;; el-get-core provides basic el-get API, intended for developers of el-get
 ;; and its methods.  See the methods directory for implementation of them.
 ;;
 
@@ -339,8 +339,9 @@ definition provided by `el-get' recipes locally.
 
     When lazy, :library sets the file against which to register
     the :after and :post-init forms for `eval-after-load'.  It
-    defaults to the first :feature, :pkgname or :package, in that
-    order.  See also `el-get-eval-after-load'.
+    defaults to the first :feature, :pkgname (removing the
+    \"username\" part for github and emacsmirror) or :package,
+    in that order.  See also `el-get-eval-after-load'.
 
 :options
 
