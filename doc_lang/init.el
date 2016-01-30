@@ -7,3 +7,5 @@
       deft-directory "~/.deft/"
       deft-use-filename-as-title t
       deft-text-mode 'org-mode)))
+
+(global-eldoc-mode 0)
