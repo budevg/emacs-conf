@@ -1,7 +1,7 @@
-;;; haskell-doc.el --- show function types in echo area  -*- coding: iso-8859-1 -*-
+;;; haskell-doc.el --- show function types in echo area  -*- coding: utf-8; lexical-binding: t -*-
 
 ;; Copyright (C) 2004, 2005, 2006, 2007, 2009  Free Software Foundation, Inc.
-;; Copyright (C) 1997 Hans-Wolfgang Loidl
+;; Copyright (C) 1997  Hans-Wolfgang Loidl
 
 ;; Author: Hans-Wolfgang Loidl <hwloidl@dcs.glasgow.ac.uk>
 ;; Temporary Maintainer and Hacker: Graeme E Moss <gem@cs.york.ac.uk>
@@ -9,57 +9,38 @@
 ;; Created: 1997-06-17
 ;; URL: http://cvs.haskell.org/cgi-bin/cvsweb.cgi/fptools/CONTRIB/haskell-modes/emacs/haskell-doc.el?rev=HEAD
 
-;;; Copyright:
-;;  ==========
+;; This file is not part of GNU Emacs.
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation; either version 3, or (at your option)
 ;; any later version.
-;;
+
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
-;;
+
 ;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, you can either send email to this
-;; program's maintainer or write to: The Free Software Foundation,
-;; Inc.; 59 Temple Place, Suite 330; Boston, MA 02111-1307, USA.
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;;  ===========
 
 ;; This program shows the type of the Haskell function under the cursor in the
 ;; minibuffer.  It acts as a kind of "Emacs background process", by regularly
 ;; checking the word under the cursor and matching it against a list of
 ;; prelude, library, local and global functions.
 
-;; To show types of global functions, i.e. functions defined in a module
-;; imported by the current module, call the function
-;; `turn-on-haskell-doc-global-types'.  This automatically loads all modules
-;; and builds `imenu' tables to get the types of all functions.
-;; Note: The modules are loaded recursively, so you might pull in
-;;       many modules by just turning on global function support.
-;; This features is currently not very well supported.
-
 ;; This program was inspired by the `eldoc.el' package by Noah Friedman.
 
-;;; Installation:
-;;  =============
+;; Installation:
 
-;; One useful way to enable this minor mode is to put the following in your
-;; .emacs:
+;; Depending on the major mode you use for your Haskell programs add
+;; one of the following to your .emacs:
 ;;
-;;      (autoload 'turn-on-haskell-doc-mode "haskell-doc" nil t)
+;;   (add-hook 'haskell-mode-hook 'haskell-doc-mode)
 
-;;   and depending on the major mode you use for your Haskell programs:
-;;      (add-hook 'hugs-mode-hook 'turn-on-haskell-doc-mode)    ; hugs-mode
-;;     or
-;;      (add-hook 'haskell-mode-hook 'turn-on-haskell-doc-mode) ; haskell-mode
-
-;;; Customisation:
-;;  ==============
+;; Customisation:
 
 ;; You can control what exactly is shown by setting the following variables to
 ;; either t or nil:
@@ -75,10 +56,10 @@
 ;;
 ;;   (setq haskell-doc-show-user-defined t)
 ;;   (setq haskell-doc-user-defined-ids
-;;	(list
-;;	   '("main" . "just another pathetic main function")
-;;	   '("foo" . "a very dummy name")
-;;	   '("bar" . "another dummy name")))
+;;      (list
+;;         '("main" . "just another pathetic main function")
+;;         '("foo" . "a very dummy name")
+;;         '("bar" . "another dummy name")))
 
 ;;  The following two variables are useful to make the type fit on one line:
 ;;  If `haskell-doc-chop-off-context' is non-nil the context part of the type
@@ -86,15 +67,14 @@
 ;;  If `haskell-doc-chop-off-fctname' is non-nil the function name is not
 ;;  shown together with the type (default: nil).
 
-;;; Internals:
-;;  ==========
+;; Internals:
 
-;; `haskell-doc-mode' is implemented as a minor-mode. So, you can combine it
-;; with any other mode. To enable it just type
-;;   M-x turn-on-haskell-doc-mode
+;; `haskell-doc-mode' is implemented as a minor-mode.  So, you can combine it
+;; with any other mode.  To enable it just type
+;;   M-x haskell-doc-mode
 
 ;; These are the names of the functions that can be called directly by the
-;; user (with keybindings in `haskell-hugs-mode' and `haskell-mode'):
+;; user (with keybindings in `haskell-mode'):
 ;;  `haskell-doc-mode' ... toggle haskell-doc-mode; with prefix turn it on
 ;;                        unconditionally if the prefix is greater 0 otherwise
 ;;                        turn it off
@@ -108,26 +88,28 @@
 ;;  `haskell-doc-check-active' ... check whether haskell-doc is active;
 ;;                                 Key: CTRL-c ESC-/
 
-;;; ToDo:
-;;  =====
+;; ToDo:
 
 ;;   - Fix byte-compile problems in `haskell-doc-prelude-types' for getArgs etc
-;;   - Write a parser for .hi files and make haskell-doc independent from
-;;     hugs-mode. Read library interfaces via this parser.
+;;   - Write a parser for .hi files.  Read library interfaces via this parser.
 ;;   - Indicate kind of object with colours
 ;;   - Handle multi-line types
 ;;   - Encode i-am-fct info in the alist of ids and types.
 
-;;; Bugs:
-;;  =====
+;; Bugs:
 
-;;   - Some prelude fcts aren't displayed properly. This might be due to a
+;;   - Some prelude fcts aren't displayed properly.  This might be due to a
 ;;     name clash of Haskell and Elisp functions (e.g. length) which
 ;;     confuses Emacs when reading `haskell-doc-prelude-types'
 
 ;;; Changelog:
-;;  ==========
+
 ;;  $Log: haskell-doc.el,v $
+;;  Revision 1.31 2015/07/23 10:34:20  ankhers
+;;  (turn-on-haskell-doc-mode): marked obsolete
+;;  (turn-on-haskell-doc): marked obsolete
+;;  other packages have been moving away from (turn-on-haskell-*)
+;;
 ;;  Revision 1.30  2009/02/02 21:00:33  monnier
 ;;  (haskell-doc-imported-list): Don't add current buffer
 ;;  to the imported file list if it is not (yet?) visiting a file.
@@ -269,7 +251,7 @@
 ;;  (haskell-doc-install-keymap): Simplify.
 ;;
 ;;  Revision 1.5  2003/01/09 11:56:26  simonmar
-;;  Patches from Ville Skytt� <scop@xemacs.org>, the XEmacs maintainer of
+;;  Patches from Ville Skyttä <scop@xemacs.org>, the XEmacs maintainer of
 ;;  the haskell-mode:
 ;;
 ;;   - Make the auto-mode-alist modifications autoload-only.
@@ -287,7 +269,7 @@
 ;;
 ;;  Revision 1.2  2002/04/23 14:45:10  simonmar
 ;;  Tweaks to the doc strings and support for customization, from
-;;  Ville Skytt� <scop@xemacs.org>.
+;;  Ville Skyttä <scop@xemacs.org>.
 ;;
 ;;  Revision 1.1  2001/07/19 16:17:36  rrt
 ;;  Add the current version of the Moss/Thorn/Marlow Emacs mode, along with its
@@ -316,53 +298,22 @@
 ;;
 
 ;;; Code:
-;;  =====
 
-;;@menu
-;;* Constants and Variables::
-;;* Install as minor mode::
-;;* Menubar Support::
-;;* Haskell Doc Mode::
-;;* Switch it on or off::
-;;* Check::
-;;* Top level function::
-;;* Mouse interface::
-;;* Print fctsym::
-;;* Movement::
-;;* Bug Reports::
-;;* Visit home site::
-;;* Index::
-;;* Token::
-;;@end menu
-
-;;@node top, Constants and Variables, (dir), (dir)
-;;@top
-
-;;@node Constants and Variables, Install as minor mode, top, top
-;;@section Constants and Variables
-
-;;@menu
-;;* Emacs portability::
-;;* Maintenance stuff::
-;;* Mode Variable::
-;;* Variables::
-;;* Prelude types::
-;;* Test membership::
-;;@end menu
-
-;;@node Emacs portability, Maintenance stuff, Constants and Variables, Constants and Variables
-;;@subsection Emacs portability
-
-(require 'haskell-mode)
 (eval-when-compile (require 'cl))
 
+(require 'haskell-mode)
+(require 'haskell-process)
+(require 'haskell)
+(require 'inf-haskell)
+(require 'imenu)
+(require 'eldoc)
+
+;;;###autoload
 (defgroup haskell-doc nil
   "Show Haskell function types in echo area."
   :group 'haskell
   :prefix "haskell-doc-")
 
-;;@node Mode Variable, Variables, Maintenance stuff, Constants and Variables
-;;@subsection Mode Variable
 
 (defvar haskell-doc-mode nil
   "*If non-nil, show the type of the function near point or a related comment.
@@ -395,10 +346,10 @@ This variable is buffer-local.")
 (make-variable-buffer-local 'haskell-doc-mode)
 
 (defvar haskell-doc-mode-hook nil
- "Hook invoked when entering `haskell-doc-mode'.")
+  "Hook invoked when entering `haskell-doc-mode'.")
 
 (defvar haskell-doc-index nil
- "Variable holding an alist matching file names to fct-type alists.
+  "Variable holding an alist matching file names to fct-type alists.
 The function `haskell-doc-make-global-fct-index' rebuilds this variables
 \(similar to an `imenu' rescan\).
 This variable is buffer-local.")
@@ -440,9 +391,9 @@ This variable is buffer-local."
 (make-variable-buffer-local 'haskell-doc-show-user-defined)
 
 (defcustom haskell-doc-chop-off-context t
- "If non-nil eliminate the context part in a Haskell type."
+  "If non-nil eliminate the context part in a Haskell type."
   :group 'haskell-doc
- :type 'boolean)
+  :type 'boolean)
 
 (defcustom haskell-doc-chop-off-fctname nil
   "If non-nil omit the function name and show only the type."
@@ -455,10 +406,8 @@ This variable is buffer-local."
   :type 'boolean)
 
 (defvar haskell-doc-search-distance 40  ; distance in characters
- "*How far to search when looking for the type declaration of fct under cursor.")
+  "*How far to search when looking for the type declaration of fct under cursor.")
 
-;;@node Variables, Prelude types, Mode Variable, Constants and Variables
-;;@subsection Variables
 
 (defvar haskell-doc-idle-delay 0.50
   "*Number of seconds of idle time to wait before printing.
@@ -468,7 +417,7 @@ last input, no documentation will be printed.
 If this variable is set to 0, no idle time is required.")
 
 (defvar haskell-doc-argument-case 'identity ; 'upcase
-  "Case to display argument names of functions, as a symbol.
+  "Case in which to display argument names of functions, as a symbol.
 This has two preferred values: `upcase' or `downcase'.
 Actually, any name of a function which takes a string as an argument and
 returns another string is acceptable.")
@@ -512,11 +461,6 @@ It is probably best to manipulate this data structure with the commands
   "*String to display in mode line when Haskell-Doc Mode is enabled.")
 
 
-;;@node Prelude types, Test membership, Variables, Constants and Variables
-;;@subsection Prelude types
-
-;;@cindex haskell-doc-reserved-ids
-
 (defvar haskell-doc-reserved-ids
   '(("case" . "case exp of { alts [;] }")
     ("class" . "class [context =>] simpleclass [where { cbody [;] }]")
@@ -541,44 +485,44 @@ It is probably best to manipulate this data structure with the commands
     ("where" . "exp where { decl; ...; decl [;] }") ; check that ; see also class, instance, module
     ("as" . "import [qualified] modid [as modid] [impspec]")
     ("qualified" . "import [qualified] modid [as modid] [impspec]")
-    ("hiding" . "hiding ( import1 , ... , importn [ , ] )"))
- "An alist of reserved identifiers.
+    ("hiding" . "hiding ( import1 , ... , importn [ , ] )")
+    ("family" . "(type family type [kind] [= type_fam_equations]) | (data family type [kind])"))
+  "An alist of reserved identifiers.
 Each element is of the form (ID . DOC) where both ID and DOC are strings.
 DOC should be a concise single-line string describing the construct in which
 the keyword is used.")
 
 (eval-and-compile
-(defalias 'haskell-doc-split-string
-  (if (condition-case ()
-	  (split-string "" nil t)
-	(wrong-number-of-arguments nil))
-      'split-string
-    ;; copied from Emacs 22
-    (lambda (string &optional separators omit-nulls)
-      (let ((keep-nulls (not (if separators omit-nulls t)))
-	    (rexp (or separators "[ \f\t\n\r\v]+"))
-	    (start 0)
-	    notfirst
-	    (list nil))
-	(while (and (string-match rexp string
-				  (if (and notfirst
-					   (= start (match-beginning 0))
-					   (< start (length string)))
-				      (1+ start) start))
-		    (< start (length string)))
-	  (setq notfirst t)
-	  (if (or keep-nulls (< start (match-beginning 0)))
-	      (setq list
-		    (cons (substring string start (match-beginning 0))
-			  list)))
-	  (setq start (match-end 0)))
-	(if (or keep-nulls (< start (length string)))
-	    (setq list
-		  (cons (substring string start)
-			list)))
-	(nreverse list))))))
+  (defalias 'haskell-doc-split-string
+    (if (condition-case ()
+            (split-string "" nil t)
+          (wrong-number-of-arguments nil))
+        'split-string
+      ;; copied from Emacs 22
+      (lambda (string &optional separators omit-nulls)
+        (let ((keep-nulls (not (if separators omit-nulls t)))
+              (rexp (or separators "[ \f\t\n\r\v]+"))
+              (start 0)
+              notfirst
+              (list nil))
+          (while (and (string-match rexp string
+                                    (if (and notfirst
+                                             (= start (match-beginning 0))
+                                             (< start (length string)))
+                                        (1+ start) start))
+                      (< start (length string)))
+            (setq notfirst t)
+            (if (or keep-nulls (< start (match-beginning 0)))
+                (setq list
+                      (cons (substring string start (match-beginning 0))
+                            list)))
+            (setq start (match-end 0)))
+          (if (or keep-nulls (< start (length string)))
+              (setq list
+                    (cons (substring string start)
+                          list)))
+          (nreverse list))))))
 
-;;@cindex haskell-doc-prelude-types
 
 (defun haskell-doc-extract-types (url)
   (with-temp-buffer
@@ -648,18 +592,18 @@ the keyword is used.")
              (val-decl-re
               (concat "^\\( +\\)?" idlist-re "[ \t\n]*::[ \t\n]*" type-re))
              (re (concat
-                 ;; 3 possibilities: a class decl, a data decl, or val decl.
-                 ;; First, let's match a class decl.
-                 "^class \\(?:.*=>\\)? *\\(.*[^ \t\n]\\)[ \t\n]*where"
+                  ;; 3 possibilities: a class decl, a data decl, or val decl.
+                  ;; First, let's match a class decl.
+                  "^class \\(?:.*=>\\)? *\\(.*[^ \t\n]\\)[ \t\n]*where"
 
-                 ;; Or a value decl:
-                 "\\|" val-decl-re
+                  ;; Or a value decl:
+                  "\\|" val-decl-re
 
-                 "\\|" ;; Or a data decl.  We only handle single-arm
-                 ;; datatypes with labels.
-                 "^data +\\([[:alnum:]][[:alnum:] ]*[[:alnum:]]\\)"
-                 " *=.*{\\([^}]+\\)}"
-                 ))
+                  "\\|" ;; Or a data decl.  We only handle single-arm
+                  ;; datatypes with labels.
+                  "^data +\\([[:alnum:]][[:alnum:] ]*[[:alnum:]]\\)"
+                  " *=.*{\\([^}]+\\)}"
+                  ))
              (re-class (concat "^[^ \t\n]\\|" re))
              curclass)
         (while (re-search-forward (if curclass re-class re) nil t)
@@ -684,7 +628,7 @@ the keyword is used.")
                                 (setq classes (substring classes 1 -1)))
                             (setq type (concat "(" curclass ", " classes
                                                ") => " type)))
-                      (setq type (concat curclass " => " type)))
+                        (setq type (concat curclass " => " type)))
                     ;; It's actually not an error: just a type annotation on
                     ;; some local variable.
                     ;; (error "Indentation outside a class in %s: %s"
@@ -1233,78 +1177,72 @@ URL is the URL of the online doc."
     )
   "Alist of prelude functions and their types.")
 
-;;@cindex haskell-doc-strategy-ids
 
 (defvar haskell-doc-strategy-ids
- (list
-  '("par"  . "Done -> Done -> Done ; [infixr 0]")
-  '("seq"  . "Done -> Done -> Done ; [infixr 1]")
+  (list
+   '("par"  . "Done -> Done -> Done ; [infixr 0]")
+   '("seq"  . "Done -> Done -> Done ; [infixr 1]")
 
-  '("using"      . "a -> Strategy a -> a ; [infixl 0]")
-  '("demanding"  . "a -> Done -> a ; [infixl 0]")
-  '("sparking"   . "a -> Done -> a ; [infixl 0]")
+   '("using"      . "a -> Strategy a -> a ; [infixl 0]")
+   '("demanding"  . "a -> Done -> a ; [infixl 0]")
+   '("sparking"   . "a -> Done -> a ; [infixl 0]")
 
-  '(">||" . "Done -> Done -> Done ; [infixr 2]")
-  '(">|" .  "Done -> Done -> Done ; [infixr 3]")
-  '("$||" . "(a -> b) -> Strategy a -> a -> b ; [infixl 6]")
-  '("$|"  . "(a -> b) -> Strategy a -> a -> b ; [infixl 6]")
-  '(".|"  . "(b -> c) -> Strategy b -> (a -> b) -> (a -> c) ; [infixl 9]")
-  '(".||" . "(b -> c) -> Strategy b -> (a -> b) -> (a -> c) ; [infixl 9]")
-  '("-|"  . "(a -> b) -> Strategy b -> (b -> c) -> (a -> c) ; [infixl 9]")
-  '("-||" . "(a -> b) -> Strategy b -> (b -> c) -> (a -> c) ; [infixl 9]")
+   '(">||" . "Done -> Done -> Done ; [infixr 2]")
+   '(">|" .  "Done -> Done -> Done ; [infixr 3]")
+   '("$||" . "(a -> b) -> Strategy a -> a -> b ; [infixl 6]")
+   '("$|"  . "(a -> b) -> Strategy a -> a -> b ; [infixl 6]")
+   '(".|"  . "(b -> c) -> Strategy b -> (a -> b) -> (a -> c) ; [infixl 9]")
+   '(".||" . "(b -> c) -> Strategy b -> (a -> b) -> (a -> c) ; [infixl 9]")
+   '("-|"  . "(a -> b) -> Strategy b -> (b -> c) -> (a -> c) ; [infixl 9]")
+   '("-||" . "(a -> b) -> Strategy b -> (b -> c) -> (a -> c) ; [infixl 9]")
 
-  '("Done" . "type Done = ()")
-  '("Strategy" . "type Strategy a = a -> Done")
+   '("Done" . "type Done = ()")
+   '("Strategy" . "type Strategy a = a -> Done")
 
-  '("r0"    . "Strategy a")
-  '("rwhnf" . "Eval a => Strategy a")
-  '("rnf" . "Strategy a")
-  '("NFData" . "class Eval a => NFData a where rnf :: Strategy a")
-  '("NFDataIntegral" ."class (NFData a, Integral a) => NFDataIntegral a")
-  '("NFDataOrd" . "class (NFData a, Ord a) => NFDataOrd a")
+   '("r0"    . "Strategy a")
+   '("rwhnf" . "Eval a => Strategy a")
+   '("rnf" . "Strategy a")
+   '("NFData" . "class Eval a => NFData a where rnf :: Strategy a")
+   '("NFDataIntegral" ."class (NFData a, Integral a) => NFDataIntegral a")
+   '("NFDataOrd" . "class (NFData a, Ord a) => NFDataOrd a")
 
-  '("markStrat" . "Int -> Strategy a -> Strategy a")
+   '("markStrat" . "Int -> Strategy a -> Strategy a")
 
-  '("seqPair" . "Strategy a -> Strategy b -> Strategy (a,b)")
-  '("parPair" . "Strategy a -> Strategy b -> Strategy (a,b)")
-  '("seqTriple" . "Strategy a -> Strategy b -> Strategy c -> Strategy (a,b,c)")
-  '("parTriple" . "Strategy a -> Strategy b -> Strategy c -> Strategy (a,b,c)")
+   '("seqPair" . "Strategy a -> Strategy b -> Strategy (a,b)")
+   '("parPair" . "Strategy a -> Strategy b -> Strategy (a,b)")
+   '("seqTriple" . "Strategy a -> Strategy b -> Strategy c -> Strategy (a,b,c)")
+   '("parTriple" . "Strategy a -> Strategy b -> Strategy c -> Strategy (a,b,c)")
 
-  '("parList"  . "Strategy a -> Strategy [a]")
-  '("parListN"  . "(Integral b) => b -> Strategy a -> Strategy [a]")
-  '("parListNth"  . "Int -> Strategy a -> Strategy [a]")
-  '("parListChunk"  . "Int -> Strategy a -> Strategy [a]")
-  '("parMap"  . "Strategy b -> (a -> b) -> [a] -> [b]")
-  '("parFlatMap"  . "Strategy [b] -> (a -> [b]) -> [a] -> [b]")
-  '("parZipWith"  . "Strategy c -> (a -> b -> c) -> [a] -> [b] -> [c]")
-  '("seqList"  . "Strategy a -> Strategy [a]")
-  '("seqListN"  . "(Integral a) => a -> Strategy b -> Strategy [b]")
-  '("seqListNth"  . "Int -> Strategy b -> Strategy [b]")
+   '("parList"  . "Strategy a -> Strategy [a]")
+   '("parListN"  . "(Integral b) => b -> Strategy a -> Strategy [a]")
+   '("parListNth"  . "Int -> Strategy a -> Strategy [a]")
+   '("parListChunk"  . "Int -> Strategy a -> Strategy [a]")
+   '("parMap"  . "Strategy b -> (a -> b) -> [a] -> [b]")
+   '("parFlatMap"  . "Strategy [b] -> (a -> [b]) -> [a] -> [b]")
+   '("parZipWith"  . "Strategy c -> (a -> b -> c) -> [a] -> [b] -> [c]")
+   '("seqList"  . "Strategy a -> Strategy [a]")
+   '("seqListN"  . "(Integral a) => a -> Strategy b -> Strategy [b]")
+   '("seqListNth"  . "Int -> Strategy b -> Strategy [b]")
 
-  '("parBuffer"  . "Int -> Strategy a -> [a] -> [a]")
+   '("parBuffer"  . "Int -> Strategy a -> [a] -> [a]")
 
-  '("seqArr"  . "(Ix b) => Strategy a -> Strategy (Array b a)")
-  '("parArr"  . "(Ix b) => Strategy a -> Strategy (Array b a)")
+   '("seqArr"  . "(Ix b) => Strategy a -> Strategy (Array b a)")
+   '("parArr"  . "(Ix b) => Strategy a -> Strategy (Array b a)")
 
-  '("fstPairFstList"  . "(NFData a) => Strategy [(a,b)]")
-  '("force"  . "(NFData a) => a -> a ")
-  '("sforce"  . "(NFData a) => a -> b -> b")
-  )
- "Alist of strategy functions and their types as defined in Strategies.lhs.")
+   '("fstPairFstList"  . "(NFData a) => Strategy [(a,b)]")
+   '("force"  . "(NFData a) => a -> a ")
+   '("sforce"  . "(NFData a) => a -> b -> b")
+   )
+  "Alist of strategy functions and their types as defined in Strategies.lhs.")
 
 (defvar haskell-doc-user-defined-ids nil
- "Alist of functions and strings defined by the user.")
+  "Alist of functions and strings defined by the user.")
 
-;;@node Test membership,  , Prelude types, Constants and Variables
-;;@subsection Test membership
 
-;;@cindex haskell-doc-is-of
 (defsubst haskell-doc-is-of (fn types)
   "Check whether FN is one of the functions in the alist TYPES and return the type."
   (assoc fn types) )
 
-;;@node Install as minor mode, Menubar Support, Constants and Variables, top
-;;@section Install as minor mode
 
 ;; Put this minor mode on the global minor-mode-alist.
 (or (assq 'haskell-doc-mode (default-value 'minor-mode-alist))
@@ -1312,16 +1250,8 @@ URL is the URL of the online doc."
                   (append (default-value 'minor-mode-alist)
                           '((haskell-doc-mode haskell-doc-minor-mode-string)))))
 
-
-;;@node Menubar Support, Haskell Doc Mode, Install as minor mode, top
-;;@section Menubar Support
-
-;; get imenu
-(require 'imenu)
-
 ;; a dummy definition needed for XEmacs (I know, it's horrible :-(
 
-;;@cindex haskell-doc-install-keymap
 
 (defvar haskell-doc-keymap
   (let ((map (make-sparse-keymap)))
@@ -1352,24 +1282,19 @@ URL is the URL of the online doc."
   ;; Add the menu to the hugs menu as last entry.
   (let ((hugsmap (lookup-key (current-local-map) [menu-bar Hugs])))
     (if (not (or (featurep 'xemacs) ; XEmacs has problems here
-		 (not (keymapp hugsmap))
-		 (lookup-key hugsmap [haskell-doc])))
-	(if (functionp 'define-key-after)
-	    (define-key-after hugsmap [haskell-doc]
-	      (cons "Haskell-doc" haskell-doc-keymap)
-	      [Haskell-doc mode]))))
+                 (not (keymapp hugsmap))
+                 (lookup-key hugsmap [haskell-doc])))
+        (if (functionp 'define-key-after)
+            (define-key-after hugsmap [haskell-doc]
+              (cons "Haskell-doc" haskell-doc-keymap)
+              [Haskell-doc mode]))))
   ;; Add shortcuts for these commands.
   (local-set-key "\C-c\e/" 'haskell-doc-check-active)
   ;; Conflicts with the binding of haskell-insert-otherwise.
   ;; (local-set-key "\C-c\C-o" 'haskell-doc-mode)
   (local-set-key [(control shift meta mouse-3)]
-		 'haskell-doc-ask-mouse-for-type))
+                 'haskell-doc-ask-mouse-for-type))
 
-
-;;@node Haskell Doc Mode, Switch it on or off, Menubar Support, top
-;;@section Haskell Doc Mode
-
-;;@cindex haskell-doc-mode
 
 (defvar haskell-doc-timer nil)
 (defvar haskell-doc-buffers nil)
@@ -1381,10 +1306,10 @@ See variable docstring."
   (interactive (list (or current-prefix-arg 'toggle)))
 
   (setq haskell-doc-mode
-	(cond
-	 ((eq arg 'toggle) (not haskell-doc-mode))
-	 (arg (> (prefix-numeric-value arg) 0))
-	 (t)))
+        (cond
+         ((eq arg 'toggle) (not haskell-doc-mode))
+         (arg (> (prefix-numeric-value arg) 0))
+         (t)))
 
   ;; First, unconditionally turn the mode OFF.
 
@@ -1414,25 +1339,24 @@ See variable docstring."
       (add-hook 'post-command-hook
                 'haskell-doc-mode-print-current-symbol-info nil 'local))
     (and haskell-doc-show-global-types
-	 (haskell-doc-make-global-fct-index)) ; build type index for global fcts
+         (haskell-doc-make-global-fct-index)) ; build type index for global fcts
 
     (haskell-doc-install-keymap)
 
     (run-hooks 'haskell-doc-mode-hook))
 
-  (and (interactive-p)
+  (and (called-interactively-p 'any)
        (message "haskell-doc-mode is %s"
-		(if haskell-doc-mode "enabled" "disabled")))
+                (if haskell-doc-mode "enabled" "disabled")))
   haskell-doc-mode)
 
 (defmacro haskell-doc-toggle-var (id prefix)
   ;; toggle variable or set it based on prefix value
   `(setq ,id
-	 (if ,prefix
-	     (>= (prefix-numeric-value ,prefix) 0)
-	   (not ,id))) )
+         (if ,prefix
+             (>= (prefix-numeric-value ,prefix) 0)
+           (not ,id))) )
 
-;;@cindex haskell-doc-show-global-types
 (defun haskell-doc-show-global-types (&optional prefix)
   "Turn on global types information in `haskell-doc-mode'."
   (interactive "P")
@@ -1440,48 +1364,44 @@ See variable docstring."
   (if haskell-doc-show-global-types
       (haskell-doc-make-global-fct-index)))
 
-;;@cindex haskell-doc-show-reserved
 (defun haskell-doc-show-reserved (&optional prefix)
   "Toggle the automatic display of a doc string for reserved ids."
   (interactive "P")
   (haskell-doc-toggle-var haskell-doc-show-reserved prefix))
 
-;;@cindex haskell-doc-show-prelude
 (defun haskell-doc-show-prelude (&optional prefix)
   "Toggle the automatic display of a doc string for reserved ids."
   (interactive "P")
   (haskell-doc-toggle-var haskell-doc-show-prelude prefix))
 
-;;@cindex haskell-doc-show-strategy
 (defun haskell-doc-show-strategy (&optional prefix)
   "Toggle the automatic display of a doc string for strategy ids."
   (interactive "P")
   (haskell-doc-toggle-var haskell-doc-show-strategy prefix))
 
-;;@cindex haskell-doc-show-user-defined
 (defun haskell-doc-show-user-defined (&optional prefix)
   "Toggle the automatic display of a doc string for user defined ids."
   (interactive "P")
   (haskell-doc-toggle-var haskell-doc-show-user-defined prefix))
 
-;;@node Switch it on or off, Check, Haskell Doc Mode, top
-;;@section Switch it on or off
-
-;;@cindex turn-on-haskell-doc-mode
 
 ;;;###autoload
 (defalias 'turn-on-haskell-doc-mode 'haskell-doc-mode)
+(make-obsolete 'turn-on-haskell-doc-mode
+               'haskell-doc-mode
+               "2015-07-23")
 
-;;@cindex  turn-off-haskell-doc-mode
+;;;###autoload
+(defalias 'turn-on-haskell-doc 'haskell-doc-mode)
+(make-obsolete 'turn-on-haskell-doc
+               'haskell-doc-mode
+               "2015-07-23")
 
-(defun turn-off-haskell-doc-mode ()
+(defalias 'turn-off-haskell-doc-mode 'turn-off-haskell-doc)
+
+(defun turn-off-haskell-doc ()
   "Unequivocally turn off `haskell-doc-mode' (which see)."
   (haskell-doc-mode 0))
-
-;;@node Check, Top level function, Switch it on or off, top
-;;@section Check
-
-;;@cindex haskell-doc-check-active
 
 (defun haskell-doc-check-active ()
   "Check whether the print function is hooked in.
@@ -1489,17 +1409,14 @@ Should be the same as the value of `haskell-doc-mode' but alas currently it
 is not."
   (interactive)
   (message "%s"
-   (if (or (and haskell-doc-mode haskell-doc-timer)
-           (memq 'haskell-doc-mode-print-current-symbol-info
-                 post-command-hook))
-       "haskell-doc is ACTIVE"
-     (substitute-command-keys
-      "haskell-doc is not ACTIVE \(Use \\[haskell-doc-mode] to turn it on\)"))))
+           (if (or (and haskell-doc-mode haskell-doc-timer)
+                   (memq 'haskell-doc-mode-print-current-symbol-info
+                         post-command-hook))
+               "haskell-doc is ACTIVE"
+             (substitute-command-keys
+              "haskell-doc is not ACTIVE \(Use \\[haskell-doc-mode] to turn it on\)"))))
 
-;;@node Top level function, Mouse interface, Check, top
-;;@section Top level function
 
-;;@cindex haskell-doc-mode-print-current-symbol-info
 ;; This is the function hooked into the elisp command engine
 (defun haskell-doc-mode-print-current-symbol-info ()
   "Print the type of the symbol under the cursor.
@@ -1517,58 +1434,42 @@ This function is run by an idle timer to print the type
          (sit-for haskell-doc-idle-delay))
        ;; good morning! read the word under the cursor for breakfast
        (haskell-doc-show-type)))
-       ;; ;; ToDo: find surrounding fct
-       ;; (cond ((eq current-symbol current-fnsym)
-       ;;        (haskell-doc-show-type current-fnsym))
-       ;;       (t
-       ;;        (or nil ; (haskell-doc-print-var-docstring current-symbol)
-       ;;            (haskell-doc-show-type current-fnsym)))))))
+;; ;; ToDo: find surrounding fct
+;; (cond ((eq current-symbol current-fnsym)
+;;        (haskell-doc-show-type current-fnsym))
+;;       (t
+;;        (or nil ; (haskell-doc-print-var-docstring current-symbol)
+;;            (haskell-doc-show-type current-fnsym)))))))
 
+;;;###autoload
 (defun haskell-doc-current-info ()
   "Return the info about symbol at point.
 Meant for `eldoc-documentation-function'."
-  (haskell-doc-sym-doc (haskell-ident-at-point)))
+  ;; There are a number of possible documentation functions.
+  ;; Some of them are asynchronous.
+  (let ((msg (or
+              (haskell-doc-current-info--interaction)
+              (haskell-doc-sym-doc (haskell-ident-at-point)))))
+    (unless (symbolp msg) msg)))
 
 
-;;@node Mouse interface, Print fctsym, Top level function, top
-;;@section Mouse interface for interactive query
 
-;;@cindex haskell-doc-ask-mouse-for-type
 (defun haskell-doc-ask-mouse-for-type (event)
- "Read the identifier under the mouse and echo its type.
+  "Read the identifier under the mouse and echo its type.
 This uses the same underlying function `haskell-doc-show-type' as the hooked
 function.  Only the user interface is different."
- (interactive "e")
- (save-excursion
-   (select-window (posn-window (event-end event)))
-   (goto-char (posn-point (event-end event)))
-   (haskell-doc-show-type)))
-
-
-;;@node Print fctsym, Movement, Mouse interface, top
-;;@section Print fctsym
-
-;;@menu
-;;* Show type::
-;;* Aux::
-;;* Global fct type::
-;;* Local fct type::
-;;@end menu
-
-;;@node Show type, Aux, Print fctsym, Print fctsym
-;;@subsection Show type
-
-;;@cindex haskell-doc-show-type
-
-(require 'syntax-ppss nil t)		; possible add-on in Emacs 21
+  (interactive "e")
+  (save-excursion
+    (select-window (posn-window (event-end event)))
+    (goto-char (posn-point (event-end event)))
+    (haskell-doc-show-type)))
 
 (defun haskell-doc-in-code-p ()
   (not (or (and (eq haskell-literate 'bird)
                 ;; Copied from haskell-indent-bolp.
                 (<= (current-column) 2)
                 (eq (char-after (line-beginning-position)) ?\>))
-           (if (fboundp 'syntax-ppss)
-               (nth 8 (syntax-ppss))))))
+           (nth 8 (syntax-ppss)))))
 
 ;;;###autoload
 (defun haskell-doc-show-type (&optional sym)
@@ -1581,7 +1482,8 @@ current buffer."
   (unless sym (setq sym (haskell-ident-at-point)))
   ;; if printed before do not print it again
   (unless (string= sym (car haskell-doc-last-data))
-    (let ((doc (haskell-doc-sym-doc sym)))
+    (let ((doc (or (haskell-doc-current-info--interaction t)
+                  (haskell-doc-sym-doc sym))))
       (when (and doc (haskell-doc-in-code-p))
         ;; In Emacs 19.29 and later, and XEmacs 19.13 and later, all
         ;; messages are recorded in a log.  Do not put haskell-doc messages
@@ -1594,6 +1496,91 @@ current buffer."
           (let ((message-log-max nil))
             (message "%s" doc)))))))
 
+(defvar haskell-doc-current-info--interaction-last nil
+  "If non-nil, a previous eldoc message from an async call, that
+  hasn't been displayed yet.")
+
+(defun haskell-doc-current-info--interaction (&optional sync)
+  "Asynchronous call to `haskell-process-get-type', suitable for
+use in the eldoc function `haskell-doc-current-info'.
+
+If SYNC is non-nil, the call will be synchronous instead, and
+instead of calling `eldoc-print-current-symbol-info', the result
+will be returned directly."
+  ;; Return nil if nothing is available, or 'async if something might
+  ;; be available, but asynchronously later. This will call
+  ;; `eldoc-print-current-symbol-info' later.
+  (let (sym prev-message)
+    (cond
+     ((setq prev-message haskell-doc-current-info--interaction-last)
+      (setq haskell-doc-current-info--interaction-last nil)
+      (cdr prev-message))
+     ((setq sym
+            (if (use-region-p)
+                (buffer-substring-no-properties
+                 (region-beginning) (region-end))
+              (haskell-ident-at-point)))
+      (if sync
+          (haskell-process-get-type sym #'identity t)
+        (haskell-process-get-type
+         sym (lambda (response)
+               (setq haskell-doc-current-info--interaction-last
+                     (cons 'async response))
+               (eldoc-print-current-symbol-info))))))))
+
+(defun haskell-process-get-type (expr-string &optional callback sync)
+  "Asynchronously get the type of a given string.
+
+EXPR-STRING should be an expression passed to :type in ghci.
+
+CALLBACK will be called with a formatted type string.
+
+If SYNC is non-nil, make the call synchronously instead."
+  (unless callback (setq callback (lambda (response) (message "%s" response))))
+  (let ((process (and (haskell-session-maybe)
+                    (haskell-session-process (haskell-session-maybe))))
+        ;; Avoid passing bad strings to ghci
+        (expr-okay
+         (and (not (string-match-p "\\`[[:space:]]*\\'" expr-string))
+            (not (string-match-p "\n" expr-string))))
+        (ghci-command (concat ":type " expr-string))
+        (process-response
+         (lambda (response)
+           ;; Responses with empty first line are likely errors
+           (if (string-match-p (rx string-start line-end) response)
+               (setq response nil)
+             ;; Remove a newline at the end
+             (setq response (replace-regexp-in-string "\n\\'" "" response))
+             ;; Propertize for eldoc
+             (save-match-data
+               (when (string-match " :: " response)
+                 ;; Highlight type
+                 (let ((name (substring response 0 (match-end 0)))
+                       (type (propertize
+                              (substring response (match-end 0))
+                              'face 'eldoc-highlight-function-argument)))
+                   (setq response (concat name type)))))
+             (when haskell-doc-prettify-types
+               (dolist (re '(("::" . "∷") ("=>" . "⇒") ("->" . "→")))
+                 (setq response
+                       (replace-regexp-in-string (car re) (cdr re) response))))
+             response))))
+    (when (and process expr-okay)
+      (if sync
+          (let ((response (haskell-process-queue-sync-request process ghci-command)))
+            (funcall callback (funcall process-response response)))
+        (lexical-let ((process process)
+                      (callback callback)
+                      (ghci-command ghci-command)
+                      (process-response process-response))
+          (haskell-process-queue-command
+           process
+           (make-haskell-command
+            :go (lambda (_) (haskell-process-send-string process ghci-command))
+            :complete
+            (lambda (_ response)
+              (funcall callback (funcall process-response response))))))
+        'async))))
 
 (defun haskell-doc-sym-doc (sym)
   "Show the type of the function near point.
@@ -1605,7 +1592,7 @@ If `haskell-doc-use-inf-haskell' is non-nil, this function will consult
 the inferior Haskell process for type/kind information, rather than using
 the haskell-doc database."
   (if haskell-doc-use-inf-haskell
-      (unless (string= "" sym)
+      (unless (or (null sym) (string= "" sym))
         (let* ((message-log-max nil)
                (result (ignore-errors
                          (unwind-protect
@@ -1623,8 +1610,7 @@ the haskell-doc database."
           (is-reserved (haskell-doc-is-of sym haskell-doc-reserved-ids))
           (is-prelude  (haskell-doc-is-of sym haskell-doc-prelude-types))
           (is-strategy (haskell-doc-is-of sym haskell-doc-strategy-ids))
-          (is-user-defined (haskell-doc-is-of sym haskell-doc-user-defined-ids))
-          (is-prelude  (haskell-doc-is-of sym haskell-doc-prelude-types)))
+          (is-user-defined (haskell-doc-is-of sym haskell-doc-user-defined-ids)))
       (cond
        ;; if reserved id (i.e. Haskell keyword
        ((and haskell-doc-show-reserved
@@ -1675,7 +1661,7 @@ the haskell-doc database."
 ;;(defun haskell-doc-fnsym-in-current-sexp ()
 ;;  (let* ((p (point))
 ;;         (sym (progn
-;;		(forward-word -1)
+;;              (forward-word -1)
 ;;                (while (and (forward-word -1) ; (haskell-doc-forward-sexp-safe -1)
 ;;                            (> (point) (point-min))))
 ;;                (cond ((or (= (point) (point-min))
@@ -1691,87 +1677,82 @@ the haskell-doc database."
 ;;                           (error nil)))))))
 ;;    (goto-char p)
 ;;    (if sym
-;;	(format "%s" sym)
+;;      (format "%s" sym)
 ;;      sym)))
 
 ;;    (and (symbolp sym)
 ;;         sym)))
 
-;;@node Aux, Global fct type, Show type, Print fctsym
-;;@subsection Aux
 
 ;; ToDo: handle open brackets to decide if it's a wrapped type
 
-;;@cindex haskell-doc-grab-line
 (defun haskell-doc-grab-line (fct-and-pos)
- "Get the type of an \(FCT POSITION\) pair from the current buffer."
- ;; (if (null fct-and-pos)
- ;;     "" ; fn is not a local fct
+  "Get the type of an \(FCT POSITION\) pair from the current buffer."
+  ;; (if (null fct-and-pos)
+  ;;     "" ; fn is not a local fct
   (let ( (str ""))
-   (goto-char (cdr fct-and-pos))
-   (beginning-of-line)
-   ;; search for start of type (phsp give better bound?)
-   (if (null (search-forward "::" (+ (point) haskell-doc-search-distance) t))
-       ""
-     (setq str (haskell-doc-grab))        ; leaves point at end of line
-     (while (haskell-doc-wrapped-type-p)  ; while in a multi-line type expr
-       (forward-line 1)
-       (beginning-of-line)
-       (skip-chars-forward " \t")
-       (setq str (concat str (haskell-doc-grab))))
-     (haskell-doc-string-nub-ws           ; squeeze string
-      (if haskell-doc-chop-off-context    ; no context
-	  (haskell-doc-chop-off-context str)
-	str)))))
- ;; (concat (car fct-and-pos) "::" (haskell-doc-string-nub-ws str))))
+    (goto-char (cdr fct-and-pos))
+    (beginning-of-line)
+    ;; search for start of type (phsp give better bound?)
+    (if (null (search-forward "::" (+ (point) haskell-doc-search-distance) t))
+        ""
+      (setq str (haskell-doc-grab))        ; leaves point at end of line
+      (while (haskell-doc-wrapped-type-p)  ; while in a multi-line type expr
+        (forward-line 1)
+        (beginning-of-line)
+        (skip-chars-forward " \t")
+        (setq str (concat str (haskell-doc-grab))))
+      (haskell-doc-string-nub-ws           ; squeeze string
+       (if haskell-doc-chop-off-context    ; no context
+           (haskell-doc-chop-off-context str)
+         str)))))
+;; (concat (car fct-and-pos) "::" (haskell-doc-string-nub-ws str))))
 
-;;@cindex haskell-doc-wrapped-type-p
 (defun haskell-doc-wrapped-type-p ()
- "Check whether the type under the cursor is wrapped over several lines.
+  "Check whether the type under the cursor is wrapped over several lines.
 The cursor must be at the end of a line, which contains the type.
 Currently, only the following is checked:
 If this line ends with a `->' or the next starts with an `->' it is a
 multi-line type \(same for `=>'\).
 `--' comments are ignored.
 ToDo: Check for matching parenthesis!."
- (save-excursion
-   (let ( (here (point))
-	  (lim (progn (beginning-of-line) (point)))
-	  ;; (foo "")
-	  (res nil)
-	  )
-   (goto-char here)
-   (search-backward "--" lim t) ; skip over `--' comment
-   (skip-chars-backward " \t")
-   (if (bolp)                   ; skip empty lines
-      (progn
-       (forward-line 1)
-       (end-of-line)
-       (setq res (haskell-doc-wrapped-type-p)))
-   (forward-char -1)
-   ;; (setq foo (concat foo (char-to-string (preceding-char)) (char-to-string (following-char))))
-   (if (or (and (or (char-equal (preceding-char) ?-) (char-equal (preceding-char) ?=))
-		(char-equal (following-char) ?>)) ; (or -!> =!>
-	   (char-equal (following-char) ?,))      ;     !,)
-       (setq res t)
-     (forward-line)
-     (let ((here (point)))
-       (goto-char here)
-       (skip-chars-forward " \t")
-       (if (looking-at "--")  ; it is a comment line
-	   (progn
-	     (forward-line 1)
-	     (end-of-line)
-	     (setq res (haskell-doc-wrapped-type-p)))
-	 (forward-char 1)
-	 ;; (setq foo (concat foo (char-to-string (preceding-char)) (char-to-string (following-char))))
-	 ;; (message "|%s|" foo)
-	 (if (and (or (char-equal (preceding-char) ?-) (char-equal (preceding-char) ?=))
-		  (char-equal (following-char) ?>)) ; -!> or =!>
-	     (setq res t))))))
-   res)))
+  (save-excursion
+    (let ( (here (point))
+           (lim (progn (beginning-of-line) (point)))
+           ;; (foo "")
+           (res nil)
+           )
+      (goto-char here)
+      (search-backward "--" lim t) ; skip over `--' comment
+      (skip-chars-backward " \t")
+      (if (bolp)                   ; skip empty lines
+          (progn
+            (forward-line 1)
+            (end-of-line)
+            (setq res (haskell-doc-wrapped-type-p)))
+        (forward-char -1)
+        ;; (setq foo (concat foo (char-to-string (preceding-char)) (char-to-string (following-char))))
+        (if (or (and (or (char-equal (preceding-char) ?-) (char-equal (preceding-char) ?=))
+                     (char-equal (following-char) ?>)) ; (or -!> =!>
+                (char-equal (following-char) ?,))      ;     !,)
+            (setq res t)
+          (forward-line)
+          (let ((here (point)))
+            (goto-char here)
+            (skip-chars-forward " \t")
+            (if (looking-at "--")  ; it is a comment line
+                (progn
+                  (forward-line 1)
+                  (end-of-line)
+                  (setq res (haskell-doc-wrapped-type-p)))
+              (forward-char 1)
+              ;; (setq foo (concat foo (char-to-string (preceding-char)) (char-to-string (following-char))))
+              ;; (message "|%s|" foo)
+              (if (and (or (char-equal (preceding-char) ?-) (char-equal (preceding-char) ?=))
+                       (char-equal (following-char) ?>)) ; -!> or =!>
+                  (setq res t))))))
+      res)))
 
-;;@cindex haskell-doc-grab
 (defun haskell-doc-grab ()
   "Return the text from point to the end of the line, chopping off comments.
 Leaves point at end of line."
@@ -1781,7 +1762,6 @@ Leaves point at end of line."
         (substring str 0 (match-beginning 0))
       str)))
 
-;;@cindex haskell-doc-string-nub-ws
 (defun haskell-doc-string-nub-ws (str)
   "Replace all sequences of whitespace in STR by just one space.
 ToDo: Also eliminate leading and trailing whitespace."
@@ -1794,54 +1774,42 @@ ToDo: Also eliminate leading and trailing whitespace."
 ;;(defun haskell-doc-string-nub-ws (str)
 ;;  "Replace all sequences of whitespaces in STR by just one whitespace."
 ;;  (let ( (res "")
-;;	 (l (length str))
-;;	 (i 0)
-;;	 (j 0)
-;;	 (in-ws nil))
+;;       (l (length str))
+;;       (i 0)
+;;       (j 0)
+;;       (in-ws nil))
 ;;   (while (< i l)
 ;;     (let* ( (c (string-to-char (substring str i (1+ i))))
-;;	    (is-ws (eq (char-syntax c) ? )) )
+;;          (is-ws (eq (char-syntax c) ? )) )
 ;;       (if (not (and in-ws is-ws))
-;;	     (setq res (concat res (char-to-string c))))
+;;           (setq res (concat res (char-to-string c))))
 ;;       (setq in-ws is-ws)
 ;;       (setq i (1+ i))))
 ;;   res))
 
-;;@cindex haskell-doc-chop-off-context
 (defun haskell-doc-chop-off-context (str)
- "Eliminate the context in a type represented by the string STR."
- (let ((i (string-match "=>" str)) )
-   (if (null i)
-       str
-     (substring str (+ i 2)))))
+  "Eliminate the context in a type represented by the string STR."
+  (let ((i (string-match "=>" str)) )
+    (if (null i)
+        str
+      (substring str (+ i 2)))))
 
-;;@cindex haskell-doc-get-imenu-info
 (defun haskell-doc-get-imenu-info (obj kind)
   "Return a string describing OBJ of KIND \(Variables, Types, Data\)."
-  (cond ((or (eq major-mode 'haskell-hugs-mode)
-             ;; GEM: Haskell Mode does not work with Haskell Doc
-             ;;      under XEmacs 20.x
-             (and (eq major-mode 'haskell-mode)
-                  (not (and (featurep 'xemacs)
-                            (string-match "^20" emacs-version)))))
-	 (let* ((imenu-info-alist (cdr (assoc kind imenu--index-alist)))
-                ;; (names (mapcar 'car imenu-info-alist))
-                (x (assoc obj imenu-info-alist)))
-	     (if x
-		 (haskell-doc-grab-line x)
-	       nil)))
-	  (t
-           ;; (error "Cannot get local functions in %s mode, sorry" major-mode))) )
-	   nil)))
+  (cond
+   ((eq major-mode 'haskell-mode)
+    (let* ((imenu-info-alist (cdr (assoc kind imenu--index-alist)))
+           ;; (names (mapcar 'car imenu-info-alist))
+           (x (assoc obj imenu-info-alist)))
+      (when x (haskell-doc-grab-line x))))
 
-;;@node Global fct type, Local fct type, Aux, Print fctsym
-;;@subsection Global fct type
+   (t ;; (error "Cannot get local functions in %s mode, sorry" major-mode)))
+    nil)))
 
 ;; ToDo:
 ;;  - modular way of defining a mapping of module name to file
 ;;  - use a path to search for file (not just current directory)
 
-;;@cindex haskell-doc-imported-list
 
 (defun haskell-doc-imported-list ()
   "Return a list of the imported modules in current buffer."
@@ -1863,35 +1831,29 @@ ToDo: Also eliminate leading and trailing whitespace."
 
 ;; ToDo: generalise this to "Types" etc (not just "Variables")
 
-;;@cindex haskell-doc-rescan-files
-
 (defun haskell-doc-rescan-files (filelist)
- "Do an `imenu' rescan on every file in FILELIST and return the fct-list.
+  "Do an `imenu' rescan on every file in FILELIST and return the fct-list.
 This function switches to and potentially loads many buffers."
- (save-current-buffer
-   (mapcar (lambda (f)
-             (set-buffer (find-file-noselect f))
-             (imenu--make-index-alist)
-             (cons f
-                   (mapcar (lambda (x)
-                             `(,(car x) . ,(haskell-doc-grab-line x)))
-                           (cdr (assoc "Variables" imenu--index-alist)))))
-           filelist)))
-
-;;@cindex haskell-doc-make-global-fct-index
+  (save-current-buffer
+    (mapcar (lambda (f)
+              (set-buffer (find-file-noselect f))
+              (imenu--make-index-alist t)
+              (cons f
+                    (mapcar (lambda (x)
+                              `(,(car x) . ,(haskell-doc-grab-line x)))
+                            (cdr (assoc "Variables" imenu--index-alist)))))
+            filelist)))
 
 (defun haskell-doc-make-global-fct-index ()
- "Scan imported files for types of global fcts and update `haskell-doc-index'."
- (interactive)
- (setq haskell-doc-index
-       (haskell-doc-rescan-files (haskell-doc-imported-list))))
+  "Scan imported files for types of global fcts and update `haskell-doc-index'."
+  (interactive)
+  (setq haskell-doc-index
+        (haskell-doc-rescan-files (haskell-doc-imported-list))))
 
 ;; ToDo: use a separate munge-type function to format type concisely
 
-;;@cindex haskell-doc-get-global-fct-type
-
 (defun haskell-doc-get-global-fct-type (&optional sym)
- "Get type for function symbol SYM by examining `haskell-doc-index'."
+  "Get type for function symbol SYM by examining `haskell-doc-index'."
   (interactive) ;  "fName of outer `include' file: \nsFct:")
   (save-excursion
     ;; (switch-to-buffer "*scratch*")
@@ -1899,96 +1861,48 @@ This function switches to and potentially loads many buffers."
     ;; ;; Produces a list of fct-type alists
     ;; (if (null sym)
     ;;     (setq sym (progn (forward-word -1) (read (current-buffer)))))
-  (or sym
-      (current-word))
-  (let* ( (fn sym) ; (format "%s" sym))
-	  (fal haskell-doc-index)
-	  (res "") )
-    (while (not (null fal))
-      (let* ( (l (car fal))
-	      (f (car l))
-	      (x (assoc fn (cdr l))) )
-	(if (not (null x))
-	    (let* ( (ty (cdr x)) ; the type as string
-		    (idx (string-match "::" ty))
-		    (str (if (null idx)
-			     ty
-			   (substring ty (+ idx 2)))) )
-	      (setq res (format "[%s] %s" f str))))
-	  (setq fal (cdr fal))))
-    res))) ; (message res)) )
-
-;;@node Local fct type,  , Global fct type, Print fctsym
-;;@subsection Local fct type
-
-;;@cindex haskell-doc-get-and-format-fct-type
+    (or sym
+        (current-word))
+    (let* ( (fn sym) ; (format "%s" sym))
+            (fal haskell-doc-index)
+            (res "") )
+      (while (not (null fal))
+        (let* ( (l (car fal))
+                (f (car l))
+                (x (assoc fn (cdr l))) )
+          (if (not (null x))
+              (let* ( (ty (cdr x)) ; the type as string
+                      (idx (string-match "::" ty))
+                      (str (if (null idx)
+                               ty
+                             (substring ty (+ idx 2)))) )
+                (setq res (format "[%s] %s" f str))))
+          (setq fal (cdr fal))))
+      res))) ; (message res)) )
 
 (defun haskell-doc-get-and-format-fct-type (fn)
- "Get the type and kind of FN by checking local and global functions."
- (save-excursion
-   (save-match-data
-     (let ((docstring "")
-	   (doc nil)
-	   )
-       ;; is it a local function?
-       (setq docstring (haskell-doc-get-imenu-info fn "Variables"))
-       (if (not (null docstring))
-		;; (string-match (format "^%s\\s-+::\\s-+\\(.*\\)$" fn) docstring))
-	   (setq doc `(,docstring . "Variables"))) ; `(,(match-string 1 docstring) . "Variables") ))
-       ;; is it a type declaration?
-       (setq docstring (haskell-doc-get-imenu-info fn "Types"))
-       (if (not (null docstring))
-		;; (string-match (format "^\\s-*type\\s-+%s.*$" fn) docstring))
-	     (setq doc `(,docstring . "Types"))) ; `(,(match-string 0 docstring) . "Types")) )
-       (if (not (null docstring))
-		;; (string-match (format "^\\s-*data.*%s.*$" fn) docstring))
-	 (setq doc `(,docstring . "Data"))) ; (setq doc `(,(match-string 0 docstring) . "Data")) )
-       ;; return the result
-       doc ))))
-
-
-;;@appendix
-
-;;@node Index, Token, Visit home site, top
-;;@section Index
-
-;;@index
-;;* haskell-doc-ask-mouse-for-type::
-;;* haskell-doc-check-active::
-;;* haskell-doc-chop-off-context::
-;;* haskell-doc-get-and-format-fct-type::
-;;* haskell-doc-get-global-fct-type::
-;;* haskell-doc-get-imenu-info::
-;;* haskell-doc-grab::
-;;* haskell-doc-grab-line::
-;;* haskell-doc-imported-list::
-;;* haskell-doc-install-keymap::
-;;* haskell-doc-is-of::
-;;* haskell-doc-make-global-fct-index::
-;;* haskell-doc-mode::
-;;* haskell-doc-mode-print-current-symbol-info::
-;;* haskell-doc-prelude-types::
-;;* haskell-doc-rescan-files::
-;;* haskell-doc-reserved-ids::
-;;* haskell-doc-show-global-types::
-;;* haskell-doc-show-prelude::
-;;* haskell-doc-show-reserved::
-;;* haskell-doc-show-strategy::
-;;* haskell-doc-show-type::
-;;* haskell-doc-show-user-defined::
-;;* haskell-doc-strategy-ids::
-;;* haskell-doc-string-nub-ws::
-;;* haskell-doc-submit-bug-report::
-;;* haskell-doc-visit-home::
-;;* haskell-doc-wrapped-type-p::
-;;* turn-off-haskell-doc-mode::
-;;* turn-on-haskell-doc-mode::
-;;@end index
-
-;;@node Token,  , Index, top
-;;@section Token
+  "Get the type and kind of FN by checking local and global functions."
+  (save-excursion
+    (save-match-data
+      (let ((docstring "")
+            (doc nil)
+            )
+        ;; is it a local function?
+        (setq docstring (haskell-doc-get-imenu-info fn "Variables"))
+        (if (not (null docstring))
+            ;; (string-match (format "^%s\\s-+::\\s-+\\(.*\\)$" fn) docstring))
+            (setq doc `(,docstring . "Variables"))) ; `(,(match-string 1 docstring) . "Variables") ))
+        ;; is it a type declaration?
+        (setq docstring (haskell-doc-get-imenu-info fn "Types"))
+        (if (not (null docstring))
+            ;; (string-match (format "^\\s-*type\\s-+%s.*$" fn) docstring))
+            (setq doc `(,docstring . "Types"))) ; `(,(match-string 0 docstring) . "Types")) )
+        (if (not (null docstring))
+            ;; (string-match (format "^\\s-*data.*%s.*$" fn) docstring))
+            (setq doc `(,docstring . "Data"))) ; (setq doc `(,(match-string 0 docstring) . "Data")) )
+        ;; return the result
+        doc ))))
 
 (provide 'haskell-doc)
 
-;; arch-tag: 6492eb7e-7048-47ac-a331-da09e1eb6254
 ;;; haskell-doc.el ends here

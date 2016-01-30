@@ -1,4 +1,4 @@
-;;; haskell-indent.el --- "semi-intelligent" indentation module for Haskell Mode
+;;; haskell-indent.el --- "semi-intelligent" indentation module for Haskell Mode -*- lexical-binding: t -*-
 
 ;; Copyright 2004, 2005, 2007, 2008, 2009  Free Software Foundation, Inc.
 ;; Copyright 1997-1998  Guy Lapalme
@@ -6,10 +6,9 @@
 ;; Author: 1997-1998 Guy Lapalme <lapalme@iro.umontreal.ca>
 
 ;; Keywords: indentation Haskell layout-rule
-;; Version: 1.2
 ;; URL: http://www.iro.umontreal.ca/~lapalme/layout/index.html
 
-;;; This file is not part of GNU Emacs.
+;; This file is not part of GNU Emacs.
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -22,11 +21,8 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs; see the file COPYING.  If not, write to the
-;; Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-;; Boston, MA 02111-1307, USA.
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 ;;; Commentary:
 
 ;; Purpose:
@@ -91,27 +87,34 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))	;need defs of push and pop
+(require 'cl-lib)
+(require 'haskell-string)
+
 (defvar haskell-literate)
 
+;;;###autoload
 (defgroup haskell-indent nil
   "Haskell indentation."
   :group 'haskell
+  :link '(custom-manual "(haskell-mode)Indentation")
   :prefix "haskell-indent-")
 
 (defcustom haskell-indent-offset 4
   "Indentation of Haskell statements with respect to containing block."
   :type 'integer
+  :safe #'natnump
   :group 'haskell-indent)
 
 (defcustom haskell-indent-literate-Bird-default-offset 1
   "Default number of blanks after > in a Bird style literate script."
   :type 'integer
+  :safe #'natnump
   :group 'haskell-indent)
 
 (defcustom haskell-indent-rhs-align-column 0
   "Column on which to align right-hand sides (use 0 for ad-hoc alignment)."
   :type 'integer
+  :safe #'natnump
   :group 'haskell-indent)
 
 (defun haskell-indent-point-to-col (apoint)
@@ -148,7 +151,7 @@ Makes sure that the same indentation info is not pushed twice.
 Uses free var `haskell-indent-info'."
   (let ((tmp (cons col name)))
     (if (member tmp haskell-indent-info)
-	haskell-indent-info
+        haskell-indent-info
       (push tmp haskell-indent-info))))
 
 (defun haskell-indent-push-pos (pos &optional name)
@@ -163,7 +166,7 @@ Uses free var `haskell-indent-info'."
   (setq column (+ column offset))
   ;; (if (and haskell-indent-tab-align (> offset 0))
   ;;     (* 8 (/ (+ column 7) 8))
-    column) ;; )
+  column) ;; )
 
 (defun haskell-indent-push-pos-offset (pos &optional offset)
   "Pushes indentation information for the column corresponding to POS
@@ -267,7 +270,7 @@ If so, return its start; otherwise return nil:
 If it is Bird-style, then return the position of the >;
 otherwise return the ending position of \\begin{code}."
   (save-excursion
-    (case haskell-literate
+    (cl-case haskell-literate
       (bird
        (beginning-of-line)
        (if (or (eq (following-char) ?\>)
@@ -320,10 +323,10 @@ It deals with both Bird style and non Bird-style scripts."
         (insert "\\begin{code}\n")))))
 
 ;;; Start of indentation code
-
 (defcustom haskell-indent-look-past-empty-line t
   "If nil, indentation engine will not look past an empty line for layout points."
   :group 'haskell-indent
+  :safe #'booleanp
   :type 'boolean)
 
 (defun haskell-indent-start-of-def ()
@@ -354,8 +357,8 @@ take a coarser approximation and stop at the first empty line."
       ;; find the first line of code which is not a comment
       (forward-comment (point-max))
       (if (> (point) save-point)
-	  start-code
-	(point)))))
+          start-code
+        (point)))))
 
 (defun haskell-indent-open-structure (start end)
   "If any structure (list or tuple) is not closed, between START and END,
@@ -374,19 +377,19 @@ location of the opening symbol, nil otherwise."
   "Check, starting from START, if END is at or within a comment.
 Returns the location of the start of the comment, nil otherwise."
   (let (pps)
-    (assert (<= start end))
+    (cl-assert (<= start end))
     (cond ((= start end) nil)
-	  ((nth 4 (save-excursion (setq pps (parse-partial-sexp start end))))
-	   (nth 8 pps))
-	  ;; We also want to say that we are *at* the beginning of a comment.
-	  ((and (not (nth 8 pps))
+          ((nth 4 (save-excursion (setq pps (parse-partial-sexp start end))))
+           (nth 8 pps))
+          ;; We also want to say that we are *at* the beginning of a comment.
+          ((and (not (nth 8 pps))
                 (>= (point-max) (+ end 2))
-		(nth 4 (save-excursion
-			 (setq pps (parse-partial-sexp end (+ end 2))))))
-	   (nth 8 pps)))))
+                (nth 4 (save-excursion
+                         (setq pps (parse-partial-sexp end (+ end 2))))))
+           (nth 8 pps)))))
 
 (defvar haskell-indent-off-side-keywords-re
-      "\\<\\(do\\|let\\|of\\|where\\|mdo\\|rec\\)\\>[ \t]*")
+  "\\<\\(do\\|let\\|of\\|where\\|mdo\\|rec\\)\\>[ \t]*")
 
 (defun haskell-indent-type-at-point ()
   "Return the type of the line (also puts information in `match-data')."
@@ -396,7 +399,7 @@ Returns the location of the start of the comment, nil otherwise."
    ((looking-at "\\(\\([[:alpha:]]\\(\\sw\\|'\\)*\\)\\|_\\)[ \t\n]*")
     'ident)
    ((looking-at "\\(|[^|]\\)[ \t\n]*") 'guard)
-   ((looking-at "\\(=[^>=]\\|::\\|->\\|<-\\)[ \t\n]*") 'rhs)
+   ((looking-at "\\(=[^>=]\\|::\\|∷\\|→\\|←\\|->\\|<-\\)[ \t\n]*") 'rhs)
    (t 'other)))
 
 (defvar haskell-indent-current-line-first-ident ""
@@ -407,14 +410,14 @@ Returns the location of the start of the comment, nil otherwise."
   "Generate contour information between START and END points."
   (if (< start end)
       (save-excursion
-	(goto-char end)
-	(haskell-indent-skip-blanks-and-newlines-backward start)
-        (let ((cur-col (current-column))            ; maximum column number
-              (fl 0)     ; number of lines that forward-line could not advance
+        (goto-char end)
+        (haskell-indent-skip-blanks-and-newlines-backward start)
+        (let ((cur-col (current-column)) ; maximum column number
+              (fl 0) ; number of lines that forward-line could not advance
               contour)
           (while (and (> cur-col 0) (= fl 0) (>= (point) start))
             (haskell-indent-back-to-indentation)
-	    (if (< (point) start) (goto-char start))
+            (if (< (point) start) (goto-char start))
             (and (not (member (haskell-indent-type-at-point)
                               '(empty comment))) ; skip empty and comment lines
                  (< (current-column) cur-col) ; less indented column found
@@ -427,14 +430,14 @@ Returns the location of the start of the comment, nil otherwise."
   "Move point to the next symbol."
   (skip-syntax-forward ")" end)
   (if (< (point) end)
-     (progn
-       (forward-sexp 1)
-       (haskell-indent-skip-blanks-and-newlines-forward end))))
+      (progn
+        (forward-sexp 1)
+        (haskell-indent-skip-blanks-and-newlines-forward end))))
 
 (defun haskell-indent-next-symbol-safe (end)
   "Puts point to the next following symbol, or to end if there are no more symbols in the sexp."
-  (condition-case errlist (haskell-indent-next-symbol end)
-      (error (goto-char end))))
+  (condition-case _errlist (haskell-indent-next-symbol end)
+    (error (goto-char end))))
 
 (defun haskell-indent-separate-valdef (start end)
   "Return a list of positions for important parts of a valdef."
@@ -580,7 +583,7 @@ Returns the location of the start of the comment, nil otherwise."
                 (if rhs-sign (haskell-indent-push-pos rhs-sign)
                   (haskell-indent-push-pos-offset valname))
               (haskell-indent-push-pos-offset valname)))
-        (case                           ; general case
+        (cl-case                        ; general case
             (haskell-indent-find-case test)
           ;; "1.1.11"   1= vn gd rh arh
           (1 (haskell-indent-push-pos valname)
@@ -622,13 +625,13 @@ Returns the location of the start of the comment, nil otherwise."
              (haskell-indent-push-pos aft-rhs-sign))
           ;; "001.10"  10= gd rh
           (10 (if (haskell-indent-no-otherwise guard) (haskell-indent-push-pos guard "| "))
-	      (if last-line (haskell-indent-push-pos-offset guard)))
+              (if last-line (haskell-indent-push-pos-offset guard)))
           ;; "001100"  11= gd agd
           (11 (if (haskell-indent-no-otherwise guard) (haskell-indent-push-pos guard "| "))
-	      (haskell-indent-push-pos aft-guard))
+              (haskell-indent-push-pos aft-guard))
           ;; "001000"  12= gd
           (12 (if (haskell-indent-no-otherwise guard) (haskell-indent-push-pos guard "| "))
-	      (if last-line (haskell-indent-push-pos-offset guard 2)))
+              (if last-line (haskell-indent-push-pos-offset guard 2)))
           ;; "000011"  13= rh arh
           (13 (haskell-indent-push-pos aft-rhs-sign))
           ;; "000010"  14= rh
@@ -654,7 +657,10 @@ Returns the location of the start of the comment, nil otherwise."
          (is-where
           (string-match "where[ \t]*" haskell-indent-current-line-first-ident))
          (diff-first                 ; not a function def with the same name
-          (not(string= valname-string haskell-indent-current-line-first-ident)))
+          (or (null valname-string)
+              (not (string= (haskell-string-trim valname-string)
+                            (haskell-string-trim haskell-indent-current-line-first-ident)))))
+
          ;; (is-type-def
          ;;  (and rhs-sign (eq (char-after rhs-sign) ?\:)))
          (test (string
@@ -678,7 +684,7 @@ Returns the location of the start of the comment, nil otherwise."
                   (haskell-indent-push-pos-offset valname))))
         (if (string= haskell-indent-current-line-first-ident "::")
             (if valname (haskell-indent-push-pos valname))
-          (case                         ; general case
+          (cl-case                      ; general case
               (haskell-indent-find-case test)
             ;; "1.1.11"   1= vn gd rh arh
             (1 (if is-where
@@ -773,54 +779,54 @@ than an identifier, a guard or rhs."
       (if (and valname-string           ; special case for start keywords
                (string-match haskell-indent-start-keywords-re valname-string))
           (haskell-indent-push-pos-offset valname)
-        (case                           ; general case
-         (haskell-indent-find-case test)
-         ;; "1.1.11"   1= vn gd rh arh
-         (1 (haskell-indent-push-pos aft-rhs-sign))
-         ;; "1.1.10"   2= vn gd rh
-         (2 (if last-line
-                   (haskell-indent-push-pos-offset guard)
+        (cl-case                        ; general case
+            (haskell-indent-find-case test)
+          ;; "1.1.11"   1= vn gd rh arh
+          (1 (haskell-indent-push-pos aft-rhs-sign))
+          ;; "1.1.10"   2= vn gd rh
+          (2 (if last-line
+                 (haskell-indent-push-pos-offset guard)
                (haskell-indent-push-pos-offset rhs-sign 2)))
-         ;; "1.1100"   3= vn gd agd
-         (3 (haskell-indent-push-pos aft-guard))
-         ;; "1.1000"   4= vn gd
-         (4 (haskell-indent-push-pos-offset guard 2))
-         ;; "1.0011"   5= vn rh arh
-         (5 (haskell-indent-push-pos valname)
-            (haskell-indent-push-pos aft-rhs-sign))
-         ;; "1.0010"   6= vn rh
-         (6 (if last-line
-                (haskell-indent-push-pos-offset valname)
-              (haskell-indent-push-pos-offset rhs-sign 2)))
-         ;; "110000"   7= vn avn
-         (7 (haskell-indent-push-pos-offset aft-valname))
-         ;; "100000"   8= vn
-         (8 (haskell-indent-push-pos valname))
-         ;; "001.11"   9= gd rh arh
-         (9 (haskell-indent-push-pos aft-rhs-sign))
-         ;; "001.10"  10= gd rh
-         (10 (if last-line
-                   (haskell-indent-push-pos-offset guard)
+          ;; "1.1100"   3= vn gd agd
+          (3 (haskell-indent-push-pos aft-guard))
+          ;; "1.1000"   4= vn gd
+          (4 (haskell-indent-push-pos-offset guard 2))
+          ;; "1.0011"   5= vn rh arh
+          (5 (haskell-indent-push-pos valname)
+             (haskell-indent-push-pos aft-rhs-sign))
+          ;; "1.0010"   6= vn rh
+          (6 (if last-line
+                 (haskell-indent-push-pos-offset valname)
                (haskell-indent-push-pos-offset rhs-sign 2)))
-         ;; "001100"  11= gd agd
-         (11 (if (haskell-indent-no-otherwise guard)
-                   (haskell-indent-push-pos aft-guard)))
-         ;; "001000"  12= gd
-         (12 (if last-line (haskell-indent-push-pos-offset guard 2)))
-         ;; "000011"  13= rh arh
-         (13 (haskell-indent-push-pos aft-rhs-sign))
-         ;; "000010"  14= rh
-         (14 (if last-line (haskell-indent-push-pos-offset rhs-sign 2)))
-         ;; "000000"  15=
-         (t (error "haskell-indent-other: %s impossible case" test ))))
+          ;; "110000"   7= vn avn
+          (7 (haskell-indent-push-pos-offset aft-valname))
+          ;; "100000"   8= vn
+          (8 (haskell-indent-push-pos valname))
+          ;; "001.11"   9= gd rh arh
+          (9 (haskell-indent-push-pos aft-rhs-sign))
+          ;; "001.10"  10= gd rh
+          (10 (if last-line
+                  (haskell-indent-push-pos-offset guard)
+                (haskell-indent-push-pos-offset rhs-sign 2)))
+          ;; "001100"  11= gd agd
+          (11 (if (haskell-indent-no-otherwise guard)
+                  (haskell-indent-push-pos aft-guard)))
+          ;; "001000"  12= gd
+          (12 (if last-line (haskell-indent-push-pos-offset guard 2)))
+          ;; "000011"  13= rh arh
+          (13 (haskell-indent-push-pos aft-rhs-sign))
+          ;; "000010"  14= rh
+          (14 (if last-line (haskell-indent-push-pos-offset rhs-sign 2)))
+          ;; "000000"  15=
+          (t (error "haskell-indent-other: %s impossible case" test ))))
       haskell-indent-info)))
 
 (defun haskell-indent-valdef-indentation (start end end-visible curr-line-type
-                                          indent-info)
+                                                indent-info)
   "Find indentation information for a value definition."
   (let ((haskell-indent-info indent-info))
     (if (< start end-visible)
-        (case curr-line-type
+        (cl-case curr-line-type
           (empty (haskell-indent-empty start end end-visible indent-info))
           (ident (haskell-indent-ident start end end-visible indent-info))
           (guard (haskell-indent-guard start end end-visible indent-info))
@@ -830,13 +836,13 @@ than an identifier, a guard or rhs."
       haskell-indent-info)))
 
 (defun haskell-indent-line-indentation (line-start line-end end-visible
-                                         curr-line-type indent-info)
+                                                   curr-line-type indent-info)
   "Compute indentation info between LINE-START and END-VISIBLE.
 Separate a line of program into valdefs between offside keywords
 and find indentation info for each part."
   (save-excursion
     ;; point is (already) at line-start
-    (assert (eq (point) line-start))
+    (cl-assert (eq (point) line-start))
     (let ((haskell-indent-info indent-info)
           (start (or (haskell-indent-in-comment line-start line-end)
                      (haskell-indent-in-string line-start line-end))))
@@ -847,8 +853,8 @@ and find indentation info for each part."
                                      line-end t)
                   (not (or (haskell-indent-in-comment line-start (point))
                            (haskell-indent-in-string line-start (point)))))
-	(let ((beg-match (match-beginning 0)) ; save beginning of match
-	      (end-match (match-end 0)))      ; save end of match
+        (let ((beg-match (match-beginning 0)) ; save beginning of match
+              (end-match (match-end 0)))      ; save end of match
           ;; Do not try to find indentation points if off-side-keyword at
           ;; the start...
           (if (or (< line-start beg-match)
@@ -872,39 +878,39 @@ and find indentation info for each part."
 (defun haskell-indent-layout-indent-info (start contour-line)
   (let ((haskell-indent-info nil)
         (curr-line-type (haskell-indent-type-at-point))
-	line-start line-end end-visible)
+        line-start line-end end-visible)
     (save-excursion
       (if (eq curr-line-type 'ident)
-	  (let				; guess the type of line
-	      ((sep
-		(haskell-indent-separate-valdef
-		 (point) (line-end-position))))
-	    ;; if the first ident is where or the start of a def
-	    ;; keep it in a global variable
-	    (setq haskell-indent-current-line-first-ident
-		  (if (string-match "where[ \t]*" (nth 1 sep))
-		      (nth 1 sep)
-		    (if (nth 5 sep)		; is there a rhs-sign
-			(if (= (char-after (nth 5 sep)) ?\:) ;is it a typdef
-			    "::" (nth 1 sep))
-		      "")))))
-      (while contour-line		; explore the contour points
-	(setq line-start (pop contour-line))
-	(goto-char line-start)
-	(setq line-end (line-end-position))
-	(setq end-visible		; visible until the column of the
-	      (if contour-line		; next contour point
-		  (save-excursion
-		    (move-to-column
-		     (haskell-indent-point-to-col (car contour-line)))
-		    (point))
-		line-end))
-	(unless (or (haskell-indent-open-structure start line-start)
-		    (haskell-indent-in-comment start line-start))
-	  (setq haskell-indent-info
-		(haskell-indent-line-indentation line-start line-end
-						 end-visible curr-line-type
-						 haskell-indent-info)))))
+          (let                          ; guess the type of line
+              ((sep
+                (haskell-indent-separate-valdef
+                 (point) (line-end-position))))
+            ;; if the first ident is where or the start of a def
+            ;; keep it in a global variable
+            (setq haskell-indent-current-line-first-ident
+                  (if (string-match "where[ \t]*" (nth 1 sep))
+                      (nth 1 sep)
+                    (if (nth 5 sep)              ; is there a rhs-sign
+                        (if (= (char-after (nth 5 sep)) ?\:) ;is it a typdef
+                            "::" (nth 1 sep))
+                      "")))))
+      (while contour-line               ; explore the contour points
+        (setq line-start (pop contour-line))
+        (goto-char line-start)
+        (setq line-end (line-end-position))
+        (setq end-visible            ; visible until the column of the
+              (if contour-line       ; next contour point
+                  (save-excursion
+                    (move-to-column
+                     (haskell-indent-point-to-col (car contour-line)))
+                    (point))
+                line-end))
+        (unless (or (haskell-indent-open-structure start line-start)
+                    (haskell-indent-in-comment start line-start))
+          (setq haskell-indent-info
+                (haskell-indent-line-indentation line-start line-end
+                                                 end-visible curr-line-type
+                                                 haskell-indent-info)))))
     haskell-indent-info))
 
 (defun haskell-indent-find-matching-start (regexp limit &optional pred start)
@@ -958,8 +964,8 @@ OPEN is the start position of the comment in which point is."
   ;; whether it's text.  Instead, we'll assume it's text.
   (save-excursion
     (if (= open (point))
-	;; We're actually just in front of a comment: align with following
-	;; code or with comment on previous line.
+        ;; We're actually just in front of a comment: align with following
+        ;; code or with comment on previous line.
         (let ((prev-line-info
                (cond
                 ((eq (char-after) ?\{) nil) ;Align as if it were code.
@@ -996,15 +1002,15 @@ OPEN is the start position of the comment in which point is."
 
       ;; We really are inside a comment.
       (if (looking-at "-}")
-	  (progn
-	    (forward-char 2)
-	    (forward-comment -1)
+          (progn
+            (forward-char 2)
+            (forward-comment -1)
             (list (list (1+ (haskell-indent-point-to-col (point))))))
-	(let ((offset (if (looking-at "--?")
-			  (- (match-beginning 0) (match-end 0)))))
-	  (forward-line -1)		;Go to previous line.
-	  (haskell-indent-back-to-indentation)
-	  (if (< (point) start) (goto-char start))
+        (let ((offset (if (looking-at "--?")
+                          (- (match-beginning 0) (match-end 0)))))
+          (forward-line -1)             ;Go to previous line.
+          (haskell-indent-back-to-indentation)
+          (if (< (point) start) (goto-char start))
 
           (list (list (if (looking-at comment-start-skip)
                           (if offset
@@ -1017,12 +1023,13 @@ OPEN is the start position of the comment in which point is."
 This is necessary in the \"do\" layout under Haskell-98.
 See http://hackage.haskell.org/trac/haskell-prime/wiki/DoAndIfThenElse"
   :group 'haskell-indent
+  :safe #'booleanp
   :type 'integer)
 
 (defun haskell-indent-closing-keyword (start)
   (let ((open (save-excursion
                 (haskell-indent-find-matching-start
-                 (case (char-after)
+                 (cl-case (char-after)
                    (?i "\\<\\(?:\\(in\\)\\|let\\)\\>")
                    (?o "\\<\\(?:\\(of\\)\\|case\\)\\>")
                    (?t "\\<\\(?:\\(then\\)\\|if\\)\\>")
@@ -1067,10 +1074,10 @@ is at the end of an otherwise-non-empty line."
   :group 'haskell-indent
   :type '(repeat (choice string
                          (cons :tag "" (string :tag "keyword:")
-                         (cons :tag "" (integer :tag "offset")
-                         (choice (const nil)
-                                 (list :tag ""
-                                       (integer :tag "offset-pending"))))))))
+                               (cons :tag "" (integer :tag "offset")
+                                     (choice (const nil)
+                                             (list :tag ""
+                                                   (integer :tag "offset-pending"))))))))
 
 (defun haskell-indent-skip-lexeme-forward ()
   (and (zerop (skip-syntax-forward "w"))
@@ -1142,18 +1149,18 @@ is at the end of an otherwise-non-empty line."
     ;; There might still be layout within the open structure.
     (let* ((end (point))
            (basic-indent-info
-             ;; Anything else than a ) is subject to layout.
-             (if (looking-at "\\s.\\|\\$ ")
-                 (haskell-indent-point-to-col open) ; align a punct with (
-               (let ((follow (save-excursion
-                               (goto-char (1+ open))
-                               (haskell-indent-skip-blanks-and-newlines-forward end)
-                               (point))))
-                 (if (= follow end)
-                     (save-excursion
-                       (goto-char open)
-                       (haskell-indent-after-keyword-column nil nil 1))
-                   (haskell-indent-point-to-col follow)))))
+            ;; Anything else than a ) is subject to layout.
+            (if (looking-at "\\s.\\|\\$ ")
+                (haskell-indent-point-to-col open) ; align a punct with (
+              (let ((follow (save-excursion
+                              (goto-char (1+ open))
+                              (haskell-indent-skip-blanks-and-newlines-forward end)
+                              (point))))
+                (if (= follow end)
+                    (save-excursion
+                      (goto-char open)
+                      (haskell-indent-after-keyword-column nil nil 1))
+                  (haskell-indent-point-to-col follow)))))
            (open-column (haskell-indent-point-to-col open))
            (contour-line (haskell-indent-contour-line (1+ open) end)))
       (if (null contour-line)
@@ -1255,40 +1262,40 @@ We stay in the cycle as long as the TAB key is pressed."
       ;; use the ordinary tab for text...
       (funcall (default-value 'indent-line-function))
     (let ((marker (if (> (current-column) (haskell-indent-current-indentation))
-		      (point-marker)))
-	  (bol (progn (beginning-of-line) (point))))
+                      (point-marker)))
+          (bol (progn (beginning-of-line) (point))))
       (haskell-indent-back-to-indentation)
       (unless (and (eq last-command this-command)
-		   (eq bol (car haskell-indent-last-info)))
-	(save-excursion
-	  (setq haskell-indent-last-info
-		(list bol (haskell-indent-indentation-info) 0 0))))
+                   (eq bol (car haskell-indent-last-info)))
+        (save-excursion
+          (setq haskell-indent-last-info
+                (list bol (haskell-indent-indentation-info) 0 0))))
 
       (let* ((il (nth 1 haskell-indent-last-info))
-	     (index (nth 2 haskell-indent-last-info))
-	     (last-insert-length (nth 3 haskell-indent-last-info))
-	     (indent-info (nth index il)))
+             (index (nth 2 haskell-indent-last-info))
+             (last-insert-length (nth 3 haskell-indent-last-info))
+             (indent-info (nth index il)))
 
-	(haskell-indent-line-to (car indent-info)) ; insert indentation
-	(delete-char last-insert-length)
-	(setq last-insert-length 0)
-	(let ((text (cdr indent-info)))
-	  (if text
-	      (progn
-		(insert text)
-		(setq last-insert-length (length text)))))
+        (haskell-indent-line-to (car indent-info)) ; insert indentation
+        (delete-char last-insert-length)
+        (setq last-insert-length 0)
+        (let ((text (cdr indent-info)))
+          (if text
+              (progn
+                (insert text)
+                (setq last-insert-length (length text)))))
 
-	(setq haskell-indent-last-info
-	      (list bol il (% (1+ index) (length il)) last-insert-length))
+        (setq haskell-indent-last-info
+              (list bol il (% (1+ index) (length il)) last-insert-length))
 
-	(if (= (length il) 1)
-	    (message "Sole indentation")
-	  (message "Indent cycle (%d)..." (length il)))
+        (if (= (length il) 1)
+            (message "Sole indentation")
+          (message "Indent cycle (%d)..." (length il)))
 
-	(if marker
-	    (goto-char (marker-position marker)))))))
+        (if marker
+            (goto-char (marker-position marker)))))))
 
-(defun haskell-indent-region (start end)
+(defun haskell-indent-region (_start _end)
   (error "Auto-reindentation of a region is not supported"))
 
 ;;; alignment functions
@@ -1320,23 +1327,23 @@ If P-ARG is t align all defs up to the mark.
 TYPE is either 'guard or 'rhs."
   (save-excursion
     (let (start-block end-block
-          (maxcol (if (eq type 'rhs) haskell-indent-rhs-align-column 0))
-          contour sep defname defnamepos
-          defcol pos lastpos
-          regstack eqns-start start-found)
+                      (maxcol (if (eq type 'rhs) haskell-indent-rhs-align-column 0))
+                      contour sep defname defnamepos
+                      defcol pos lastpos
+                      regstack eqns-start start-found)
       ;; find the starting and ending boundary points for alignment
       (if p-arg
           (if (mark)                    ; aligning everything in the region
-            (progn
-              (when (> (mark) (point)) (exchange-point-and-mark))
-              (setq start-block
-                    (save-excursion
-                      (goto-char (mark))
-                      (line-beginning-position)))
-              (setq end-block
-                  (progn (if (haskell-indent-bolp)
-                             (haskell-indent-forward-line -1))
-                         (line-end-position))))
+              (progn
+                (when (> (mark) (point)) (exchange-point-and-mark))
+                (setq start-block
+                      (save-excursion
+                        (goto-char (mark))
+                        (line-beginning-position)))
+                (setq end-block
+                      (progn (if (haskell-indent-bolp)
+                                 (haskell-indent-forward-line -1))
+                             (line-end-position))))
             (error "The mark is not set for aligning definitions"))
         ;; aligning the current definition
         (setq start-block (haskell-indent-start-of-def))
@@ -1390,13 +1397,13 @@ TYPE is either 'guard or 'rhs."
             ;; go through each equation to find the region to indent
             (while eqns-start
               (let ((eqn (caar eqns-start)))
-		(setq lastpos (if (cdr eqns-start)
-				  (save-excursion
-				    (goto-char (caadr eqns-start))
-				    (haskell-indent-forward-line -1)
-				    (line-end-position))
-				end-block))
-		(setq sep (haskell-indent-separate-valdef eqn lastpos)))
+                (setq lastpos (if (cdr eqns-start)
+                                  (save-excursion
+                                    (goto-char (cl-caadr eqns-start))
+                                    (haskell-indent-forward-line -1)
+                                    (line-end-position))
+                                end-block))
+                (setq sep (haskell-indent-separate-valdef eqn lastpos)))
               (if (eq type 'guard)
                   (setq pos (nth 3 sep))
                 ;; check if what follows a rhs sign is more indented or not
@@ -1426,7 +1433,7 @@ TYPE is either 'guard or 'rhs."
             (if regstack
                 (haskell-indent-shift-columns maxcol regstack)))))))
 
-(defun haskell-indent-align-guards-and-rhs (start end)
+(defun haskell-indent-align-guards-and-rhs (_start _end)
   "Align the guards and rhs of functions in the region, which must be active."
   ;; The `start' and `end' args are dummys right now: they're just there so
   ;; we can use the "r" interactive spec which properly signals an error.
@@ -1450,7 +1457,7 @@ TYPE is either 'guard or 'rhs."
 Alignment works only if all guards are to the south-east of their |."
   (interactive "*")
   (let ((pc (if (haskell-indent-bolp) ?\012
-                (preceding-char)))
+              (preceding-char)))
         (pc1 (or (char-after (- (point) 2)) 0)))
     ;; check what guard to insert depending on the previous context
     (if (= pc ?\ )                      ; x = any char other than blank or |
@@ -1503,8 +1510,13 @@ One indentation cycle is used."
     (define-key map [?\C-c ?\C->] 'haskell-indent-put-region-in-literate)
     map))
 
+;;;###autoload
 (defun turn-on-haskell-indent ()
   "Turn on ``intelligent'' Haskell indentation mode."
+  (when (and (bound-and-true-p haskell-indentation-mode)
+             (fboundp 'haskell-indentation-mode))
+    (haskell-indentation-mode 0))
+
   (set (make-local-variable 'indent-line-function) 'haskell-indent-cycle)
   (set (make-local-variable 'indent-region-function) 'haskell-indent-region)
   (setq haskell-indent-mode t)
@@ -1530,6 +1542,7 @@ One indentation cycle is used."
 (defun turn-off-haskell-indent ()
   "Turn off ``intelligent'' Haskell indentation mode."
   (kill-local-variable 'indent-line-function)
+  (kill-local-variable 'indent-region-function)
   ;; Remove haskell-indent-map from the local map.
   (let ((map (current-local-map)))
     (while map
@@ -1579,5 +1592,4 @@ Invokes `haskell-indent-hook' if not nil."
 
 (provide 'haskell-indent)
 
-;; arch-tag: e4e5e90a-12e2-4002-b5cb-7b2375710013
 ;;; haskell-indent.el ends here
