@@ -11,7 +11,7 @@
 (autoload 'haskell-process-do-type "haskell-commands" nil t)
 (autoload 'haskell-process-load-or-reload "haskell" nil t)
 (autoload 'haskell-doc-current-info "haskell-doc" nil t)
-(autoload 'haskell-ds-create-imenu-index "haskell-decl-scan.el" nil t)
+(autoload 'haskell-ds-create-imenu-index "haskell-decl-scan" nil t)
 
 (eval-after-load "haskell-mode"
   '(progn
