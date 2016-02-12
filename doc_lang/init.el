@@ -8,4 +8,5 @@
       deft-use-filename-as-title t
       deft-text-mode 'org-mode)))
 
-(global-eldoc-mode 0)
+(if (fboundp 'global-eldoc-mode)
+    (global-eldoc-mode 0))
