@@ -16,7 +16,7 @@
 ;;	Rémi Vanicat      <vanicat@debian.org>
 ;;	Yann Hodique      <yann.hodique@gmail.com>
 
-;; Package-Requires: ((emacs "24.4") (async "20150909.2257") (dash "20151021.113") (with-editor "20160128.1201") (git-commit "20160119.1409") (magit-popup "20160119.1409"))
+;; Package-Requires: ((emacs "24.4") (async "20150909.2257") (dash "20151021.113") (with-editor "20160223.115") (git-commit "20160130.64") (magit-popup "20160302.322"))
 ;; Keywords: git tools vc
 ;; Homepage: https://github.com/magit/magit
 
@@ -196,7 +196,10 @@ The functions which respect this option are
 
 all    Show counts for branches and tags.
 branch Show counts for branches only.
-nil    Never show counts."
+nil    Never show counts.
+
+To change the value in an existing buffer use the command
+`magit-refs-show-commit-count'"
   :package-version '(magit . "2.1.0")
   :group 'magit-refs
   :safe (lambda (val) (memq val '(all branch nil)))
@@ -924,14 +927,14 @@ reference, but it is not checked out."
           (branches (magit-list-local-branch-names)))
       (dolist (line (magit-git-lines "branch" "-vv"
                                      (cadr magit-refresh-args)))
-        (string-match magit-refs-branch-line-re line)
-        (magit-bind-match-strings
-            (branch hash message upstream ahead behind gone) line
-          (when (string-match-p "(HEAD detached" branch)
-            (setq branch nil))
-          (magit-insert-branch
-           branch magit-refs-local-branch-format current branches
-           'magit-branch-local hash message upstream ahead behind gone))))
+        (when (string-match magit-refs-branch-line-re line)
+          (magit-bind-match-strings
+              (branch hash message upstream ahead behind gone) line
+            (when (string-match-p "(HEAD detached" branch)
+              (setq branch nil))
+            (magit-insert-branch
+             branch magit-refs-local-branch-format current branches
+             'magit-branch-local hash message upstream ahead behind gone)))))
     (insert ?\n)))
 
 (defun magit-insert-remote-branches ()
@@ -1898,12 +1901,23 @@ If no merge is in progress, do nothing."
 
 ;;;; Reset
 
+;;;###autoload (autoload 'magit-reset-popup "magit" nil t)
+(magit-define-popup magit-reset-popup
+  "Popup console for reset commands."
+  'magit-commands
+  :man-page "git-reset"
+  :actions '((?m "reset mixed  (HEAD and index)"         magit-reset-head)
+             (?s "reset soft   (HEAD only)"              magit-reset-soft)
+             (?h "reset hard   (HEAD, index, and files)" magit-reset-hard)
+             (?i "reset index  (index only)"             magit-reset-index))
+  :max-action-columns 1)
+
 ;;;###autoload
 (defun magit-reset-index (commit)
   "Reset the index to COMMIT.
 Keep the head and working tree as-is, so if COMMIT refers to the
 head this effectively unstages all changes.
-\n(git reset COMMIT)"
+\n(git reset COMMIT .)"
   (interactive (list (magit-read-branch-or-commit "Reset index to")))
   (magit-reset-internal nil commit "."))
 
@@ -2259,12 +2273,13 @@ the current repository."
 
 (magit-define-popup magit-file-popup
   "Popup console for Magit commands in file-visiting buffers."
-  :actions '((?s "Stage"   magit-stage-file)
-             (?l "Log"     magit-log-buffer-file)
-             (?c "Commit"  magit-commit-popup)
-             (?u "Unstage" magit-unstage-file)
-             (?b "Blame"   magit-blame-popup) nil nil
-             (?p "Find blob" magit-blob-previous))
+  :actions '((?s "Stage"     magit-stage-file)
+             (?d "Diff"      magit-diff-buffer-file-popup)
+             (?b "Blame"     magit-blame-popup)
+             (?u "Unstage"   magit-unstage-file)
+             (?l "Log"       magit-log-buffer-file)
+             (?p "Find blob" magit-blob-previous)
+             (?c "Commit"    magit-commit-popup))
   :max-action-columns 3)
 
 (defvar magit-file-mode-lighter "")
@@ -2382,6 +2397,7 @@ Currently this only adds the following key bindings.
              (?f "Fetching"        magit-fetch-popup)
              (?F "Pulling"         magit-pull-popup)
              (?l "Logging"         magit-log-popup)
+             (?L "Change logs"     magit-log-refresh-popup)
              (?m "Merging"         magit-merge-popup)
              (?M "Remoting"        magit-remote-popup)
              (?o "Submodules"      magit-submodule-popup)
@@ -2392,6 +2408,7 @@ Currently this only adds the following key bindings.
              (?V "Reverting"       magit-revert-popup)
              (?w "Apply patches"   magit-am-popup)
              (?W "Format patches"  magit-patch-popup)
+             (?X "Resetting"       magit-reset-popup)
              (?y "Show Refs"       magit-show-refs-popup)
              (?z "Stashing"        magit-stash-popup)
              (?! "Running"         magit-run-popup)
@@ -2526,7 +2543,7 @@ With prefix argument simply read a directory name using
 (defun magit-list-repos-1 (directory depth)
   (cond ((file-readable-p (expand-file-name ".git" directory))
          (list directory))
-        ((and (> depth 0) (file-accessible-directory-p directory))
+        ((and (> depth 0) (magit-file-accessible-directory-p directory))
          (--mapcat (when (file-directory-p it)
                      (magit-list-repos-1 it (1- depth)))
                    (directory-files directory t "^[^.]" t)))))
@@ -2835,10 +2852,11 @@ Git, and Emacs in the echo area."
                               (package-desc-version (cadr it)))))))))))
     (if (stringp magit-version)
         (when (called-interactively-p 'any)
-          (message "Magit %s, Git %s, Emacs %s"
+          (message "Magit %s, Git %s, Emacs %s, %s"
                    (or magit-version "(unknown)")
                    (or (magit-git-version t) "(unknown)")
-                   emacs-version))
+                   emacs-version
+                   system-type))
       (setq debug (reverse debug))
       (setq magit-version 'error)
       (when magit-version
