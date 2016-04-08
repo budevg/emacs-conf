@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gitu
+# key: gitu
+# --
+git reset --hard \`git log HEAD..${1:origin/master} --oneline |tail -n 1 |awk '{print \$1}'\`
