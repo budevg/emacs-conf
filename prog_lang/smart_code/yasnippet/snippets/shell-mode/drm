@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: drm
+# key: drm
+# --
+${1:sudo docker} rm $($1 ps -qa --filter "status=exited")$0

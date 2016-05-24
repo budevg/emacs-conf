@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: drmi
+# key: drmi
+# --
+${1:sudo docker} rmi $($1 images --filter "dangling=true" -q --no-trunc)$0
