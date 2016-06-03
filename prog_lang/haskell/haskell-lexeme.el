@@ -29,7 +29,7 @@
             (and (consp key) (> (car key) 128))
             (and (numberp key) (> key 128)))
            (if (member val '(Pc Pd Po Sm Sc Sk So))
-	       (modify-category-entry key ?P))))
+               (modify-category-entry key ?P))))
    unicode-category-table)
 
   (dolist (key (string-to-list "!#$%&*+./<=>?@^|~\\-"))
@@ -107,13 +107,16 @@ Note that (match-string 1) returns the unqualified part.")
 Note that negative sign char is not part of a number.")
 
 (defconst haskell-lexeme-char-literal-inside
-  (rx (| (regexp "[^\n'\\]")
+  (rx (| (not (any "\n'\\"))
          (: "\\"
             (| "a" "b" "f" "n" "r" "t" "v" "\\" "\"" "'"
                "NUL" "SOH" "STX" "ETX" "EOT" "ENQ" "ACK"
                "BEL" "BS" "HT" "LF" "VT" "FF" "CR" "SO" "SI" "DLE"
                "DC1" "DC2" "DC3" "DC4" "NAK" "SYN" "ETB" "CAN"
                "EM" "SUB" "ESC" "FS" "GS" "RS" "US" "SP" "DEL"
+               (regexp "[0-9]+")
+               (: "x" (regexp "[0-9a-fA-F]+"))
+               (: "o" (regexp "[0-7]+"))
                (: "^" (regexp "[]A-Z@^_\\[]"))))))
   "Regexp matching an inside of a character literal.")
 
@@ -129,6 +132,9 @@ Note that negative sign char is not part of a number.")
                "BEL" "BS" "HT" "LF" "VT" "FF" "CR" "SO" "SI" "DLE"
                "DC1" "DC2" "DC3" "DC4" "NAK" "SYN" "ETB" "CAN"
                "EM" "SUB" "ESC" "FS" "GS" "RS" "US" "SP" "DEL"
+               (regexp "[0-9]+")
+               (: "x" (regexp "[0-9a-fA-F]+"))
+               (: "o" (regexp "[0-7]+"))
                (: "^" (regexp "[]A-Z@^_\\[]"))
                (regexp "[ \t\n\r\v\f]*\\\\")))))
   "Regexp matching an item that is a single character or a single
@@ -140,9 +146,11 @@ strictly only escape sequences defined in Haskell Report.")
 (defconst haskell-lexeme-string-literal
   (rx (: (group "\"")
          (group (* (| (regexp "\\\\[ \t\n\r\v\f]*\\\\")
-                      "\\\""
-                      (regexp "[^\"\n]"))))
-         (group (| "\"" (regexp "$")))))
+                      (regexp "\\\\[ \t\n\r\v\f]+")
+                      (regexp "\\\\[^ \t\n\r\v\f]")
+                      (regexp "[^\"\n\\]"))))
+         (group (| "\"" (regexp "$") (regexp "\\\\?\\'")
+                   ))))
   "Regexp matching a string literal lookalike.
 
 Note that `haskell-lexeme-string-literal' matches more than
@@ -165,12 +173,12 @@ Regexp has subgroup expressions:
                     (group (* (| (not (any "|"))
                                  (: "|" (not (any "]"))))
                               ))
-                    (group "|")
-                    "]"))
+                    (group (| "|" eos))
+                    (| "]" eos)))
   "Regexp matching a quasi quote literal.
 
 Quasi quotes start with '[xxx|' or '[$xxx|' sequence and end with
-'|]'. The 'xxx' is quoter name There is no escaping mechanism
+'|]'. The 'xxx' is a quoter name. There is no escaping mechanism
 provided for the ending sequence.
 
 Regexp has subgroup expressions:
@@ -211,7 +219,7 @@ of a token."
      ((member char '(?\] ?\[ ?\( ?\) ?\{ ?\} ?\` ?\, ?\;))
       'special))))
 
-(defun haskell-lexeme-looking-at-token ()
+(defun haskell-lexeme-looking-at-token (&rest flags)
   "Like `looking-at' but understands Haskell lexemes.
 
 Moves point forward over whitespace.  Returns a symbol describing
@@ -237,11 +245,25 @@ symbol or identifier can be done with:
    (haskell-lexeme-classify-by-first-char (char-after (match-beginning 1)))
 
 See `haskell-lexeme-classify-by-first-char' for details."
-  (skip-syntax-forward "->")
+  (while
+      ;; Due to how unterminated strings terminate at newline, some
+      ;; newlines have syntax set to generic string delimeter. We want
+      ;; those to be treated as whitespace anyway
+      (or
+       (> (skip-syntax-forward "-") 0)
+       (and (not (member 'newline flags))
+            (> (skip-chars-forward "\n") 0))))
   (let
       ((case-fold-search nil)
        (point (point-marker)))
     (or
+     (and
+      (equal (string-to-syntax "<") (syntax-after (point)))
+      (progn
+        (set-match-data (list point (set-marker (make-marker) (line-end-position))))
+        'literate-comment))
+     (and (looking-at "\n")
+          'newline)
      (and (looking-at "{-")
           (save-excursion
             (forward-comment 1)
@@ -255,7 +277,9 @@ See `haskell-lexeme-classify-by-first-char' for details."
           (let ((match-data (match-data)))
             (if (and (equal "[" (match-string-no-properties 0))
                      (looking-at haskell-lexeme-quasi-quote-literal))
-                (if (member (match-string-no-properties 1) '("e" "d" "p" "t"))
+                (if (or (member (match-string-no-properties 1) '("e" "d" "p" "t"))
+                        (not (equal (haskell-lexeme-classify-by-first-char (char-after (match-beginning 1)))
+                                    'varid)))
                     (progn
                       (set-match-data match-data)
                       'special)

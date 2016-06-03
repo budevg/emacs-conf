@@ -1,7 +1,8 @@
 ;;; haskell-doc.el --- show function types in echo area  -*- coding: utf-8; lexical-binding: t -*-
 
-;; Copyright (C) 2004, 2005, 2006, 2007, 2009  Free Software Foundation, Inc.
-;; Copyright (C) 1997  Hans-Wolfgang Loidl
+;; Copyright © 2004, 2005, 2006, 2007, 2009, 2016  Free Software Foundation, Inc.
+;; Copyright © 1997  Hans-Wolfgang Loidl
+;;             2016  Arthur Fayzrakhmanov
 
 ;; Author: Hans-Wolfgang Loidl <hwloidl@dcs.glasgow.ac.uk>
 ;; Temporary Maintainer and Hacker: Graeme E Moss <gem@cs.york.ac.uk>
@@ -299,11 +300,10 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
-
 (require 'haskell-mode)
 (require 'haskell-process)
 (require 'haskell)
+(require 'haskell-utils)
 (require 'inf-haskell)
 (require 'imenu)
 (require 'eldoc)
@@ -315,7 +315,7 @@
   :prefix "haskell-doc-")
 
 
-(defvar haskell-doc-mode nil
+(defvar-local haskell-doc-mode nil
   "*If non-nil, show the type of the function near point or a related comment.
 
 If the identifier near point is a Haskell keyword and the variable
@@ -343,17 +343,15 @@ in the alist `haskell-doc-user-defined-ids' and the variable
 `haskell-doc-show-user-defined' is non-nil show the type of the function.
 
 This variable is buffer-local.")
-(make-variable-buffer-local 'haskell-doc-mode)
 
 (defvar haskell-doc-mode-hook nil
   "Hook invoked when entering `haskell-doc-mode'.")
 
-(defvar haskell-doc-index nil
+(defvar-local haskell-doc-index nil
   "Variable holding an alist matching file names to fct-type alists.
 The function `haskell-doc-make-global-fct-index' rebuilds this variables
 \(similar to an `imenu' rescan\).
 This variable is buffer-local.")
-(make-variable-buffer-local 'haskell-doc-index)
 
 (defcustom haskell-doc-show-global-types nil
   "If non-nil, search for the types of global functions by loading the files.
@@ -492,37 +490,6 @@ Each element is of the form (ID . DOC) where both ID and DOC are strings.
 DOC should be a concise single-line string describing the construct in which
 the keyword is used.")
 
-(eval-and-compile
-  (defalias 'haskell-doc-split-string
-    (if (condition-case ()
-            (split-string "" nil t)
-          (wrong-number-of-arguments nil))
-        'split-string
-      ;; copied from Emacs 22
-      (lambda (string &optional separators omit-nulls)
-        (let ((keep-nulls (not (if separators omit-nulls t)))
-              (rexp (or separators "[ \f\t\n\r\v]+"))
-              (start 0)
-              notfirst
-              (list nil))
-          (while (and (string-match rexp string
-                                    (if (and notfirst
-                                             (= start (match-beginning 0))
-                                             (< start (length string)))
-                                        (1+ start) start))
-                      (< start (length string)))
-            (setq notfirst t)
-            (if (or keep-nulls (< start (match-beginning 0)))
-                (setq list
-                      (cons (substring string start (match-beginning 0))
-                            list)))
-            (setq start (match-end 0)))
-          (if (or keep-nulls (< start (length string)))
-              (setq list
-                    (cons (substring string start)
-                          list)))
-          (nreverse list))))))
-
 
 (defun haskell-doc-extract-types (url)
   (with-temp-buffer
@@ -635,7 +602,7 @@ the keyword is used.")
                     ;;        module vars)
                     nil)
                 (setq curclass nil))
-              (dolist (var (haskell-doc-split-string vars comma-re t))
+              (dolist (var (split-string vars comma-re t))
                 (if (string-match "(.*)" var) (setq var (substring var 1 -1)))
                 (push (cons var type) elems))))
            ;; A datatype decl.
@@ -656,7 +623,7 @@ the keyword is used.")
                       (if (string-match ",\\'" type)
                           (setq type (substring type 0 -1)))
                       (setq type (concat name " -> " type))
-                      (dolist (var (haskell-doc-split-string vars comma-re t))
+                      (dolist (var (split-string vars comma-re t))
                         (if (string-match "(.*)" var)
                             (setq var (substring var 1 -1)))
                         (push (cons var type) elems))))))))
@@ -1250,8 +1217,6 @@ URL is the URL of the online doc."
                   (append (default-value 'minor-mode-alist)
                           '((haskell-doc-mode haskell-doc-minor-mode-string)))))
 
-;; a dummy definition needed for XEmacs (I know, it's horrible :-(
-
 
 (defvar haskell-doc-keymap
   (let ((map (make-sparse-keymap)))
@@ -1424,11 +1389,14 @@ is not."
 This function is run by an idle timer to print the type
  automatically if `haskell-doc-mode' is turned on."
   (and haskell-doc-mode
+       (haskell-doc-in-code-p)
+       (not haskell-mode-interactive-prompt-state)
        (not (eobp))
        (not executing-kbd-macro)
        ;; Having this mode operate in the minibuffer makes it impossible to
        ;; see what you're doing.
        (not (eq (selected-window) (minibuffer-window)))
+       ;; not in string or comment
        ;; take a nap, if run straight from post-command-hook.
        (if (fboundp 'run-with-idle-timer) t
          (sit-for haskell-doc-idle-delay))
@@ -1447,12 +1415,11 @@ This function is run by an idle timer to print the type
 Meant for `eldoc-documentation-function'."
   ;; There are a number of possible documentation functions.
   ;; Some of them are asynchronous.
-  (let ((msg (or
-              (haskell-doc-current-info--interaction)
-              (haskell-doc-sym-doc (haskell-ident-at-point)))))
-    (unless (symbolp msg) msg)))
-
-
+  (when (haskell-doc-in-code-p)
+    (let ((msg (or
+                (haskell-doc-current-info--interaction)
+                (haskell-doc-sym-doc (haskell-ident-at-point)))))
+      (unless (symbolp msg) msg))))
 
 (defun haskell-doc-ask-mouse-for-type (event)
   "Read the identifier under the mouse and echo its type.
@@ -1465,6 +1432,7 @@ function.  Only the user interface is different."
     (haskell-doc-show-type)))
 
 (defun haskell-doc-in-code-p ()
+  "A predicate indicating suitable case to show docs."
   (not (or (and (eq haskell-literate 'bird)
                 ;; Copied from haskell-indent-bolp.
                 (<= (current-column) 2)
@@ -1473,7 +1441,7 @@ function.  Only the user interface is different."
 
 ;;;###autoload
 (defun haskell-doc-show-type (&optional sym)
-  "Show the type of the function near point.
+  "Show the type of the function near point or given symbol SYM.
 For the function under point, show the type in the echo area.
 This information is extracted from the `haskell-doc-prelude-types' alist
 of prelude functions and their types, or from the local functions in the
@@ -1488,21 +1456,17 @@ current buffer."
         ;; In Emacs 19.29 and later, and XEmacs 19.13 and later, all
         ;; messages are recorded in a log.  Do not put haskell-doc messages
         ;; in that log since they are legion.
-        (if (eval-when-compile (fboundp 'display-message))
-            ;; XEmacs 19.13 way of preventing log messages.
-            ;;(display-message 'no-log (format <args>))
-            ;; XEmacs 19.15 seems to be a bit different.
-            (display-message 'message (format "%s" doc))
-          (let ((message-log-max nil))
-            (message "%s" doc)))))))
+        (let ((message-log-max nil))
+          (message "%s" doc))))))
 
 (defvar haskell-doc-current-info--interaction-last nil
-  "If non-nil, a previous eldoc message from an async call, that
-  hasn't been displayed yet.")
+  "Async message stack.
+If non-nil, a previous eldoc message from an async call, that
+hasn't been displayed yet.")
 
 (defun haskell-doc-current-info--interaction (&optional sync)
-  "Asynchronous call to `haskell-process-get-type', suitable for
-use in the eldoc function `haskell-doc-current-info'.
+  "Asynchronous call to `haskell-process-get-type'.
+Suitable for use in the eldoc function `haskell-doc-current-info'.
 
 If SYNC is non-nil, the call will be synchronous instead, and
 instead of calling `eldoc-print-current-symbol-info', the result
@@ -1510,23 +1474,25 @@ will be returned directly."
   ;; Return nil if nothing is available, or 'async if something might
   ;; be available, but asynchronously later. This will call
   ;; `eldoc-print-current-symbol-info' later.
-  (let (sym prev-message)
-    (cond
-     ((setq prev-message haskell-doc-current-info--interaction-last)
-      (setq haskell-doc-current-info--interaction-last nil)
-      (cdr prev-message))
-     ((setq sym
-            (if (use-region-p)
-                (buffer-substring-no-properties
-                 (region-beginning) (region-end))
-              (haskell-ident-at-point)))
-      (if sync
-          (haskell-process-get-type sym #'identity t)
-        (haskell-process-get-type
-         sym (lambda (response)
-               (setq haskell-doc-current-info--interaction-last
-                     (cons 'async response))
-               (eldoc-print-current-symbol-info))))))))
+  (when (haskell-doc-in-code-p)
+    ;; do nothing when inside string or comment
+    (let (sym prev-message)
+      (cond
+       ((setq prev-message haskell-doc-current-info--interaction-last)
+        (setq haskell-doc-current-info--interaction-last nil)
+        (cdr prev-message))
+       ((setq sym
+              (if (use-region-p)
+                  (buffer-substring-no-properties
+                   (region-beginning) (region-end))
+                (haskell-ident-at-point)))
+        (if sync
+            (haskell-process-get-type sym #'identity t)
+          (haskell-process-get-type
+           sym (lambda (response)
+                 (setq haskell-doc-current-info--interaction-last
+                       (cons 'async response))
+                 (eldoc-print-current-symbol-info)))))))))
 
 (defun haskell-process-get-type (expr-string &optional callback sync)
   "Asynchronously get the type of a given string.
@@ -1569,21 +1535,17 @@ If SYNC is non-nil, make the call synchronously instead."
       (if sync
           (let ((response (haskell-process-queue-sync-request process ghci-command)))
             (funcall callback (funcall process-response response)))
-        (lexical-let ((process process)
-                      (callback callback)
-                      (ghci-command ghci-command)
-                      (process-response process-response))
-          (haskell-process-queue-command
-           process
-           (make-haskell-command
-            :go (lambda (_) (haskell-process-send-string process ghci-command))
-            :complete
-            (lambda (_ response)
-              (funcall callback (funcall process-response response))))))
+        (haskell-process-queue-command
+         process
+         (make-haskell-command
+          :go (lambda (_) (haskell-process-send-string process ghci-command))
+          :complete
+          (lambda (_ response)
+            (funcall callback (funcall process-response response)))))
         'async))))
 
 (defun haskell-doc-sym-doc (sym)
-  "Show the type of the function near point.
+  "Show the type of given symbol SYM.
 For the function under point, show the type in the echo area.
 This information is extracted from the `haskell-doc-prelude-types' alist
 of prelude functions and their types, or from the local functions in the
@@ -1769,23 +1731,6 @@ ToDo: Also eliminate leading and trailing whitespace."
     (while (setq i (string-match " [ \t\n]+\\|[\t\n]+" str (1+ i)))
       (setq str (replace-match " " t t str)))
     str))
-
-;; ToDo: make this more efficient!!
-;;(defun haskell-doc-string-nub-ws (str)
-;;  "Replace all sequences of whitespaces in STR by just one whitespace."
-;;  (let ( (res "")
-;;       (l (length str))
-;;       (i 0)
-;;       (j 0)
-;;       (in-ws nil))
-;;   (while (< i l)
-;;     (let* ( (c (string-to-char (substring str i (1+ i))))
-;;          (is-ws (eq (char-syntax c) ? )) )
-;;       (if (not (and in-ws is-ws))
-;;           (setq res (concat res (char-to-string c))))
-;;       (setq in-ws is-ws)
-;;       (setq i (1+ i))))
-;;   res))
 
 (defun haskell-doc-chop-off-context (str)
   "Eliminate the context in a type represented by the string STR."

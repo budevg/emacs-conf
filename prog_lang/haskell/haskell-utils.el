@@ -35,15 +35,20 @@
 
 ;;; Code:
 
-;; NOTE: This module is supposed to be a leaf-module and shall not
-;;       require/depend-on any other haskell-mode modules in order to
-;;       stay at the bottom of the module dependency graph.
+;; =============================================================================
+;;                                     NOTE:
+;; THIS MODULE IS SUPPOSED TO BE A LEAF-MODULE AND SHALL NOT REQUIRE/DEPEND-ON
+;; ANY OTHER HASKELL-MODE MODULES IN ORDER TO STAY AT THE BOTTOM OF THE MODULE
+;; DEPENDENCY GRAPH.
+;; =============================================================================
 
-(require 'haskell-customize)
+(eval-when-compile (require 'cl-lib))
 
-(defvar haskell-utils-async-post-command-flag nil
+(defvar-local haskell-utils-async-post-command-flag nil
   "Non-nil means some commands were triggered during async function execution.")
-(make-variable-buffer-local 'haskell-utils-async-post-command-flag)
+
+(defvar haskell-mode-interactive-prompt-state nil
+  "Special variable indicating a state of user input waiting.")
 
 (defun haskell-utils-read-directory-name (prompt default)
   "Read directory name and normalize to true absolute path.
@@ -127,18 +132,21 @@ Returns one of the following symbols:
   (:type-at and maybe some other commands error)
 * *all other reposnses* are treated as success reposneses and
   'no-error is returned."
-  (let ((first-line (car (split-string response "\n" t))))
-    (cond
-     ((null first-line) 'no-error)
-     ((string-match-p "^unknown command" first-line)
-      'unknown-command)
-     ((string-match-p
-       "^Couldn't guess that module name. Does it exist?"
-       first-line)
-      'option-missing)
-     ((string-match-p "^<interactive>:" first-line)
-      'interactive-error)
-     (t 'no-error))))
+  (if response
+      (let ((first-line (car (split-string response "\n" t))))
+        (cond
+         ((null first-line) 'no-error)
+         ((string-match-p "^unknown command" first-line)
+          'unknown-command)
+         ((string-match-p
+           "^Couldn't guess that module name. Does it exist?"
+           first-line)
+          'option-missing)
+         ((string-match-p "^<interactive>:" first-line)
+          'interactive-error)
+         (t 'no-error)))
+    ;; in case of nil-ish reponse it's not clear is it error response or not
+    'no-error))
 
 (defun haskell-utils-compose-type-at-command (pos)
   "Prepare :type-at command to be send to haskell process.
@@ -174,6 +182,12 @@ expression bounds."
                end-l
                end-c
                value)))))
+
+
+(defun haskell-mode-toggle-interactive-prompt-state (&optional disabled)
+  "Set `haskell-mode-interactive-prompt-state' to t.
+If given DISABLED argument sets variable value to nil, otherwise to t."
+  (setq haskell-mode-interactive-prompt-state (not disabled)))
 
 (provide 'haskell-utils)
 ;;; haskell-utils.el ends here

@@ -64,7 +64,7 @@ The `%s' placeholder is replaced by the current buffer's filename."
 
 (defconst haskell-compilation-error-regexp-alist
   `((,(concat
-       "^ *\\(?1:[^ \t\r\n]+?\\):"
+       "^ *\\(?1:[^\t\r\n]+?\\):"
        "\\(?:"
        "\\(?2:[0-9]+\\):\\(?4:[0-9]+\\)\\(?:-\\(?5:[0-9]+\\)\\)?" ;; "121:1" & "12:3-5"
        "\\|"
@@ -94,10 +94,8 @@ This is a child of `compilation-mode-map'.")
 
   (when haskell-compile-ghc-filter-linker-messages
     (delete-matching-lines "^ *Loading package [^ \t\r\n]+ [.]+ linking [.]+ done\\.$"
-                           (if (boundp 'compilation-filter-start) ;; available since Emacs 24.2
-                               (save-excursion (goto-char compilation-filter-start)
-                                               (line-beginning-position))
-                             (point-min))
+                           (save-excursion (goto-char compilation-filter-start)
+                                           (line-beginning-position))
                            (point))))
 
 (define-compilation-mode haskell-compilation-mode "HsCompilation"
@@ -108,8 +106,8 @@ format is supported, as well as info-locations within compile
 messages pointing to additional source locations.
 
 See Info node `(haskell-mode)compilation' for more details."
-  (set (make-local-variable 'compilation-error-regexp-alist)
-       haskell-compilation-error-regexp-alist)
+  (setq-local compilation-error-regexp-alist
+              haskell-compilation-error-regexp-alist)
 
   (add-hook 'compilation-filter-hook
             'haskell-compilation-filter-hook nil t)
@@ -138,8 +136,7 @@ derived from `compilation-mode'. See Info
 node `(haskell-mode)compilation' for more details."
   (interactive "P")
   (save-some-buffers (not compilation-ask-about-save)
-                     (if (boundp 'compilation-save-buffers-predicate) ;; since Emacs 24.1(?)
-                         compilation-save-buffers-predicate))
+                         compilation-save-buffers-predicate)
   (let* ((cabdir (haskell-cabal-find-dir))
          (command1 (if (eq edit-command '-)
                        haskell-compile-cabal-build-alt-command

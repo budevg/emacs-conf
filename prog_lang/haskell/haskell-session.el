@@ -36,9 +36,7 @@
 ;; Globals
 
 ;; Used internally
-(defvar haskell-session)
-
-(make-variable-buffer-local 'haskell-session)
+(defvar-local haskell-session nil)
 
 (defvar haskell-sessions (list)
   "All Haskell sessions in the Emacs session.")
@@ -65,7 +63,7 @@
                  (let ((dir (haskell-session-get a 'cabal-dir)))
                    (if dir
                        (if (string-prefix-p dir
-					    (file-name-directory (buffer-file-name)))
+                                            (file-name-directory (buffer-file-name)))
                            (if acc
                                (if (and
                                     (> (length (haskell-session-get a 'cabal-dir))
@@ -92,7 +90,7 @@
 This could be helpful for temporary or auxiliary buffers such as
 presentation mode buffers (e.g. in case when session is killed
 with all relevant buffers)."
-  (set (make-local-variable 'haskell-session) session))
+  (setq-local haskell-session session))
 
 (defun haskell-session-choose ()
   "Find a session by choosing from a list of the current sessions."
@@ -112,7 +110,7 @@ with all relevant buffers)."
 
 (defun haskell-session-clear ()
   "Clear the buffer of any Haskell session choice."
-  (set (make-local-variable 'haskell-session) nil))
+  (setq-local haskell-session nil))
 
 (defun haskell-session-lookup (name)
   "Get the session by name."
@@ -155,9 +153,9 @@ If `haskell-process-load-or-reload-prompt' is nil, accept `default'."
   (let* ((maybe-target (haskell-session-get s 'target))
          (target (if maybe-target maybe-target
                    (let ((new-target
-			  (if haskell-process-load-or-reload-prompt
-			      (read-string "build target (empty for default):")
-			    "")))
+                          (if haskell-process-load-or-reload-prompt
+                              (read-string "build target (empty for default):")
+                            "")))
                      (haskell-session-set-target s new-target)))))
     (if (not (string= target "")) target nil)))
 
@@ -198,10 +196,10 @@ If `haskell-process-load-or-reload-prompt' is nil, accept `default'."
   "Get the session cabal-dir."
   (or (haskell-session-get s 'cabal-dir)
       (let ((set-dir (haskell-cabal-get-dir (not haskell-process-load-or-reload-prompt))))
-	(if set-dir
-	    (progn (haskell-session-set-cabal-dir s set-dir)
-		   set-dir)
-	    (haskell-session-cabal-dir s)))))
+        (if set-dir
+            (progn (haskell-session-set-cabal-dir s set-dir)
+                   set-dir)
+            (haskell-session-cabal-dir s)))))
 
 (defun haskell-session-modify (session key update)
   "Update the value at KEY in SESSION with UPDATE."

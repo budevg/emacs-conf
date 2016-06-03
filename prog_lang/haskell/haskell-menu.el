@@ -48,20 +48,24 @@
   (switch-to-buffer-other-window (get-buffer haskell-menu-buffer-name))
   (haskell-menu-revert-function nil nil))
 
+(defvar haskell-menu-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "n") 'next-line)
+    (define-key map (kbd "p") 'previous-line)
+    (define-key map (kbd "RET") 'haskell-menu-mode-ret)
+    map)
+  "Keymap for `haskell-menu-mode'.")
+
 (define-derived-mode haskell-menu-mode special-mode "Haskell Session Menu"
   "Major mode for managing Haskell sessions.
 Each line describes one session.
 Letters do not insert themselves; instead, they are commands."
   (setq buffer-read-only t)
-  (set (make-local-variable 'revert-buffer-function)
-       'haskell-menu-revert-function)
+  (setq-local revert-buffer-function 'haskell-menu-revert-function)
   (setq truncate-lines t)
   (haskell-menu-revert-function nil t))
 
 (suppress-keymap haskell-menu-mode-map t)
-(define-key haskell-menu-mode-map (kbd "n") 'next-line)
-(define-key haskell-menu-mode-map (kbd "p") 'previous-line)
-(define-key haskell-menu-mode-map (kbd "RET") 'haskell-menu-mode-ret)
 
 (defun haskell-menu-revert-function (_arg1 _arg2)
   "Function to refresh the display."

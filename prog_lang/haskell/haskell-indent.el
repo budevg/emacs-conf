@@ -1489,9 +1489,8 @@ One indentation cycle is used."
 
 ;;; haskell-indent-mode
 
-(defvar haskell-indent-mode nil
+(defvar-local haskell-indent-mode nil
   "Non-nil if the semi-intelligent Haskell indentation mode is in effect.")
-(make-variable-buffer-local 'haskell-indent-mode)
 
 (defvar haskell-indent-map
   (let ((map (make-sparse-keymap)))
@@ -1499,15 +1498,15 @@ One indentation cycle is used."
     ;; (define-key map "\177"  'backward-delete-char-untabify)
     ;; The binding to TAB is already handled by indent-line-function.  --Stef
     ;; (define-key map "\t"    'haskell-indent-cycle)
-    (define-key map [?\C-c ?\C-=] 'haskell-indent-insert-equal)
-    (define-key map [?\C-c ?\C-|] 'haskell-indent-insert-guard)
+    (define-key map (kbd "C-c C-=") 'haskell-indent-insert-equal)
+    (define-key map (kbd "C-c C-|") 'haskell-indent-insert-guard)
     ;; Alternate binding, in case C-c C-| is too inconvenient to type.
     ;; Duh, C-g is a special key, let's not use it here.
-    ;; (define-key map [?\C-c ?\C-g] 'haskell-indent-insert-guard)
-    (define-key map [?\C-c ?\C-o] 'haskell-indent-insert-otherwise)
-    (define-key map [?\C-c ?\C-w] 'haskell-indent-insert-where)
-    (define-key map [?\C-c ?\C-.] 'haskell-indent-align-guards-and-rhs)
-    (define-key map [?\C-c ?\C->] 'haskell-indent-put-region-in-literate)
+    ;; (define-key map (kbd "C-c C-g") 'haskell-indent-insert-guard)
+    (define-key map (kbd "C-c C-o") 'haskell-indent-insert-otherwise)
+    (define-key map (kbd "C-c C-w") 'haskell-indent-insert-where)
+    (define-key map (kbd "C-c C-.") 'haskell-indent-align-guards-and-rhs)
+    (define-key map (kbd "C-c C->") 'haskell-indent-put-region-in-literate)
     map))
 
 ;;;###autoload
@@ -1517,16 +1516,15 @@ One indentation cycle is used."
              (fboundp 'haskell-indentation-mode))
     (haskell-indentation-mode 0))
 
-  (set (make-local-variable 'indent-line-function) 'haskell-indent-cycle)
-  (set (make-local-variable 'indent-region-function) 'haskell-indent-region)
+  (setq-local indent-line-function 'haskell-indent-cycle)
+  (setq-local indent-region-function 'haskell-indent-region)
   (setq haskell-indent-mode t)
   ;; Activate our keymap.
   (let ((map (current-local-map)))
     (while (and map (not (eq map haskell-indent-map)))
       (setq map (keymap-parent map)))
-    (if map
-        ;; haskell-indent-map is already active: nothing to do.
-        nil
+    ;; if haskell-indent-map is already active: there's nothing to do.
+    (unless map
       ;; Put our keymap on top of the others.  We could also put it in
       ;; second place, or in a minor-mode.  The minor-mode approach would be
       ;; easier, but it's harder for the user to override it.  This approach
@@ -1580,6 +1578,9 @@ these functions also align the guards and rhs of the current definition
       aligns the guards and rhs of the region
     \\[haskell-indent-put-region-in-literate]
       makes the region a piece of literate code in a literate script
+
+If `ARG' is falsey, toggle `haskell-indent-mode'.  Else sets
+`haskell-indent-mode' to whether `ARG' is greater than 0.
 
 Invokes `haskell-indent-hook' if not nil."
   (interactive "P")
