@@ -12,6 +12,8 @@
 (autoload 'haskell-process-load-or-reload "haskell" nil t)
 (autoload 'haskell-doc-current-info "haskell-doc" nil t)
 (autoload 'haskell-ds-create-imenu-index "haskell-decl-scan" nil t)
+(autoload 'haskell-mode-after-save-handler "haskell" nil t)
+(autoload 'haskell-completions-completion-at-point "haskell-completions" nil t)
 
 (eval-after-load "haskell-mode"
   '(progn
@@ -30,6 +32,9 @@
 (eval-after-load "haskell-interactive-mode"
   '(progn
      (define-key haskell-interactive-mode-map (kbd "C-c C-k") 'haskell-interactive-mode-clear)
+     (custom-set-variables
+      '(haskell-interactive-popup-errors nil)
+      )
      ))
 
 (defun haskell-who-calls (&optional prompt)
