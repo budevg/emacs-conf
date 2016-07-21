@@ -20,3 +20,6 @@
   (comint-send-file
    (in-emacs-d "source_control/.gitconfig")
    "~/.gitconfig"))
+
+(autoload 'browse-at-remote "browse-at-remote" nil t)
+(global-set-key (kbd "C-f a") 'browse-at-remote)

@@ -1,0 +1,7 @@
+(:name browse-at-remote
+       :description "Browse target page on github/bitbucket from emacs buffers"
+       :type github
+       :pkgname "rmuslimov/browse-at-remote"
+       :build `(,(concat "cp browse-at-remote.el "
+                         (in-emacs-d "source_control")))
+       :depends (f s cl-lib))
