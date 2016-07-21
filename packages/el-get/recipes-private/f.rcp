@@ -1,0 +1,8 @@
+(:name f
+       :website "https://github.com/rejeep/f.el"
+       :description "Modern API for working with files and directories in Emacs"
+       :depends (s dash)
+       :type github
+       :build `(,(concat "cp f.el "
+                         (in-emacs-d "lisp_lib")))
+       :pkgname "rejeep/f.el")
