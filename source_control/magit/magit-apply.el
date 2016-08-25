@@ -40,6 +40,9 @@
 (declare-function magit-checkout-stage 'magit)
 (declare-function magit-checkout-read-stage 'magit)
 (defvar auto-revert-verbose)
+;; For `magit-stage-untracked'
+(declare-function magit-submodule-add 'magit-submodule)
+(declare-function magit-submodule-read-name 'magit-submodule)
 
 (require 'dired)
 
@@ -193,18 +196,19 @@ so causes the change to be applied to the index as well."
 With a prefix argument, INTENT, and an untracked file (or files)
 at point, stage the file but not its content."
   (interactive "P")
-  (--when-let (magit-apply--get-selection)
-    (pcase (list (magit-diff-type) (magit-diff-scope))
-      (`(untracked     ,_) (magit-stage-untracked intent))
-      (`(unstaged  region) (magit-apply-region it "--cached"))
-      (`(unstaged    hunk) (magit-apply-hunk   it "--cached"))
-      (`(unstaged   hunks) (magit-apply-hunks  it "--cached"))
-      (`(unstaged    file) (magit-stage-1 "-u" (list (magit-section-value it))))
-      (`(unstaged   files) (magit-stage-1 "-u" (magit-region-values)))
-      (`(unstaged    list) (magit-stage-1 "-u"))
-      (`(staged        ,_) (user-error "Already staged"))
-      (`(committed     ,_) (user-error "Cannot stage committed changes"))
-      (`(undefined     ,_) (user-error "Cannot stage this change")))))
+  (--if-let (and (derived-mode-p 'magit-mode) (magit-apply--get-selection))
+      (pcase (list (magit-diff-type) (magit-diff-scope))
+        (`(untracked     ,_) (magit-stage-untracked intent))
+        (`(unstaged  region) (magit-apply-region it "--cached"))
+        (`(unstaged    hunk) (magit-apply-hunk   it "--cached"))
+        (`(unstaged   hunks) (magit-apply-hunks  it "--cached"))
+        (`(unstaged    file) (magit-stage-1 "-u" (list (magit-section-value it))))
+        (`(unstaged   files) (magit-stage-1 "-u" (magit-region-values)))
+        (`(unstaged    list) (magit-stage-1 "-u"))
+        (`(staged        ,_) (user-error "Already staged"))
+        (`(committed     ,_) (user-error "Cannot stage committed changes"))
+        (`(undefined     ,_) (user-error "Cannot stage this change")))
+    (call-interactively 'magit-stage-file)))
 
 ;;;###autoload
 (defun magit-stage-file (file)
@@ -269,7 +273,12 @@ ignored) files.
         (goto-char (magit-section-start
                     (magit-get-section
                      `((file . ,repo) (untracked) (status)))))
-        (call-interactively 'magit-submodule-add)))
+        (magit-submodule-add
+         (let ((default-directory
+                 (file-name-as-directory (expand-file-name repo))))
+           (magit-get "remote" (or (magit-get-remote) "origin") "url"))
+         repo
+         (magit-submodule-read-name repo))))
     (magit-wip-commit-after-apply files " after stage")))
 
 ;;;; Unstage

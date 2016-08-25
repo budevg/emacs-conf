@@ -37,8 +37,6 @@
 (declare-function magit-dired-jump 'magit)
 (declare-function magit-find-file-noselect 'magit)
 (declare-function magit-status-internal 'magit)
-;; For `magit-diff-wash-revision'
-(declare-function magit-insert-tags-header 'magit)
 ;; For `magit-diff-while-committing'
 (declare-function magit-commit-message-buffer 'magit)
 ;; For `magit-insert-revision-gravatar'
@@ -791,6 +789,7 @@ be committed."
 (defun magit-diff-buffer-file ()
   "Show diff for the blob or file visited in the current buffer."
   (interactive)
+  (require 'magit)
   (-if-let (file (magit-file-relative-name))
       (magit-mode-setup-internal #'magit-diff-mode
                                  (list (or magit-buffer-refname
@@ -821,6 +820,7 @@ for a revision."
           (atpoint (or (and (bound-and-true-p magit-blame-mode)
                             (magit-blame-chunk-get :hash))
                        mcommit
+                       magit-buffer-refname
                        (magit-branch-or-commit-at-point)
                        (magit-tag-at-point))))
      (nconc (cons (or (and (not current-prefix-arg) atpoint)
@@ -990,6 +990,15 @@ which, as the name suggests always visits the actual file."
           (rev (cond (force-worktree nil)
                      ((derived-mode-p 'magit-revision-mode)
                       (car magit-refresh-args))
+                     ((derived-mode-p 'magit-stash-mode)
+                      (magit-section-case
+                        (file (-> it
+                                  magit-section-parent
+                                  magit-section-value))
+                        (hunk (-> it
+                                  magit-section-parent
+                                  magit-section-parent
+                                  magit-section-value))))
                      ((derived-mode-p 'magit-diff-mode)
                       (--when-let (car magit-refresh-args)
                         (and (string-match "\\.\\.\\([^.].*\\)?[ \t]*\\'" it)
@@ -1135,7 +1144,8 @@ commit or stash at point, then prompt for a commit."
      ((derived-mode-p 'git-rebase-mode)
       (save-excursion
         (goto-char (line-beginning-position))
-        (--if-let (and (looking-at git-rebase-line)
+        (--if-let (and git-rebase-line
+                       (looking-at git-rebase-line)
                        (match-string 2))
             (setq rev it
                   cmd 'magit-show-commit
@@ -1235,12 +1245,14 @@ is set in `magit-mode-setup'."
 
 (defun magit-insert-diff (rev-or-range)
   "Insert the diff into this `magit-diff-mode' buffer."
-  (magit-git-wash #'magit-diff-wash-diffs
-    "diff" rev-or-range "-p" "--no-prefix"
-    (and (member "--stat" (nth 2 magit-refresh-args)) "--numstat")
-    (nth 1 magit-refresh-args)
-    (nth 2 magit-refresh-args) "--"
-    (nth 3 magit-refresh-args)))
+  (let ((magit-git-global-arguments
+         (remove "--literal-pathspecs" magit-git-global-arguments)))
+    (magit-git-wash #'magit-diff-wash-diffs
+      "diff" rev-or-range "-p" "--no-prefix"
+      (and (member "--stat" (nth 2 magit-refresh-args)) "--numstat")
+      (nth 1 magit-refresh-args)
+      (nth 2 magit-refresh-args) "--"
+      (nth 3 magit-refresh-args))))
 
 (defvar magit-file-section-map
   (let ((map (make-sparse-keymap)))
@@ -1572,16 +1584,18 @@ Staging and applying changes is documented in info node
 
 (defun magit-insert-revision-diff (rev)
   "Insert the diff into this `magit-revision-mode' buffer."
-  ;; Before v2.2.0, "--format=" did not mean "no output".
-  ;; Instead the default format was used.  So use "--format=%n"
-  ;; and then delete the empty lines.
-  (magit-git-wash (lambda (args)
-                    (delete-region (point) (progn (forward-line 3) (point)))
-                    (magit-diff-wash-diffs args))
-    "show" "-p" "--cc" "--format=%n" "--no-prefix"
-    (and (member "--stat" (nth 2 magit-refresh-args)) "--numstat")
-    (nth 2 magit-refresh-args) (concat rev "^{commit}") "--"
-    (nth 3 magit-refresh-args)))
+  (let ((magit-git-global-arguments
+         (remove "--literal-pathspecs" magit-git-global-arguments)))
+    ;; Before v2.2.0, "--format=" did not mean "no output".
+    ;; Instead the default format was used.  So use "--format=%n"
+    ;; and then delete the empty lines.
+    (magit-git-wash (lambda (args)
+                      (delete-region (point) (progn (forward-line 3) (point)))
+                      (magit-diff-wash-diffs args))
+      "show" "-p" "--cc" "--format=%n" "--no-prefix"
+      (and (member "--stat" (nth 2 magit-refresh-args)) "--numstat")
+      (nth 2 magit-refresh-args) (concat rev "^{commit}") "--"
+      (nth 3 magit-refresh-args))))
 
 (defun magit-insert-revision-tag (rev)
   "Insert tag message and headers into a revision buffer.
@@ -1613,6 +1627,9 @@ or a ref which is not a branch, then it inserts nothing."
       (if (= (point) (+ beg 2))
           (progn (backward-delete-char 2)
                  (insert "(no message)\n"))
+        (goto-char beg)
+        (while (search-forward "\r\n" nil t) ; Remove trailing CRs.
+          (delete-region (match-beginning 0) (1+ (match-beginning 0))))
         (goto-char beg)
         (forward-line)
         (put-text-property beg (point) 'face 'magit-section-secondary-heading)

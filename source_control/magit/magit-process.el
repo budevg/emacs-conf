@@ -45,6 +45,15 @@
 
 ;;; Options
 
+(defcustom magit-log-output-coding-system 'utf-8
+  "Default coding system for receiving log output from Git.
+
+Should be consistent with the Git config value `i18n.logOutputEncoding'."
+  :package-version '(magit . "2.8.0")
+  :group 'magit-process
+  :group 'magit-log
+  :type '(coding-system :tag "Coding system to decode Git log output"))
+
 (defcustom magit-process-connection-type (not (eq system-type 'cygwin))
   "Connection type used for the Git process.
 
@@ -139,10 +148,11 @@ itself from the hook, to avoid further futile attempts."
     ;; match-group 99 is used to identify a host
     "^\\(Enter \\)?[Pp]assword\\( for '\\(?99:.*\\)'\\)?: ?$"
     "^.*'s password: ?$"
-    "^Yubikey for .*: ?$")
+    "^Yubikey for .*: ?$"
+    "^Enter PIN for .*: ?$")
   "List of regexps matching password prompts of Git and its subprocesses.
 Also see `magit-process-find-password-functions'."
-  :package-version '(magit . "2.1.0")
+  :package-version '(magit . "2.8.0")
   :group 'magit-process
   :type '(repeat (regexp)))
 
@@ -227,7 +237,9 @@ optional NODISPLAY is non-nil also display it."
             (when magit-process-log-max
               (magit-process-truncate-log))
           (magit-process-mode)
-          (let ((inhibit-read-only t))
+          (let ((inhibit-read-only t)
+                (magit-insert-section--parent  nil)
+                (magit-insert-section--oldroot nil))
             (make-local-variable 'text-property-default-nonsticky)
             (magit-insert-section (processbuf)
               (insert "\n")))))
@@ -291,8 +303,10 @@ before use.
 Process output goes into a new section in the buffer returned by
 `magit-process-buffer'."
   (run-hooks 'magit-pre-call-git-hook)
-  (apply #'magit-call-process magit-git-executable
-         (magit-process-git-arguments args)))
+  (let ((coding-system-for-read
+         (or coding-system-for-read magit-log-output-coding-system)))
+    (apply #'magit-call-process magit-git-executable
+           (magit-process-git-arguments args))))
 
 (defun magit-call-process (program &rest args)
   "Call PROGRAM synchronously in a separate process.
@@ -440,8 +454,10 @@ and still alive), as well as the respective Magit status buffer.
 
 See `magit-start-process' for more information."
   (run-hooks 'magit-pre-start-git-hook)
-  (apply #'magit-start-process magit-git-executable input
-         (magit-process-git-arguments args)))
+  (let ((coding-system-for-read
+         (or coding-system-for-read magit-log-output-coding-system)))
+    (apply #'magit-start-process magit-git-executable input
+           (magit-process-git-arguments args))))
 
 (defun magit-start-process (program &optional input &rest args)
   "Start PROGRAM, prepare for refresh, and return the process object.
@@ -506,7 +522,8 @@ Magit status buffer."
 
 (defun magit-process-insert-section (pwd program args &optional errcode errlog)
   (let ((inhibit-read-only t)
-        (magit-insert-section--parent magit-root-section))
+        (magit-insert-section--parent magit-root-section)
+        (magit-insert-section--oldroot nil))
     (goto-char (1- (point-max)))
     (magit-insert-section (process)
       (insert (if errcode

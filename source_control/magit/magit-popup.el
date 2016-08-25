@@ -12,7 +12,7 @@
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
-;; Package-Requires: ((emacs "24.4") (async "20150909.2257") (dash "20151021.113"))
+;; Package-Requires: ((emacs "24.4") (async "20160711.223") (dash "20160820.501"))
 ;; Keywords: bindings
 ;; Homepage: https://github.com/magit/magit
 
@@ -63,14 +63,13 @@
 (declare-function Man-next-section 'man)
 
 ;; For the `:variable' event type.
-(declare-function magit-call-git 'magit-process)
 (declare-function magit-git-string 'magit-git)
 (declare-function magit-refresh 'magit-mode)
+(declare-function magit-get 'magit-git)
 (declare-function magit-set 'magit-git)
 
 ;; For branch actions.
 (declare-function magit-branch-set-face 'magit-git)
-(declare-function magit-local-branch-p 'magit-git)
 
 ;;; Settings
 ;;;; Custom Groups
@@ -180,6 +179,7 @@ that without users being aware of it could lead to tears.
     (define-key map [?\C-x ?\C-s] 'magit-popup-save-default-arguments)
     (define-key map [?\C-g]       'magit-popup-quit)
     (define-key map [??]          'magit-popup-help)
+    (define-key map [?\C-h ?k]    'magit-popup-help)
     (define-key map [?\C-h ?i]    'magit-popup-info)
     (define-key map [?\C-t]       'magit-popup-toggle-show-common-commands)
     (define-key map [?\d]         'backward-button)
@@ -472,7 +472,7 @@ usually specified in that order):
 
   Members of VALUE may also be nil.  This should only be used
   together with `:max-action-columns' and allows having gaps in
-  the action grit, which can help arranging actions sensibly.
+  the action grid, which can help arranging actions sensibly.
 
 `:default-action'
   The default action of the popup which is used directly instead
@@ -829,11 +829,10 @@ TYPE is one of `:action', `:sequence-action', `:switch', or
 
 (defun magit-popup-set-variable
     (variable choices &optional default other)
-  (--if-let (--if-let (magit-git-string "config" "--local" variable)
-                (cadr (member it choices))
-              (car choices))
-      (magit-set it variable)
-    (magit-call-git "config" "--unset" variable))
+  (magit-set (--if-let (magit-git-string "config" "--local" variable)
+                 (cadr (member it choices))
+               (car choices))
+             variable)
   (magit-refresh)
   (message "%s %s" variable
            (magit-popup-format-variable-1 variable choices default other)))
@@ -865,9 +864,10 @@ argument is used in which case the popup remains open.
 For a popup named `NAME-popup' that usually means setting the
 value of the custom option `NAME-arguments'."
   (interactive "P")
-  (customize-set-variable (magit-popup-get :variable)
-                          (magit-popup-get-args))
-  (unless arg (magit-popup-quit)))
+  (-if-let (var (magit-popup-get :variable))
+      (progn (customize-set-variable var (magit-popup-get-args))
+             (unless arg (magit-popup-quit)))
+    (user-error "Nothing to set")))
 
 (defun magit-popup-save-default-arguments (arg)
   "Save default value for the arguments for the current popup.
@@ -877,9 +877,10 @@ argument is used in which case the popup remains open.
 For a popup named `NAME-popup' that usually means saving the
 value of the custom option `NAME-arguments'."
   (interactive "P")
-  (customize-save-variable (magit-popup-get :variable)
-                           (magit-popup-get-args))
-  (unless arg (magit-popup-quit)))
+  (-if-let (var (magit-popup-get :variable))
+      (progn (customize-save-variable var (magit-popup-get-args))
+             (unless arg (magit-popup-quit)))
+    (user-error "Nothing to save")))
 
 ;;; Help
 
@@ -961,7 +962,7 @@ and are defined in `magit-popup-mode-map' (which see)."
     (split-window-below)
     (other-window 1)
     (with-no-warnings ; display-buffer-function is obsolete
-      (let ((display-buffer-alist nil)
+      (let ((display-buffer-alist '(("" display-buffer-use-some-window)))
             (display-buffer-function nil))
         (describe-function function)))
     (fit-window-to-buffer)
@@ -1167,12 +1168,14 @@ of events shared by all popups and before point is adjusted.")
 
 (defun magit-popup-format-variable-1
     (variable choices &optional default other)
+  "Print popup entry for git VARIABLE with possible CHOICES.
+DEFAULT is git's default choice for VARIABLE.  OTHER is a git
+variable whose value may be used as a default."
   (let ((local  (magit-git-string "config" "--local"  variable))
         (global (magit-git-string "config" "--global" variable)))
     (when other
-      (--if-let (magit-git-string "config" other)
-          (setq other (concat other ":" it))
-        (setq other nil)))
+      (setq other (--when-let (magit-get other)
+                    (concat other ":" it))))
     (concat
      (propertize "[" 'face 'magit-popup-disabled-argument)
      (mapconcat

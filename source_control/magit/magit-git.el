@@ -61,7 +61,7 @@
   ;; wrappers "cmd/git.exe" or "cmd/git.cmd", which are much slower
   ;; than using "bin/git.exe" directly.
   (or (and (eq system-type 'windows-nt)
-           (--when-let (executable-find "git.exe")
+           (--when-let (executable-find "git")
              (or (ignore-errors
                    ;; Git for Windows 2.x provides cygpath so we can
                    ;; ask it for native paths.  Using an upper case
@@ -187,7 +187,7 @@ change the upstream and many which create new branches."
 (defvar magit--refresh-cache nil)
 
 (defmacro magit--with-refresh-cache (key &rest body)
-  (declare (indent 1))
+  (declare (indent 1) (debug (form body)))
   (let ((k (cl-gensym)))
     `(if magit--refresh-cache
          (let ((,k ,key))
@@ -742,18 +742,18 @@ string \"true\", otherwise return nil."
 (defun magit-name-local-branch (rev &optional lax)
   (--when-let (magit-git-string "name-rev" "--name-only" "--no-undefined"
                                 "--refs=refs/heads/*" rev)
-    (and (or lax (not (string-match-p "~" it))) it)))
+    (and (or lax (not (string-match-p "[~^]" it))) it)))
 
 (defun magit-name-remote-branch (rev &optional lax)
   (--when-let (magit-git-string "name-rev" "--name-only" "--no-undefined"
                                 "--refs=refs/remotes/*" rev)
-    (and (or lax (not (string-match-p "~" it)))
+    (and (or lax (not (string-match-p "[~^]" it)))
          (substring it 8))))
 
 (defun magit-name-tag (rev &optional lax)
   (--when-let (magit-git-string "name-rev" "--name-only" "--no-undefined"
                                 "--refs=refs/tags/*" rev)
-    (and (or lax (not (string-match-p "~" it)))
+    (and (or lax (not (string-match-p "[~^]" it)))
          (substring it 5))))
 
 (defun magit-ref-fullname (name)
@@ -796,7 +796,8 @@ string \"true\", otherwise return nil."
   (or (magit-section-case
         (branch (magit-section-value it))
         (commit (let ((rev (magit-section-value it)))
-                  (or (magit-get-shortname rev) rev))))
+                  (or (magit-get-shortname rev) rev)))
+        (tag    (magit-section-value it)))
       (and (derived-mode-p 'magit-revision-mode)
            (car magit-refresh-args))))
 
@@ -1031,7 +1032,10 @@ where COMMITS is the number of commits in TAG but not in REV."
 
 (defun magit-list-worktrees ()
   (let (worktrees worktree)
-    (dolist (line (magit-git-lines "worktree" "list" "--porcelain"))
+    (dolist (line (let ((magit-git-standard-options
+                         ;; KLUDGE At least in v2.8.3 this triggers a segfault.
+                         (remove "--no-pager" magit-git-standard-options)))
+                    (magit-git-lines "worktree" "list" "--porcelain")))
       (cond ((string-prefix-p "worktree" line)
              (push (setq worktree (list (substring line 9) nil nil nil))
                    worktrees))
@@ -1430,7 +1434,7 @@ Return a list of two integers: (A>B B>A)."
 (defun magit-get-all (&rest keys)
   "Return all values of the Git config entry specified by KEYS."
   (let ((magit-git-debug nil))
-    (magit-git-lines "config" "--get-all" (mapconcat 'identity keys "."))))
+    (magit-git-items "config" "-z" "--get-all" (mapconcat 'identity keys "."))))
 
 (defun magit-get-boolean (&rest keys)
   "Return the boolean value of Git config entry specified by KEYS."
@@ -1438,9 +1442,14 @@ Return a list of two integers: (A>B B>A)."
 
 (defun magit-set (val &rest keys)
   "Set Git config settings specified by KEYS to VAL."
-  (if val
-      (magit-git-string "config" (mapconcat 'identity keys ".") val)
-    (magit-git-string "config" "--unset" (mapconcat 'identity keys "."))))
+  (let ((key (mapconcat 'identity keys ".")))
+    (if val
+        (magit-git-success "config" key val)
+      (magit-git-success "config" "--unset" key))
+    val))
+
+(gv-define-setter magit-get (val &rest keys)
+  `(magit-set ,val ,@keys))
 
 ;;; magit-git.el ends soon
 
