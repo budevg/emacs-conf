@@ -79,7 +79,7 @@ class ConfigBuilder(object):
 ''' % " ".join('"%s"' % e for e in path_elements))
                 self._data.append('''
 (setenv "PATH"
-        (concat "%s"
+        (concat "%s:"
          (getenv "PATH")))
 ''' % ":".join(path_elements))
 
