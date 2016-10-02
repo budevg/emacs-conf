@@ -7,6 +7,7 @@
 (add-to-list 'auto-mode-alist '("\\.cabal\\'" . haskell-cabal-mode))
 
 (autoload 'haskell-interactive-bring "haskell" nil t)
+(autoload 'haskell-mode-tag-find "haskell" nil t)
 (autoload 'haskell-mode-jump-to-def-or-tag "haskell-commands" nil t)
 (autoload 'haskell-process-do-type "haskell-commands" nil t)
 (autoload 'haskell-process-load-or-reload "haskell" nil t)
