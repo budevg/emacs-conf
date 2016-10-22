@@ -1,9 +1,8 @@
-
+import os
+import re
 import sys
 import argparse
 from configuration import Node, PACKAGES, FRAME
-import os
-import re
 
 def out(msg):
     print msg
@@ -24,6 +23,7 @@ class ConfigBuilder(object):
         self._action = action
         self._packages = packages
         self._frame = frame
+        self._data = []
 
     def build(self):
         if self._action == "create":
@@ -38,10 +38,10 @@ class ConfigBuilder(object):
                 os.makedirs(pkg_dir.dir)
 
     def _create(self):
-        self._data = []
         self._optimize_startup_time_start()
         self._gen_config_path()
         self._gen_exec_path()
+        self._gen_env()
         self._gen_load_packages()
         self._gen_frame_config()
         self._optimize_startup_time_end()
@@ -70,7 +70,7 @@ class ConfigBuilder(object):
 
         with open(bashrc) as f:
             for line in f:
-                m = re.match("^PATH=(.*):\$PATH$", line)
+                m = re.match(r"^PATH=(.*):\$PATH$", line)
                 if not m:
                     continue
                 path_elements = m.group(1).split(":")
@@ -83,6 +83,11 @@ class ConfigBuilder(object):
          (getenv "PATH")))
 ''' % ":".join(path_elements))
 
+    def _gen_env(self):
+        for k, v in {"PAGER" : "cat"}.iteritems():
+            self._data.append('(setenv "%s" "%s")' %
+                              (k, v))
+            self._data.append("")
 
     def _gen_load_packages(self):
         for pkg_dir in self._enum_dirs():
@@ -112,12 +117,12 @@ class ConfigBuilder(object):
             pkg = packages
             if cond == "file":
                 if pkg.path.endswith(".el"):
-                    yield Node(file = pkg.path)
+                    yield Node(file=pkg.path)
             elif cond == "dirs":
                 if pkg.path.endswith(".el"):
-                    yield Node(dir = os.path.dirname(pkg.path))
+                    yield Node(dir=os.path.dirname(pkg.path))
                 else:
-                    yield Node(dir = pkg.path)
+                    yield Node(dir=pkg.path)
 
     def _gen_frame_config(self):
         self._data.append('''
@@ -139,9 +144,14 @@ class ConfigBuilder(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Autogenerate emacs configuration')
-    parser.add_argument('--action', dest = 'action', action='store',
-                        default = 'create', required = True,
-                        help='specify action to use during autogeneration of emacs configuration')
+    parser.add_argument('--action',
+                        dest='action',
+                        action='store',
+                        default='create',
+                        required=True,
+                        help='specify action to use during '
+                             'autogeneration of emacs '
+                             'configuration')
 
     args = parser.parse_args()
     if args.action in ['create', 'skeleton']:
