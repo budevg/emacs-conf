@@ -22,7 +22,8 @@
                                      "iolatency"
                                      "iosnoop"
                                      "kprobe"
-                                     "tpoint")))
+                                     "tpoint"
+                                     "uprobe")))
          (src (concat (in-emacs-d "shell/ftrace/") util))
          (dst util))
     (comint-send-file-base64 src dst "+x")))
