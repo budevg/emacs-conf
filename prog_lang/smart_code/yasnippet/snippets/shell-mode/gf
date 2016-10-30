@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gf
+# key: gf
+# --
+git fetch origin && git checkout -f origin/${1:master}$0

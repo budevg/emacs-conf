@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gr
+# key: gr
+# --
+rsync -avR \`git ls-files -m\` ${1:host}:${2:dst}$0
