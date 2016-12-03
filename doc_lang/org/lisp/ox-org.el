@@ -1,6 +1,6 @@
-;;; ox-org.el --- Org Back-End for Org Export Engine
+;;; ox-org.el --- Org Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2016 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
 ;; Keywords: org, wp
@@ -25,7 +25,8 @@
 ;;; Code:
 
 (require 'ox)
-(declare-function htmlize-buffer "htmlize" (&optional buffer))
+(declare-function htmlize-buffer "ext:htmlize" (&optional buffer))
+(defvar htmlize-output-type)
 
 (defgroup org-export-org nil
   "Options for exporting Org mode files to Org."
@@ -34,8 +35,6 @@
   :version "24.4"
   :package-version '(Org . "8.0"))
 
-(define-obsolete-variable-alias
-  'org-export-htmlized-org-css-url 'org-org-htmlized-css-url "24.4")
 (defcustom org-org-htmlized-css-url nil
   "URL pointing to the CSS defining colors for htmlized Emacs buffers.
 Normally when creating an htmlized version of an Org buffer,
@@ -45,7 +44,7 @@ look bad if different people with different fontification setup
 work on the same website.  When this variable is non-nil,
 creating an htmlized version of an Org buffer using
 `org-org-export-as-org' will include a link to this URL if the
-setting of `org-html-htmlize-output-type' is 'css."
+setting of `org-html-htmlize-output-type' is `css'."
   :group 'org-export-org
   :type '(choice
 	  (const :tag "Don't include external stylesheet link" nil)
@@ -62,6 +61,7 @@ setting of `org-html-htmlize-output-type' is 'css."
     (dynamic-block . org-org-identity)
     (entity . org-org-identity)
     (example-block . org-org-identity)
+    (export-block . org-org-export-block)
     (fixed-width . org-org-identity)
     (footnote-definition . ignore)
     (footnote-reference . org-org-identity)
@@ -109,7 +109,13 @@ setting of `org-html-htmlize-output-type' is 'css."
 	      (if a (org-org-export-to-org t s v b)
 		(org-open-file (org-org-export-to-org nil s v b))))))))
 
-(defun org-org-identity (blob contents info)
+(defun org-org-export-block (export-block _contents _info)
+  "Transcode a EXPORT-BLOCK element from Org to LaTeX.
+CONTENTS and INFO are ignored."
+  (and (equal (org-element-property :type export-block) "ORG")
+       (org-element-property :value export-block)))
+
+(defun org-org-identity (blob contents _info)
   "Transcode BLOB element or object back into Org syntax.
 CONTENTS is its contents, as a string or nil.  INFO is ignored."
   (let ((case-fold-search t))
@@ -131,7 +137,7 @@ CONTENTS is its contents, as a string or nil.  INFO is ignored."
 			      (org-export-get-relative-level headline info))
     (org-element-headline-interpreter headline contents)))
 
-(defun org-org-keyword (keyword contents info)
+(defun org-org-keyword (keyword _contents _info)
   "Transcode KEYWORD element back into Org syntax.
 CONTENTS is nil.  INFO is ignored."
   (let ((key (org-element-property :key keyword)))
@@ -139,7 +145,7 @@ CONTENTS is nil.  INFO is ignored."
 		    '("AUTHOR" "CREATOR" "DATE" "EMAIL" "OPTIONS" "TITLE"))
       (org-element-keyword-interpreter keyword nil))))
 
-(defun org-org-link (link contents info)
+(defun org-org-link (link contents _info)
   "Transcode LINK object back into Org syntax.
 CONTENTS is the description of the link, as a string, or nil.
 INFO is a plist containing current export state."
@@ -202,7 +208,7 @@ a communication channel."
 		  (mapconcat
 		   (lambda (d)
 		     (org-element-normalize-string
-		      (concat (format "[%s] "(car d))
+		      (concat (format "[fn:%s] "(car d))
 			      (org-export-data (cdr d) info))))
 		   footnotes-alist "\n"))))
    (make-string (or (org-element-property :post-blank section) 0) ?\n)))
@@ -297,8 +303,8 @@ Return output file name."
 	   (work-buffer (or visitingp (find-file-noselect filename)))
 	   newbuf)
       (with-current-buffer work-buffer
-        (font-lock-ensure)
-        (show-all)
+        (org-font-lock-ensure)
+        (outline-show-all)
         (org-show-block-all)
         (setq newbuf (htmlize-buffer)))
       (with-current-buffer newbuf

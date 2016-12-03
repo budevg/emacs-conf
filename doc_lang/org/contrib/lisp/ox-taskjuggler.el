@@ -1,6 +1,6 @@
 ;;; ox-taskjuggler.el --- TaskJuggler Back-End for Org Export Engine
 ;;
-;; Copyright (C) 2007-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2016 Free Software Foundation, Inc.
 ;;
 ;; Emacs Lisp Archive Entry
 ;; Filename: ox-taskjuggler.el
@@ -603,7 +603,7 @@ doesn't include leading \"depends\"."
 		   (let ((id (org-element-property :TASK_ID dep)))
 		     (and id
 			  (string-match (concat id " +\\({.*?}\\)") dep-str)
-			  (org-match-string-no-properties 1 dep-str))))
+			  (match-string-no-properties 1 dep-str))))
 		  path)
 	      ;; Compute number of exclamation marks by looking for the
 	      ;; common ancestor between TASK and DEP.

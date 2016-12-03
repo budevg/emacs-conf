@@ -1,6 +1,6 @@
-;;; ob-groovy.el --- org-babel functions for Groovy evaluation
+;;; ob-groovy.el --- Babel Functions for Groovy      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2016 Free Software Foundation, Inc.
 
 ;; Author: Miro Bezjak
 ;; Keywords: literate programming, reproducible research
@@ -31,7 +31,6 @@
 
 ;;; Code:
 (require 'ob)
-(eval-when-compile (require 'cl))
 
 (defvar org-babel-tangle-lang-exts) ;; Autoloaded
 (add-to-list 'org-babel-tangle-lang-exts '("groovy" . "groovy"))
@@ -51,9 +50,8 @@ called by `org-babel-execute-src-block'"
   (message "executing Groovy source code block")
   (let* ((processed-params (org-babel-process-params params))
          (session (org-babel-groovy-initiate-session (nth 0 processed-params)))
-         (vars (nth 1 processed-params))
          (result-params (nth 2 processed-params))
-         (result-type (cdr (assoc :result-type params)))
+         (result-type (cdr (assq :result-type params)))
          (full-body (org-babel-expand-body:generic
                      body params))
          (result (org-babel-groovy-evaluate
@@ -62,9 +60,9 @@ called by `org-babel-execute-src-block'"
     (org-babel-reassemble-table
      result
      (org-babel-pick-name
-      (cdr (assoc :colname-names params)) (cdr (assoc :colnames params)))
+      (cdr (assq :colname-names params)) (cdr (assq :colnames params)))
      (org-babel-pick-name
-      (cdr (assoc :rowname-names params)) (cdr (assoc :rownames params))))))
+      (cdr (assq :rowname-names params)) (cdr (assq :rownames params))))))
 
 (defvar org-babel-groovy-wrapper-method
 
@@ -78,19 +76,19 @@ println(new Runner().run())
 
 
 (defun org-babel-groovy-evaluate
-  (session body &optional result-type result-params)
+    (session body &optional result-type result-params)
   "Evaluate BODY in external Groovy process.
-If RESULT-TYPE equals 'output then return standard output as a string.
-If RESULT-TYPE equals 'value then return the value of the last statement
+If RESULT-TYPE equals `output' then return standard output as a string.
+If RESULT-TYPE equals `value' then return the value of the last statement
 in BODY as elisp."
   (when session (error "Sessions are not (yet) supported for Groovy"))
-  (case result-type
-    (output
+  (pcase result-type
+    (`output
      (let ((src-file (org-babel-temp-file "groovy-")))
        (progn (with-temp-file src-file (insert body))
               (org-babel-eval
                (concat org-babel-groovy-command " " src-file) ""))))
-    (value
+    (`value
      (let* ((src-file (org-babel-temp-file "groovy-"))
             (wrapper (format org-babel-groovy-wrapper-method body)))
        (with-temp-file src-file (insert wrapper))
@@ -101,11 +99,11 @@ in BODY as elisp."
            (org-babel-script-escape raw)))))))
 
 
-(defun org-babel-prep-session:groovy (session params)
+(defun org-babel-prep-session:groovy (_session _params)
   "Prepare SESSION according to the header arguments specified in PARAMS."
   (error "Sessions are not (yet) supported for Groovy"))
 
-(defun org-babel-groovy-initiate-session (&optional session)
+(defun org-babel-groovy-initiate-session (&optional _session)
   "If there is not a current inferior-process-buffer in SESSION
 then create.  Return the initialized session.  Sessions are not
 supported in Groovy."

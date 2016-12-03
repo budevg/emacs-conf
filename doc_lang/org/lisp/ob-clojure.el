@@ -1,6 +1,6 @@
-;;; ob-clojure.el --- org-babel functions for clojure evaluation
+;;; ob-clojure.el --- Babel Functions for Clojure    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
 ;; Author: Joel Boehland, Eric Schulte, Oleh Krehel
 ;;
@@ -39,12 +39,15 @@
 ;; web page: http://technomancy.us/126
 
 ;;; Code:
+(require 'cl-lib)
 (require 'ob)
-(eval-when-compile
-  (require 'cl))
 
+(declare-function cider-current-connection "ext:cider-client" (&optional type))
+(declare-function cider-current-session "ext:cider-client" ())
 (declare-function nrepl-dict-get "ext:nrepl-client" (dict key))
-(declare-function nrepl-sync-request:eval "ext:nrepl-client" (input &optional ns session))
+(declare-function nrepl-sync-request:eval "ext:nrepl-client"
+		  (input connection session &optional ns))
+(declare-function org-trim "org" (s &optional keep-lead))
 (declare-function slime-eval "ext:slime" (sexp &optional package))
 
 (defvar org-babel-tangle-lang-exts)
@@ -64,18 +67,17 @@
 
 (defun org-babel-expand-body:clojure (body params)
   "Expand BODY according to PARAMS, return the expanded body."
-  (let* ((vars (mapcar #'cdr (org-babel-get-header params :var)))
-	 (result-params (cdr (assoc :result-params params)))
+  (let* ((vars (org-babel--get-vars params))
+	 (result-params (cdr (assq :result-params params)))
 	 (print-level nil) (print-length nil)
-	 (body (org-babel-trim
-		(if (> (length vars) 0)
-		    (concat "(let ["
-			    (mapconcat
-			     (lambda (var)
-			       (format "%S (quote %S)" (car var) (cdr var)))
-			     vars "\n      ")
-			    "]\n" body ")")
-		  body))))
+	 (body (org-trim
+		(if (null vars) (org-trim body)
+		  (concat "(let ["
+			  (mapconcat
+			   (lambda (var)
+			     (format "%S (quote %S)" (car var) (cdr var)))
+			   vars "\n      ")
+			  "]\n" body ")")))))
     (if (or (member "code" result-params)
 	    (member "pp" result-params))
 	(format "(clojure.pprint/pprint (do %s))" body)
@@ -85,13 +87,14 @@
   "Execute a block of Clojure code with Babel."
   (let ((expanded (org-babel-expand-body:clojure body params))
 	result)
-    (case org-babel-clojure-backend
+    (cl-case org-babel-clojure-backend
       (cider
        (require 'cider)
-       (let ((result-params (cdr (assoc :result-params params))))
+       (let ((result-params (cdr (assq :result-params params))))
 	 (setq result
 	       (nrepl-dict-get
-		(nrepl-sync-request:eval expanded)
+		(nrepl-sync-request:eval
+		 expanded (cider-current-connection) (cider-current-session))
 		(if (or (member "output" result-params)
 			(member "pp" result-params))
 		    "out"
@@ -99,13 +102,13 @@
       (slime
        (require 'slime)
        (with-temp-buffer
-    	 (insert expanded)
+	 (insert expanded)
 	 (setq result
 	       (slime-eval
 		`(swank:eval-and-grab-output
 		  ,(buffer-substring-no-properties (point-min) (point-max)))
-		(cdr (assoc :package params)))))))
-    (org-babel-result-cond (cdr (assoc :result-params params))
+		(cdr (assq :package params)))))))
+    (org-babel-result-cond (cdr (assq :result-params params))
       result
       (condition-case nil (org-babel-script-escape result)
 	(error result)))))

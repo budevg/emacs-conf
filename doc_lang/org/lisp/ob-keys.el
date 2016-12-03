@@ -1,6 +1,6 @@
-;;; ob-keys.el --- key bindings for org-babel
+;;; ob-keys.el --- Key Bindings for Babel            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -23,8 +23,8 @@
 
 ;;; Commentary:
 
-;; Add org-babel keybindings to the org-mode keymap for exposing
-;; org-babel functions.  These will all share a common prefix.  See
+;; Add Org Babel keybindings to the Org mode keymap for exposing
+;; Org Babel functions.  These will all share a common prefix.  See
 ;; the value of `org-babel-key-bindings' for a list of interactive
 ;; functions and their associated keys.
 

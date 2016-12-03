@@ -47,6 +47,7 @@
 		     (italic . org-confluence-italic)
                      (item . org-confluence-item)
 		     (link . org-confluence-link)
+		     (paragraph . org-confluence-paragraph)
 		     (property-drawer . org-confluence-property-drawer)
 		     (section . org-confluence-section)
 		     (src-block . org-confluence-src-block)
@@ -56,6 +57,11 @@
 		     (table-row . org-confluence-table-row)
 		     (template . org-confluence-template)
 		     (underline . org-confluence-underline)))
+
+(defcustom org-confluence-lang-alist
+  '(("sh" . "bash"))
+  "Map from org-babel language name to confluence wiki language name"
+  :type '(alist :key-type string :value-type string))
 
 ;; All the functions we use
 (defun org-confluence-bold (bold contents info)
@@ -101,6 +107,12 @@
               raw-link))
             "]")))
 
+(defun org-confluence-paragraph (paragraph contents info)
+  "Transcode PARAGRAPH element for Confluence.
+CONTENTS is the paragraph contents.  INFO is a plist used as
+a communication channel."
+  contents)
+
 (defun org-confluence-property-drawer (property-drawer contents info)
   (and (org-string-nw-p contents)
        (format "\{\{%s\}\}" contents)))
@@ -111,8 +123,7 @@
 (defun org-confluence-src-block (src-block contents info)
   ;; FIXME: provide a user-controlled variable for theme
   (let* ((lang (org-element-property :language src-block))
-         (language (if (string= lang "sh") "bash" ;; FIXME: provide a mapping of some sort
-                     lang))
+         (language (or (cdr (assoc lang org-confluence-lang-alist)) lang))
          (content (org-export-format-code-default src-block info)))
     (org-confluence--block language "Emacs" content)))
 

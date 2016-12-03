@@ -1,6 +1,6 @@
-;;; ob-J.el --- org-babel functions for J evaluation
+;;; ob-J.el --- Babel Functions for J                -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2016 Free Software Foundation, Inc.
 
 ;; Author: Oleh Krehel
 ;; Keywords: literate programming, reproducible research
@@ -29,12 +29,20 @@
 ;; (available in MELPA).
 
 ;;; Code:
+
 (require 'ob)
 
-(declare-function org-trim "org" (S))
+(declare-function org-trim "org" (s &optional keep-lead))
 (declare-function j-console-ensure-session "ext:j-console" ())
 
-(defun org-babel-expand-body:J (body params &optional processed-params)
+(defcustom org-babel-J-command "jconsole"
+  "Command to call J."
+  :group 'org-babel
+  :version "25.2"
+  :package-version '(Org . "9.0")
+  :type 'string)
+
+(defun org-babel-expand-body:J (body _params &optional _processed-params)
   "Expand BODY according to PARAMS, return the expanded body.
 PROCESSED-PARAMS isn't used yet."
   (org-babel-J-interleave-echos-except-functions body))
@@ -59,26 +67,25 @@ PROCESSED-PARAMS isn't used yet."
 	 (org-babel-J-interleave-echos-except-functions s3)))
     (org-babel-J-interleave-echos body)))
 
+(defalias 'org-babel-execute:j 'org-babel-execute:J)
+
 (defun org-babel-execute:J (body params)
   "Execute a block of J code BODY.
 PARAMS are given by org-babel.
 This function is called by `org-babel-execute-src-block'"
   (message "executing J source code block")
   (let* ((processed-params (org-babel-process-params params))
-	 (sessionp (cdr (assoc :session params)))
-         (session (org-babel-j-initiate-session sessionp))
-         (vars (nth 2 processed-params))
-         (result-params (nth 3 processed-params))
-         (result-type (nth 4 processed-params))
+	 (sessionp (cdr (assq :session params)))
          (full-body (org-babel-expand-body:J
                      body params processed-params))
 	 (tmp-script-file (org-babel-temp-file "J-src")))
+    (org-babel-j-initiate-session sessionp)
     (org-babel-J-strip-whitespace
      (if (string= sessionp "none")
 	 (progn
 	   (with-temp-file tmp-script-file
 	     (insert full-body))
-	   (org-babel-eval (format "jconsole < %s" tmp-script-file) ""))
+	   (org-babel-eval (format "%s < %s" org-babel-J-command tmp-script-file) ""))
        (org-babel-J-eval-string full-body)))))
 
 (defun org-babel-J-eval-string (str)

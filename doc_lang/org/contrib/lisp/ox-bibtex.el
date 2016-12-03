@@ -92,7 +92,7 @@
 
 ;; Initialization
 
-(eval-when-compile (require 'cl))
+(require 'cl-lib)
 
 ;;; Internal Functions
 
@@ -136,7 +136,7 @@ contains a list of strings to be passed as options to
 
 (defun org-bibtex-citation-p (object)
   "Non-nil when OBJECT is a citation."
-  (case (org-element-type object)
+  (cl-case (org-element-type object)
     (link (equal (org-element-property :type object) "cite"))
     (latex-fragment
      (string-match "\\`\\\\cite{" (org-element-property :value object)))))
@@ -159,9 +159,7 @@ to `org-bibtex-citation-p' predicate."
 (defun org-bibtex-goto-citation (&optional citation)
   "Visit a citation given its ID."
   (interactive)
-  (let ((citation (or citation
-		      (org-icompleting-read "Citation: "
-					    (obe-citations)))))
+  (let ((citation (or citation (completing-read "Citation: " (obe-citations)))))
     (find-file (or org-bibtex-file
 		   (error "`org-bibtex-file' has not been configured")))
     (goto-char (point-min))
@@ -169,7 +167,7 @@ to `org-bibtex-citation-p' predicate."
       (outline-previous-visible-heading 1)
       t)))
 
-(let ((jump-fn (car (org-remove-if-not #'fboundp '(ebib org-bibtex-goto-citation)))))
+(let ((jump-fn (car (cl-remove-if-not #'fboundp '(ebib org-bibtex-goto-citation)))))
   (org-add-link-type "cite" jump-fn))
 
 
@@ -248,6 +246,7 @@ Return new parse tree."
 		(insert (format "<div id=\"bibliography\">\n<h2>%s</h2>\n"
 				(org-export-translate "References" :html info)))
 		(insert-file-contents (concat out-file ".html"))
+		(goto-char (point-max))
 		(insert "\n</div>"))
 	       ((org-export-derived-backend-p backend 'ascii)
 		;; convert HTML references to text w/pandoc
@@ -304,7 +303,7 @@ the HTML and ASCII backends."
 		  next)
 	      (while (and (setq next (org-export-get-next-element object info))
 			  (or (and (stringp next)
-				   (not (org-string-match-p "\\S-" next)))
+				   (not (string-match-p "\\S-" next)))
 			      (org-bibtex-citation-p next)))
 		(unless (stringp next)
 		  (push (org-bibtex-get-citation-key next) keys))

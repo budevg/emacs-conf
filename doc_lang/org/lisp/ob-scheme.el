@@ -1,6 +1,6 @@
-;;; ob-scheme.el --- org-babel functions for Scheme
+;;; ob-scheme.el --- Babel Functions for Scheme      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2016 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	    Michael Gauland
@@ -45,17 +45,18 @@
 (defvar geiser-default-implementation) ; Defined in geiser-impl.el
 (defvar geiser-active-implementations) ; Defined in geiser-impl.el
 
-(declare-function run-geiser "geiser-repl" (impl))
-(declare-function geiser-mode "geiser-mode" ())
-(declare-function geiser-eval-region "geiser-mode" (start end &optional and-go raw nomsg))
-(declare-function geiser-repl-exit "geiser-repl" (&optional arg))
+(declare-function run-geiser "ext:geiser-repl" (impl))
+(declare-function geiser-mode "ext:geiser-mode" ())
+(declare-function geiser-eval-region "ext:geiser-mode"
+                  (start end &optional and-go raw nomsg))
+(declare-function geiser-repl-exit "ext:geiser-repl" (&optional arg))
 
 (defvar org-babel-default-header-args:scheme '()
   "Default header arguments for scheme code blocks.")
 
 (defun org-babel-expand-body:scheme (body params)
   "Expand BODY according to PARAMS, return the expanded body."
-  (let ((vars (mapcar #'cdr (org-babel-get-header params :var))))
+  (let ((vars (org-babel--get-vars params)))
     (if (> (length vars) 0)
         (concat "(let ("
                 (mapconcat
@@ -109,7 +110,7 @@ For a named session, the buffer name will be the session name.
 
 If the session is unnamed (nil), generate a name.
 
-If the session is 'none', use nil for the session name, and
+If the session is `none', use nil for the session name, and
 org-babel-scheme-execute-with-geiser will use a temporary session."
   (let ((result
 	 (cond ((not name)
@@ -172,7 +173,7 @@ is true; otherwise returns the last value."
 	(setq result (if (or (string= result "#<void>")
 			     (string= result "#<unspecified>"))
 			 nil
-		       (read result)))))
+		       result))))
     result))
 
 (defun org-babel-execute:scheme (body params)
@@ -184,23 +185,23 @@ This function is called by `org-babel-execute-src-block'"
 			      (buffer-name source-buffer))))
     (save-excursion
       (org-babel-reassemble-table
-       (let* ((result-type (cdr (assoc :result-type params)))
-	      (impl (or (when (cdr (assoc :scheme params))
-			  (intern (cdr (assoc :scheme params))))
+       (let* ((result-type (cdr (assq :result-type params)))
+	      (impl (or (when (cdr (assq :scheme params))
+			  (intern (cdr (assq :scheme params))))
 			geiser-default-implementation
 			(car geiser-active-implementations)))
 	      (session (org-babel-scheme-make-session-name
-			source-buffer-name (cdr (assoc :session params)) impl))
+			source-buffer-name (cdr (assq :session params)) impl))
 	      (full-body (org-babel-expand-body:scheme body params)))
 	 (org-babel-scheme-execute-with-geiser
 	  full-body			 ; code
 	  (string= result-type "output") ; output?
 	  impl				 ; implementation
 	  (and (not (string= session "none")) session))) ; session
-       (org-babel-pick-name (cdr (assoc :colname-names params))
-			    (cdr (assoc :colnames params)))
-       (org-babel-pick-name (cdr (assoc :rowname-names params))
-			    (cdr (assoc :rownames params)))))))
+       (org-babel-pick-name (cdr (assq :colname-names params))
+			    (cdr (assq :colnames params)))
+       (org-babel-pick-name (cdr (assq :rowname-names params))
+			    (cdr (assq :rownames params)))))))
 
 (provide 'ob-scheme)
 

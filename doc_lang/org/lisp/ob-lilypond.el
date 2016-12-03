@@ -1,6 +1,6 @@
-;;; ob-lilypond.el --- org-babel functions for lilypond evaluation
+;;; ob-lilypond.el --- Babel Functions for Lilypond  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2016 Free Software Foundation, Inc.
 
 ;; Author: Martyn Jago
 ;; Keywords: babel language, literate programming
@@ -92,7 +92,7 @@ you can leave the string empty on this case."
   :version "24.3"
   :package-version '(Org . "8.2.7")
   :set
-  (lambda (symbol value)
+  (lambda (_symbol value)
     (setq
      org-babel-lilypond-ly-command   (nth 0 value)
      org-babel-lilypond-pdf-command  (nth 1 value)
@@ -123,14 +123,14 @@ blocks.")
 
 (defun org-babel-expand-body:lilypond (body params)
   "Expand BODY according to PARAMS, return the expanded body."
-  (let ((vars (mapcar #'cdr (org-babel-get-header params :var))))
+  (let ((vars (org-babel--get-vars params)))
     (mapc
      (lambda (pair)
        (let ((name (symbol-name (car pair)))
 	     (value (cdr pair)))
 	 (setq body
 	       (replace-regexp-in-string
-		(concat "\$" (regexp-quote name))
+		(concat "$" (regexp-quote name))
 		(if (stringp value) value (format "%S" value))
 		body))))
      vars)
@@ -157,9 +157,8 @@ specific arguments to =org-babel-tangle="
 
 (defun org-babel-lilypond-process-basic (body params)
   "Execute a lilypond block in basic mode."
-  (let* ((result-params (cdr (assoc :result-params params)))
-	 (out-file (cdr (assoc :file params)))
-	 (cmdline (or (cdr (assoc :cmdline params))
+  (let* ((out-file (cdr (assq :file params)))
+	 (cmdline (or (cdr (assq :cmdline params))
 		      ""))
 	 (in-file (org-babel-temp-file "lilypond-")))
 
@@ -182,7 +181,7 @@ specific arguments to =org-babel-tangle="
       cmdline
       in-file) "")) nil)
 
-(defun org-babel-prep-session:lilypond (session params)
+(defun org-babel-prep-session:lilypond (_session _params)
   "Return an error because LilyPond exporter does not support sessions."
   (error "Sorry, LilyPond does not currently support sessions!"))
 
@@ -265,32 +264,26 @@ LINE is the erroneous line"
     (setq case-fold-search nil)
     (if (search-forward line nil t)
         (progn
-          (show-all)
+          (outline-show-all)
           (set-mark (point))
           (goto-char (- (point) (length line))))
       (goto-char temp))))
 
 (defun org-babel-lilypond-parse-line-num (&optional buffer)
   "Extract error line number."
-  (when buffer
-    (set-buffer buffer))
+  (when buffer (set-buffer buffer))
   (let ((start
          (and (search-backward ":" nil t)
               (search-backward ":" nil t)
               (search-backward ":" nil t)
-              (search-backward ":" nil t)))
-        (num nil))
-    (if start
-        (progn
-          (forward-char)
-          (let ((num (buffer-substring
-                      (+ 1 start)
-                      (- (search-forward ":" nil t) 1))))
-            (setq num (string-to-number num))
-            (if (numberp num)
-                num
-              nil)))
-      nil)))
+              (search-backward ":" nil t))))
+    (when start
+      (forward-char)
+      (let ((num (string-to-number
+		  (buffer-substring
+		   (+ 1 start)
+		   (- (search-forward ":" nil t) 1)))))
+	(and (numberp num) num)))))
 
 (defun org-babel-lilypond-parse-error-line (file-name lineNo)
   "Extract the erroneous line from the tangled .ly file
