@@ -1,0 +1,61 @@
+From 0009318f180d170b0fc0df53cfb747099e5d156f Mon Sep 17 00:00:00 2001
+From: Evgeny Budilovsky <budevg@gmail.com>
+Date: Sat, 3 Dec 2016 18:41:22 +0200
+Subject: [PATCH] local patch
+
+Signed-off-by: Evgeny Budilovsky <budevg@gmail.com>
+---
+ src/frame.c | 6 +++---
+ src/xfns.c  | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/frame.c b/src/frame.c
+index 854f72e..0be20c9 100644
+--- a/src/frame.c
++++ b/src/frame.c
+@@ -3884,7 +3884,7 @@ x_set_vertical_scroll_bars (struct frame *f, Lisp_Object arg, Lisp_Object oldval
+ 	 However, if the window hasn't been created yet, we shouldn't
+ 	 call x_set_window_size.  */
+       if (FRAME_X_WINDOW (f))
+-	adjust_frame_size (f, -1, -1, 3, 0, Qvertical_scroll_bars);
++	adjust_frame_size (f, -1, -1, 3, 0, Qnil);
+ 
+       SET_FRAME_GARBAGED (f);
+     }
+@@ -5158,7 +5158,7 @@ See the command `menu-bar-mode' for a description of this minor mode.
+ Setting this variable directly does not take effect;
+ either customize it (see the info node `Easy Customization')
+ or call the function `menu-bar-mode'.  */);
+-  Vmenu_bar_mode = Qt;
++  Vmenu_bar_mode = Qnil;
+ 
+   DEFVAR_LISP ("tool-bar-mode", Vtool_bar_mode,
+                doc: /* Non-nil if Tool-Bar mode is enabled.
+@@ -5167,7 +5167,7 @@ Setting this variable directly does not take effect;
+ either customize it (see the info node `Easy Customization')
+ or call the function `tool-bar-mode'.  */);
+ #ifdef HAVE_WINDOW_SYSTEM
+-  Vtool_bar_mode = Qt;
++  Vtool_bar_mode = Qnil;
+ #else
+   Vtool_bar_mode = Qnil;
+ #endif
+diff --git a/src/xfns.c b/src/xfns.c
+index 7c1bb1c..cc08846 100644
+--- a/src/xfns.c
++++ b/src/xfns.c
+@@ -3393,9 +3393,9 @@ This function is an internal primitive--use `make-frame' instead.  */)
+ 		       NULL, NULL, RES_TYPE_NUMBER);
+   x_default_parameter (f, parms, Qvertical_scroll_bars,
+ #if defined (USE_GTK) && defined (USE_TOOLKIT_SCROLL_BARS)
+-		       Qright,
++		       Qnil,
+ #else
+-		       Qleft,
++		       Qnil,
+ #endif
+ 		       "verticalScrollBars", "ScrollBars",
+ 		       RES_TYPE_SYMBOL);
+-- 
+2.7.4
+
