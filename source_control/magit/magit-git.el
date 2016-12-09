@@ -33,6 +33,7 @@
 (require 'magit-utils)
 (require 'magit-section)
 
+(declare-function magit-maybe-make-margin-overlay 'magit-log)
 (declare-function magit-process-buffer 'magit-process)
 (declare-function magit-process-file 'magit-process)
 (declare-function magit-process-insert-section 'magit-process)
@@ -51,7 +52,8 @@
   "Git and other external processes used by Magit."
   :group 'magit)
 
-(defvar magit-git-environment nil
+(defvar magit-git-environment
+  (list (format "INSIDE_EMACS=%s,magit" emacs-version))
   "Prepended to `process-environment' while running git.")
 
 (defcustom magit-git-executable
@@ -74,11 +76,12 @@
                             "alias.X=!x() { which \"$1\" | cygpath -mf -; }; x"
                             "X" "git"))
                      (setq magit-git-environment
-                           (list (concat "PATH="
+                           (cons (concat "PATH="
                                          (car (process-lines
                                                it "-c"
                                                "alias.P=!cygpath -wp \"$PATH\""
-                                               "P")))))))
+                                               "P")))
+                                 magit-git-environment))))
                  ;; For 1.x, we search for bin/ next to cmd/.
                  (let ((alt (directory-file-name (file-name-directory it))))
                    (if (and (equal (file-name-nondirectory alt) "cmd")
@@ -94,7 +97,9 @@
   :type 'string)
 
 (defcustom magit-git-global-arguments
-  '("--no-pager" "--literal-pathspecs" "-c" "core.preloadindex=true")
+  `("--no-pager" "--literal-pathspecs" "-c" "core.preloadindex=true"
+    ,@(and (eq system-type 'windows-nt)
+           (list "-c" "i18n.logOutputEncoding=UTF-8")))
   "Global git arguments.
 
 The arguments set here are used every time the git executable is
@@ -108,12 +113,10 @@ anything that is part of the default value, unless you really
 know what you are doing.  And think very hard before adding
 something; it will be used every time Magit runs Git for any
 purpose."
-  :package-version '(magit . "2.1.0")
+  :package-version '(magit . "2.9.0")
   :group 'magit
+  :group 'magit-process
   :type '(repeat string))
-
-(define-obsolete-variable-alias 'magit-git-standard-options
-  'magit-git-global-arguments "2.1.0")
 
 (defcustom magit-git-debug nil
   "Whether to enable additional reporting of git errors.
@@ -199,6 +202,25 @@ change the upstream and many which create new branches."
                (push (cons ,k value)
                      (cdr magit--refresh-cache))
                value)))
+       ,@body)))
+
+(defmacro magit-with-editor (&rest body)
+  "Like `with-editor' but let-bind some more variables."
+  (declare (indent 0) (debug (body)))
+  `(let ((magit-process-popup-time -1)
+         ;; The user may have customized `shell-file-name' to
+         ;; something which results in `w32-shell-dos-semantics' nil
+         ;; (which changes the quoting style used by
+         ;; `shell-quote-argument'), but Git for Windows expects shell
+         ;; quoting in the dos style.
+         (shell-file-name (if (and (eq system-type 'windows-nt)
+                                   ;; If we have Cygwin mount points
+                                   ;; the git flavor is cygwin, so dos
+                                   ;; shell quoting is probably wrong.
+                                   (not magit-cygwin-mount-points))
+                              "cmdproxy"
+                            shell-file-name)))
+     (with-editor "GIT_EDITOR"
        ,@body)))
 
 (defun magit-process-git-arguments (args)
@@ -336,7 +358,8 @@ call function WASHER with no argument."
         (funcall washer args))
       (when (or (= (point) beg)
                 (= (point) (1+ beg)))
-        (magit-cancel-section)))))
+        (magit-cancel-section))
+      (magit-maybe-make-margin-overlay))))
 
 (defun magit-git-version (&optional raw)
   (--when-let (let (magit-git-global-arguments)
@@ -459,7 +482,10 @@ returning the truename."
 
 (defun magit-inside-gitdir-p ()
   "Return t if `default-directory' is below a repository directory."
-  (magit-rev-parse-p "--is-inside-git-dir"))
+  ;; This does not work if the gitdir is not located inside the
+  ;; working tree: (magit-rev-parse-p "--is-inside-git-dir").
+  (-when-let (gitdir (magit-git-dir))
+    (file-in-directory-p default-directory gitdir)))
 
 (defun magit-inside-worktree-p ()
   "Return t if `default-directory' is below the work tree of a repository."
@@ -611,11 +637,18 @@ Sorted from longest to shortest CYGWIN name."
       (concat win (substring filename (length cyg)))
     filename))
 
-(defun magit-convert-git-filename (filename)
-  (-if-let ((cyg . win)
-            (cl-rassoc filename magit-cygwin-mount-points
-                       :test (lambda (f win) (string-prefix-p win f))))
-      (concat cyg (substring filename (length win)))
+(defun magit-convert-filename-for-git (filename)
+  "Convert FILENAME so that it can be passed to git.
+1. If it's a remote filename, then remove the remote part.
+2. Expand \"~/\", git isn't a shell and does not understand it.
+3. Deal with an `windows-nt' Emacs vs. Cygwin Git incompatibility."
+  (if (file-name-absolute-p filename)
+      (-if-let ((cyg . win)
+                (cl-rassoc filename magit-cygwin-mount-points
+                           :test (lambda (f win) (string-prefix-p win f))))
+          (concat cyg (substring filename (length win)))
+        (or (file-remote-p filename 'localname)
+            filename))
     filename))
 
 (defun magit-decode-git-path (path)
@@ -856,7 +889,11 @@ which is different from the current branch and still exists."
   (let ((remote (magit-get "branch" branch "remote")))
     (and remote (not (equal remote "."))
          ;; The user has opted in...
-         (or force (member branch magit-branch-prefer-remote-upstream))
+         (or force
+             (--any (if (magit-git-success "check-ref-format" "--branch" it)
+                        (equal it branch)
+                      (string-match-p it branch))
+                    magit-branch-prefer-remote-upstream))
          ;; and local BRANCH tracks a remote branch...
          (let ((upstream (magit-get-upstream-branch branch)))
            ;; whose upstream...
@@ -1032,9 +1069,9 @@ where COMMITS is the number of commits in TAG but not in REV."
 
 (defun magit-list-worktrees ()
   (let (worktrees worktree)
-    (dolist (line (let ((magit-git-standard-options
+    (dolist (line (let ((magit-git-global-arguments
                          ;; KLUDGE At least in v2.8.3 this triggers a segfault.
-                         (remove "--no-pager" magit-git-standard-options)))
+                         (remove "--no-pager" magit-git-global-arguments)))
                     (magit-git-lines "worktree" "list" "--porcelain")))
       (cond ((string-prefix-p "worktree" line)
              (push (setq worktree (list (substring line 9) nil nil nil))
@@ -1067,6 +1104,10 @@ where COMMITS is the number of commits in TAG but not in REV."
   (or (car (member rev (magit-list-local-branches)))
       (car (member rev (magit-list-local-branch-names)))))
 
+(defun magit-remote-branch-p (rev)
+  (or (car (member rev (magit-list-remote-branches)))
+      (car (member rev (magit-list-remote-branch-names)))))
+
 (defun magit-branch-set-face (branch)
   (propertize branch 'face (if (magit-local-branch-p branch)
                                'magit-branch-local
@@ -1088,7 +1129,9 @@ Return a list of two integers: (A>B B>A)."
                         "\t")))
 
 (defun magit-abbrev-length ()
-  (string-to-number (or (magit-get "core.abbrev") "7")))
+  (--if-let (magit-get "core.abbrev")
+      (string-to-number it)
+    (length (magit-rev-parse "--short" "HEAD"))))
 
 (defun magit-abbrev-arg (&optional arg)
   (format "--%s=%d" (or arg "abbrev") (magit-abbrev-length)))
@@ -1187,9 +1230,9 @@ Return a list of two integers: (A>B B>A)."
 (defmacro magit-with-temp-index (tree arg &rest body)
   (declare (indent 2) (debug (form form body)))
   (let ((file (cl-gensym "file")))
-    `(let ((,file (magit-convert-git-filename
+    `(let ((magit--refresh-cache nil)
+           (,file (magit-convert-filename-for-git
                    (make-temp-name (magit-git-dir "index.magit.")))))
-       (setq ,file (or (file-remote-p ,file 'localname) ,file))
        (unwind-protect
            (progn (--when-let ,tree
                     (or (magit-git-success "read-tree" ,arg it
@@ -1244,6 +1287,15 @@ Return a list of two integers: (A>B B>A)."
   (concat "\\`\\([^ \t]*[^.]\\)?"       ; revA
           "\\(\\.\\.\\.?\\)"            ; range marker
           "\\([^.][^ \t]*\\)?\\'"))     ; revB
+
+(defun magit-split-range (range)
+  (when (string-match magit-range-re range)
+    (let ((beg (or (match-string 1 range) "HEAD"))
+          (end (or (match-string 3 range) "HEAD")))
+      (cons (if (string-equal (match-string 2) "...")
+                (magit-git-string "merge-base" beg end)
+              beg)
+            end))))
 
 ;;; Completion
 
@@ -1382,17 +1434,19 @@ Return a list of two integers: (A>B B>A)."
          (and (not (equal previous branch)) previous)))))
 
 (defun magit-read-starting-point (prompt)
-  (or (magit-completing-read
-       (concat prompt " starting at")
-       (cons "HEAD" (magit-list-refnames))
-       nil nil nil 'magit-revision-history
-       (or (let ((r (magit-remote-branch-at-point))
-                 (l (magit-local-branch-at-point)))
-             (if magit-prefer-remote-upstream (or r l) (or l r)))
-           (magit-commit-at-point)
-           (magit-stash-at-point)
-           (magit-get-current-branch)))
+  (or (magit-completing-read (concat prompt " starting at")
+                             (cons "HEAD" (magit-list-refnames))
+                             nil nil nil 'magit-revision-history
+                             (magit--default-starting-point))
       (user-error "Nothing selected")))
+
+(defun magit--default-starting-point ()
+  (or (let ((r (magit-remote-branch-at-point))
+            (l (magit-local-branch-at-point)))
+        (if magit-prefer-remote-upstream (or r l) (or l r)))
+      (magit-commit-at-point)
+      (magit-stash-at-point)
+      (magit-get-current-branch)))
 
 (defun magit-read-tag (prompt &optional require-match)
   (magit-completing-read prompt (magit-list-tags) nil
@@ -1425,20 +1479,44 @@ Return a list of two integers: (A>B B>A)."
                              (magit-remote-at-point)
                              (magit-get-remote))))
 
+(defun magit-read-module-path (prompt)
+  (magit-completing-read prompt (magit-get-submodules)))
+
 ;;; Variables
+
+(defun magit-config-get-from-cached-list (key)
+  (gethash
+   ;; `git config --list' downcases first and last components of the key.
+   (--> key
+        (replace-regexp-in-string "\\`[^.]+" #'downcase it t t)
+        (replace-regexp-in-string "[^.]+\\'" #'downcase it t t))
+   (magit--with-refresh-cache (list 'config (magit-toplevel))
+     (let ((configs (make-hash-table :test 'equal)))
+       (dolist (conf (magit-git-items "config" "--list" "-z"))
+         (let* ((nl-pos (cl-position ?\n conf))
+                (key (substring conf 0 nl-pos))
+                (val (if nl-pos (substring conf (1+ nl-pos)) "")))
+           (puthash key (nconc (gethash key configs) (list val)) configs)))
+       configs))))
 
 (defun magit-get (&rest keys)
   "Return the value of Git config entry specified by KEYS."
-  (magit-git-str "config" (mapconcat 'identity keys ".")))
+  (car (last (apply 'magit-get-all keys))))
 
 (defun magit-get-all (&rest keys)
   "Return all values of the Git config entry specified by KEYS."
-  (let ((magit-git-debug nil))
-    (magit-git-items "config" "-z" "--get-all" (mapconcat 'identity keys "."))))
+  (let ((magit-git-debug nil)
+        (key (mapconcat 'identity keys ".")))
+    (if magit--refresh-cache
+        (magit-config-get-from-cached-list key)
+      (magit-git-items "config" "-z" "--get-all" key))))
 
 (defun magit-get-boolean (&rest keys)
   "Return the boolean value of Git config entry specified by KEYS."
-  (magit-git-true "config" "--bool" (mapconcat 'identity keys ".")))
+  (let ((key (mapconcat 'identity keys ".")))
+    (if magit--refresh-cache
+        (equal "true" (car (magit-config-get-from-cached-list key)))
+      (magit-git-true "config" "--bool" key))))
 
 (defun magit-set (val &rest keys)
   "Set Git config settings specified by KEYS to VAL."
@@ -1453,6 +1531,8 @@ Return a list of two integers: (A>B B>A)."
 
 ;;; magit-git.el ends soon
 
+(define-obsolete-variable-alias 'magit-git-standard-options
+  'magit-git-global-arguments "Magit 2.1.0")
 (define-obsolete-function-alias 'magit-get-tracked-ref
   'magit-get-upstream-ref "Magit 2.4.0")
 (define-obsolete-function-alias 'magit-get-tracked-branch

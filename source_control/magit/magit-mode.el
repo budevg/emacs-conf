@@ -34,6 +34,7 @@
 
 (require 'magit-section)
 (require 'magit-git)
+(require 'magit-popup)
 
 ;; For `magit-xref-insert-buttons' from `magit'
 (defvar magit-diff-show-xref-buttons)
@@ -58,13 +59,13 @@
 
 (defcustom magit-mode-setup-hook
   '(magit-maybe-save-repository-buffers
-    magit-maybe-show-margin)
+    magit-set-buffer-margin)
   "Hook run by `magit-mode-setup'."
   :package-version '(magit . "2.3.0")
   :group 'magit-modes
   :type 'hook
   :options '(magit-maybe-save-repository-buffers
-             magit-maybe-show-margin))
+             magit-set-buffer-margin))
 
 (defcustom magit-pre-refresh-hook '(magit-maybe-save-repository-buffers)
   "Hook run before refreshing in `magit-refresh'.
@@ -288,6 +289,8 @@ starts complicating other things, then it will be removed."
     (define-key map "\t"    'magit-section-toggle)
     (define-key map [C-tab] 'magit-section-cycle)
     (define-key map [M-tab] 'magit-section-cycle-diffs)
+    (define-key map [S-tab] 'magit-section-cycle-global)
+    ;; Next two are for backward compatibility.
     (define-key map [s-tab] 'magit-section-cycle-global)
     (define-key map [backtab] 'magit-section-cycle-global)
     (define-key map "^"    'magit-section-up)
@@ -382,7 +385,10 @@ which deletes the thing at point."
 Where applicable, section-specific keymaps bind another command
 which visits the thing at point."
   (interactive)
-  (user-error "There is no thing at point that could be visited"))
+  (if (eq magit-current-popup 'magit-dispatch-popup)
+      (progn (setq magit-current-popup nil)
+             (call-interactively (key-binding (this-command-keys))))
+    (user-error "There is no thing at point that could be visited")))
 
 (easy-menu-define magit-mode-menu magit-mode-map
   "Magit menu"
@@ -458,13 +464,20 @@ Magit is documented in info node `(magit)'."
   (add-hook 'post-command-hook #'magit-section-update-highlight t t)
   (setq-local redisplay-highlight-region-function 'magit-highlight-region)
   (setq-local redisplay-unhighlight-region-function 'magit-unhighlight-region)
-  (when (fboundp 'linum-mode)
-    (linum-mode -1)))
+  (when (bound-and-true-p global-linum-mode)
+    (linum-mode -1))
+  (when (and (fboundp 'nlinum-mode)
+             (bound-and-true-p global-nlinum-mode))
+    (nlinum-mode -1)))
 
 (defvar-local magit-region-overlays nil)
 
-(defun magit-highlight-region (start end window rol)
+(defun magit-delete-region-overlays ()
   (mapc #'delete-overlay magit-region-overlays)
+  (setq magit-region-overlays nil))
+
+(defun magit-highlight-region (start end window rol)
+  (magit-delete-region-overlays)
   (if (and (run-hook-with-args-until-success 'magit-region-highlight-hook
                                              (magit-current-section))
            (not magit-keep-region-overlay))
@@ -474,7 +487,7 @@ Magit is documented in info node `(magit)'."
 
 (defun magit-unhighlight-region (rol)
   (setq magit-section-highlighted-section nil)
-  (mapc #'delete-overlay magit-region-overlays)
+  (magit-delete-region-overlays)
   (funcall (default-value 'redisplay-unhighlight-region-function) rol))
 
 (defvar-local magit-refresh-args nil
@@ -627,7 +640,8 @@ the mode of the current buffer derives from `magit-log-mode' or
 `magit-cherry-mode'."
   (display-buffer
    buffer
-   (cond ((and (derived-mode-p 'magit-log-mode 'magit-cherry-mode)
+   (cond ((and (or git-commit-mode
+                   (derived-mode-p 'magit-log-mode 'magit-cherry-mode))
                (with-current-buffer buffer
                  (derived-mode-p 'magit-diff-mode)))
           nil)
@@ -885,10 +899,10 @@ Run hooks `magit-pre-refresh-hook' and `magit-post-refresh-hook'."
                         (or (get-buffer-window-list buffer nil t)
                             (list (selected-window))))))
         (deactivate-mark)
-        (setq magit-section-highlight-overlays nil
-              magit-section-highlighted-section nil
-              magit-section-highlighted-sections nil
-              magit-section-unhighlight-sections nil)
+        (setq magit-section-highlight-overlays nil)
+        (setq magit-section-highlighted-section nil)
+        (setq magit-section-highlighted-sections nil)
+        (setq magit-section-unhighlight-sections nil)
         (let ((inhibit-read-only t))
           (erase-buffer)
           (save-excursion
@@ -992,7 +1006,7 @@ argument (the prefix) non-nil means save all with no questions."
      arg (-partial (lambda (topdir)
                      (and buffer-file-name
                           ;; Avoid needlessly connecting to unrelated remotes.
-                          (string-prefix-p topdir buffer-file-name)
+                          (string-prefix-p topdir (file-truename buffer-file-name))
                           (equal (magit-rev-parse-safe "--show-toplevel")
                                  topdir)))
                    topdir))))

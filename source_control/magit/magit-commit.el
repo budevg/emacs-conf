@@ -249,9 +249,12 @@ depending on the value of option `magit-commit-squash-confirm'."
           (unless edit
             (push "--no-edit" args))
           (if rebase
-              (with-editor "GIT_EDITOR"
-                (let ((magit-process-popup-time -1))
-                  (magit-call-git "commit" args)))
+              (magit-with-editor
+                (magit-call-git
+                 "commit" "--no-gpg-sign"
+                 (-remove-first
+                  (apply-partially #'string-match-p "\\`--gpg-sign=")
+                  args)))
             (magit-run-git-with-editor "commit" args)))
       (magit-log-select
         `(lambda (commit)
@@ -331,15 +334,18 @@ depending on the value of option `magit-commit-squash-confirm'."
 
 (defun magit-read-gpg-secret-key (prompt &optional _initial-input)
   (require 'epa)
-  (let ((keys (--map (list (epg-sub-key-id (car (epg-key-sub-key-list it)))
-                           (-when-let (id-obj (car (epg-key-user-id-list it)))
-                             (let    ((id-str (epg-user-id-string id-obj)))
-                               (if (stringp id-str)
-                                   id-str
-                                 (epg-decode-dn id-obj)))))
+  (let ((keys (--map (concat (epg-sub-key-id (car (epg-key-sub-key-list it)))
+                             " "
+                             (-when-let (id-obj (car (epg-key-user-id-list it)))
+                               (let    ((id-str (epg-user-id-string id-obj)))
+                                 (if (stringp id-str)
+                                     id-str
+                                   (epg-decode-dn id-obj)))))
                      (epg-list-keys (epg-make-context epa-protocol) nil t))))
-    (magit-completing-read prompt keys nil nil nil 'magit-gpg-secret-key-hist
-                           (car (or magit-gpg-secret-key-hist keys)))))
+    (car (split-string (magit-completing-read
+                        prompt keys nil nil nil 'magit-gpg-secret-key-hist
+                        (car (or magit-gpg-secret-key-hist keys)))
+                       " "))))
 
 (defvar magit-commit-add-log-insert-function 'magit-commit-add-log-insert
   "Used by `magit-commit-add-log' to insert a single entry.")

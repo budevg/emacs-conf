@@ -56,7 +56,9 @@
 ;;   x        Add a script to be run with the commit at point
 ;;            being checked out.
 ;;
-;;   RET      Show the commit at point in another buffer.
+;;   SPC      Show the commit at point in another buffer.
+;;   RET      Show the commit at point in another buffer and
+;;            select its window.
 ;;   C-/      Undo last change.
 
 ;; You should probably also read the `git-rebase' manpage.
@@ -105,9 +107,7 @@
   :group 'faces
   :group 'git-rebase)
 
-(defface git-rebase-hash
-  '((((class color) (background light)) :foreground "grey60")
-    (((class color) (background  dark)) :foreground "grey40"))
+(defface git-rebase-hash '((t (:inherit magit-hash)))
   "Face for commit hashes."
   :group 'git-rebase-faces)
 
@@ -120,6 +120,16 @@
   "Face for commented action and exec lines."
   :group 'git-rebase-faces)
 
+(defface git-rebase-comment-hash
+  '((t (:inherit git-rebase-hash :weight bold)))
+  "Face for commit hashes in commit message comments."
+  :group 'git-rebase-faces)
+
+(defface git-rebase-comment-heading
+  '((t :inherit font-lock-keyword-face))
+  "Face used for headings in rebase message comments."
+  :group 'git-commit-faces)
+
 ;;; Keymaps
 
 (defvar git-rebase-mode-map
@@ -128,7 +138,8 @@
     (define-key map (kbd "q")    'undefined)
     (define-key map [remap undo] 'git-rebase-undo)
     (define-key map (kbd "RET") 'git-rebase-show-commit)
-    (define-key map (kbd "SPC") 'magit-diff-show-or-scroll-up)
+    (define-key map (kbd "SPC") 'git-rebase-show-or-scroll-up)
+    (define-key map (kbd "DEL") 'git-rebase-show-or-scroll-down)
     (define-key map (kbd "x")   'git-rebase-exec)
     (define-key map (kbd "c")   'git-rebase-pick)
     (define-key map (kbd "r")   'git-rebase-reword)
@@ -152,6 +163,7 @@
 
 (put 'git-rebase-reword :advertised-binding "r")
 (put 'git-rebase-move-line-up :advertised-binding (kbd "M-p"))
+(put 'git-rebase-kill-line :advertised-binding "k")
 
 (easy-menu-define git-rebase-mode-menu git-rebase-mode-map
   "Git-Rebase mode menu"
@@ -170,15 +182,17 @@
     ["Finish" with-editor-finish t]))
 
 (defvar git-rebase-command-descriptions
-  '((with-editor-finish        . "tell Git to make it happen")
-    (with-editor-cancel        . "tell Git that you changed your mind, i.e. abort")
-    (previous-line             . "move point to previous line")
-    (next-line                 . "move point to next line")
-    (git-rebase-move-line-up   . "move the commit at point up")
-    (git-rebase-move-line-down . "move the commit at point down")
-    (git-rebase-show-commit    . "show the commit at point in another buffer")
-    (undo                      . "undo last change")
-    (git-rebase-kill-line      . "drop the commit at point")))
+  '((with-editor-finish           . "tell Git to make it happen")
+    (with-editor-cancel           . "tell Git that you changed your mind, i.e. abort")
+    (git-rebase-backward-line     . "move point to previous line")
+    (forward-line                 . "move point to next line")
+    (git-rebase-move-line-up      . "move the commit at point up")
+    (git-rebase-move-line-down    . "move the commit at point down")
+    (git-rebase-show-or-scroll-up . "show the commit at point in another buffer")
+    (git-rebase-show-commit
+     . "show the commit at point in another buffer and select its window")
+    (undo                         . "undo last change")
+    (git-rebase-kill-line         . "drop the commit at point")))
 
 ;;; Commands
 
@@ -351,15 +365,42 @@ Like `undo' but works in read-only buffers."
   (let ((inhibit-read-only t))
     (undo arg)))
 
+(defun git-rebase--show-commit (&optional scroll)
+  (let ((disable-magit-save-buffers t))
+    (save-excursion
+      (goto-char (line-beginning-position))
+      (--if-let (and (looking-at git-rebase-line)
+                     (match-string 2))
+          (pcase scroll
+            (`up   (magit-diff-show-or-scroll-up))
+            (`down (magit-diff-show-or-scroll-down))
+            (_     (apply #'magit-show-commit it (magit-diff-arguments))))
+        (ding)))))
+
 (defun git-rebase-show-commit ()
   "Show the commit on the current line if any."
   (interactive)
-  (save-excursion
-    (goto-char (line-beginning-position))
-    (--if-let (and (looking-at git-rebase-line)
-                   (match-string 2))
-        (apply #'magit-show-commit it (magit-diff-arguments))
-      (ding))))
+  (git-rebase--show-commit))
+
+(defun git-rebase-show-or-scroll-up ()
+  "Update the commit buffer for commit on current line.
+
+Either show the commit at point in the appropriate buffer, or if
+that buffer is already being displayed in the current frame and
+contains information about that commit, then instead scroll the
+buffer up."
+  (interactive)
+  (git-rebase--show-commit 'up))
+
+(defun git-rebase-show-or-scroll-down ()
+  "Update the commit buffer for commit on current line.
+
+Either show the commit at point in the appropriate buffer, or if
+that buffer is already being displayed in the current frame and
+contains information about that commit, then instead scroll the
+buffer down."
+  (interactive)
+  (git-rebase--show-commit 'down))
 
 (defun git-rebase-backward-line (&optional n)
   "Move N lines backward (forward if N is negative).
@@ -384,7 +425,7 @@ running 'man git-rebase' at the command line) for details."
         (concat "^\\(" (regexp-quote comment-start) "?"
                 "\\(?:[fprse]\\|pick\\|reword\\|edit\\|squash\\|fixup\\|exec\\)\\) "
                 "\\(?:\\([^ \n]+\\) \\(.*\\)\\)?"))
-  (setq font-lock-defaults '(git-rebase-mode-font-lock-keywords t t))
+  (setq font-lock-defaults (list (git-rebase-mode-font-lock-keywords) t t))
   (unless git-rebase-show-instructions
     (let ((inhibit-read-only t))
       (flush-lines git-rebase-comment-re)))
@@ -400,7 +441,9 @@ running 'man git-rebase' at the command line) for details."
     (setq save-place nil)))
 
 (defun git-rebase-cancel-confirm (force)
-  (or (not (buffer-modified-p)) force (y-or-n-p "Abort this rebase? ")))
+  (or (not (buffer-modified-p))
+      force
+      (magit-confirm 'abort-rebase "Abort this rebase")))
 
 (defun git-rebase-autostash-save ()
   (--when-let (magit-file-line (magit-git-dir "rebase-merge/autostash"))
@@ -416,7 +459,8 @@ running 'man git-rebase' at the command line) for details."
 (defun git-rebase-match-killed-action (limit)
   (re-search-forward (concat git-rebase-comment-re "[^ \n].*") limit t))
 
-(defconst git-rebase-mode-font-lock-keywords
+(defun git-rebase-mode-font-lock-keywords ()
+  "Font lock keywords for Git-Rebase mode."
   `(("^\\([efprs]\\|pick\\|reword\\|edit\\|squash\\|fixup\\) \\([^ \n]+\\) \\(.*\\)"
      (1 'font-lock-keyword-face)
      (2 'git-rebase-hash)
@@ -425,8 +469,12 @@ running 'man git-rebase' at the command line) for details."
      (1 'font-lock-keyword-face)
      (2 'git-rebase-description))
     (git-rebase-match-comment-line 0 'font-lock-comment-face)
-    (git-rebase-match-killed-action 0 'git-rebase-killed-action t))
-  "Font lock keywords for Git-Rebase mode.")
+    (git-rebase-match-killed-action 0 'git-rebase-killed-action t)
+    (,(format "^%s Rebase \\([^ ]*\\) onto \\([^ ]*\\)" comment-start)
+     (1 'git-rebase-comment-hash t)
+     (2 'git-rebase-comment-hash t))
+    (,(format "^%s \\(Commands:\\)" comment-start)
+     (1 'git-rebase-comment-heading t))))
 
 (defun git-rebase-mode-show-keybindings ()
   "Modify the \"Commands:\" section of the comment Git generates
@@ -478,6 +526,8 @@ By default, this is the same except for the \"pick\" command."
 
 (eval-after-load 'recentf
   '(add-to-list 'recentf-exclude git-rebase-filename-regexp))
+
+(add-to-list 'with-editor-file-name-history-exclude git-rebase-filename-regexp)
 
 (provide 'git-rebase)
 ;; Local Variables:

@@ -34,6 +34,7 @@
 
 (require 'magit-utils)
 
+(declare-function magit-maybe-make-margin-overlay 'magit-log)
 (defvar magit-keep-region-overlay)
 
 ;;; Options
@@ -330,7 +331,9 @@ With a prefix argument also expand it." heading)
         (remove-overlays beg end 'invisible t)
         (let ((o (make-overlay beg end)))
           (overlay-put o 'evaporate t)
-          (overlay-put o 'invisible t))))))
+          (overlay-put o 'invisible t))))
+    (when (memq (magit-section-type section) '(unpulled unpushed))
+      (magit-section-cache-visibility section))))
 
 (defun magit-section-toggle (section)
   "Toggle visibility of the body of the current section."
@@ -531,60 +534,76 @@ This command is intended for debugging purposes."
 
 ;;; Match
 
-(defun magit-section-match (condition &optional section)
+(cl-defun magit-section-match
+    (condition &optional (section (magit-current-section)))
   "Return t if SECTION matches CONDITION.
-SECTION defaults to the section at point.
 
-Conditions can take the following forms:
+SECTION defaults to the section at point.  If SECTION is not
+specified and there also is no section at point, then return
+nil.
+
+CONDITION can take the following forms:
   (CONDITION...)  matches if any of the CONDITIONs matches.
   [TYPE...]       matches if the first TYPE matches the type
-                  of the section at point, the second matches
-                  that of its parent, and so on.
+                  of the section, the second matches that of
+                  its parent, and so on.
   [* TYPE...]     matches sections that match [TYPE...] and
                   also recursively all their child sections.
-  TYPE            matches TYPE regardless of its parents.
+  TYPE            matches sections of TYPE regardless of the
+                  types of the parent sections.
 
 Each TYPE is a symbol.  Note that it is not necessary to specify
 all TYPEs up to the root section as printed by
 `magit-describe-type', unless of course you want to be that
 precise."
-  ;; When recursing SECTION actually is a type list.  Matching
-  ;; macros also pass such a list instead of a section struct.
-  (let ((types (if (magit-section-p section)
-                   (mapcar 'car (magit-section-ident section))
-                 section)))
-    (when (or types section (magit-current-section))
-      (if (listp condition)
-          (--first (magit-section-match it types) condition)
-        (magit-section-match-1 (if (symbolp condition)
-                                   (list condition)
-                                 (append condition nil))
-                               types)))))
+  ;; For backward compatibility reasons SECTION can also be a
+  ;; type-list as understood by `magit-section-match-1'.  This
+  ;; includes uses of the macros `magit-section-when' and
+  ;; `magit-section-case' that did not get recompiled after
+  ;; this function was changed.
+  (and section
+       (magit-section-match-1 condition
+                              (if (magit-section-p section)
+                                  (mapcar #'car (magit-section-ident section))
+                                section))))
 
-(defun magit-section-match-1 (l1 l2)
+(defun magit-section-match-1 (condition type-list)
+  (if (listp condition)
+      (--first (magit-section-match-1 it type-list) condition)
+    (magit-section-match-2 (if (symbolp condition)
+                               (list condition)
+                             (append condition nil))
+                           type-list)))
+
+(defun magit-section-match-2 (l1 l2)
   (or (null l1)
       (if (eq (car l1) '*)
-          (or (magit-section-match-1 (cdr l1) l2)
+          (or (magit-section-match-2 (cdr l1) l2)
               (and l2
-                   (magit-section-match-1 l1 (cdr l2))))
+                   (magit-section-match-2 l1 (cdr l2))))
         (and l2
              (equal (car l1) (car l2))
-             (magit-section-match-1 (cdr l1) (cdr l2))))))
+             (magit-section-match-2 (cdr l1) (cdr l2))))))
 
 (defmacro magit-section-when (condition &rest body)
   "If the section at point matches CONDITION evaluate BODY.
 
-If the section matches evaluate BODY forms sequentially and
-return the value of the last one, or if there are no BODY forms
-return the value of the section.  If the section does not match
-return nil.
+If the section matches, then evaluate BODY forms sequentially
+with `it' bound to the section and return the value of the last
+form.  If there are no BODY forms, then return the value of the
+section.  If the section does not match or if there is no section
+at point then return nil.
 
 See `magit-section-match' for the forms CONDITION can take."
   (declare (indent 1)
            (debug (sexp body)))
   `(--when-let (magit-current-section)
-     (when (magit-section-match ',condition
-                                (mapcar 'car (magit-section-ident it)))
+     ;; Quoting CONDITION here often leads to double-quotes, which
+     ;; isn't an issue because `magit-section-match-1' implicitly
+     ;; deals with that.  We shouldn't force users of this function
+     ;; to not quote CONDITION because that would needlessly break
+     ;; backward compatibility.
+     (when (magit-section-match ',condition it)
        ,@(or body '((magit-section-value it))))))
 
 (defmacro magit-section-case (&rest clauses)
@@ -608,7 +627,7 @@ at point."
             (,ident (and it (mapcar 'car (magit-section-ident it)))))
        (cond ,@(mapcar (lambda (clause)
                          `(,(or (eq (car clause) t)
-                                `(and it (magit-section-match
+                                `(and it (magit-section-match-1
                                           ',(car clause) ,ident)))
                            ,@(cdr clause)))
                        clauses)))))
@@ -762,6 +781,7 @@ insert a newline character if necessary."
                 (propertize heading 'face 'magit-section-heading)))))
   (unless (bolp)
     (insert ?\n))
+  (magit-maybe-make-margin-overlay)
   (setf (magit-section-content magit-insert-section--current) (point-marker)))
 
 (defvar magit-insert-headers-hook nil "For internal use only.")
@@ -825,9 +845,10 @@ evaluated its BODY.  Admittedly that's a bit of a hack."
             (deactivate-mark nil)
             (selection (magit-region-sections)))
         (mapc #'delete-overlay magit-section-highlight-overlays)
+        (setq magit-section-highlight-overlays nil)
         (setq magit-section-unhighlight-sections
-              magit-section-highlighted-sections
-              magit-section-highlighted-sections nil)
+              magit-section-highlighted-sections)
+        (setq magit-section-highlighted-sections nil)
         (unless (eq section magit-root-section)
           (run-hook-with-args-until-success
            'magit-section-highlight-hook section selection))
@@ -1040,10 +1061,10 @@ current section, the one point is in.
 
 When the region looks like it would in any other buffer then
 the selection is invalid.  When the selection is valid then the
-region uses the `magit-section-highlight'.  This does not apply
-to diffs were things get a bit more complicated, but even here
-if the region looks like it usually does, then that's not a
-valid selection as far as this function is concerned.
+region uses the `magit-section-highlight' face.  This does not
+apply to diffs where things get a bit more complicated, but even
+here if the region looks like it usually does, then that's not
+a valid selection as far as this function is concerned.
 
 If optional TYPES is non-nil then the selection not only has to
 be valid; the types of all selected sections additionally have to

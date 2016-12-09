@@ -171,7 +171,8 @@ without prompting."
   'magit-commands
   :man-page "git-revert"
   :switches '((?s "Add Signed-off-by lines" "--signoff"))
-  :options  '((?s "Strategy" "--strategy="))
+  :options  '((?s "Strategy"       "--strategy=")
+              (?S "Sign using gpg" "--gpg-sign=" magit-read-gpg-secret-key))
   :actions  '((?V "Revert commit(s)" magit-revert)
               (?v "Revert changes"   magit-revert-no-commit))
   :sequence-actions '((?V "Continue" magit-sequencer-continue)
@@ -386,7 +387,7 @@ START has to be selected from a list of recent commits."
         (setq commit (--if-let (magit-get-upstream-branch)
                          (magit-git-string "merge-base" it "HEAD")
                        nil))
-      (when (magit-git-failure "merge-base" "--is-ancestor" commit "HEAD")
+      (unless (magit-rev-ancestor-p commit "HEAD")
         (user-error "%s isn't an ancestor of HEAD" commit))
       (if (magit-commit-parents commit)
           (setq commit (concat commit "^"))
@@ -482,7 +483,8 @@ edit.  With a prefix argument the old message is reused as-is."
   "Abort the current rebase operation, restoring the original branch."
   (interactive)
   (if (magit-rebase-in-progress-p)
-      (magit-run-git "rebase" "--abort")
+      (when (magit-confirm 'abort-rebase "Abort this rebase")
+        (magit-run-git "rebase" "--abort"))
     (user-error "No rebase in progress")))
 
 (defun magit-rebase-in-progress-p ()
@@ -608,8 +610,9 @@ If no such sequence is in progress, do nothing."
            ((magit-anything-modified-p t)
             ;; ...and the dust hasn't settled yet...
             (magit-sequence-insert-commit
-             (let ((staged   (magit-commit-tree "oO" nil "HEAD"))
-                   (unstaged (magit-commit-worktree "oO" "--reset")))
+             (let* ((magit--refresh-cache nil)
+                    (staged   (magit-commit-tree "oO" nil "HEAD"))
+                    (unstaged (magit-commit-worktree "oO" "--reset")))
                (cond
                 ;; ...but we could end up at the same tree just by committing.
                 ((or (magit-rev-equal staged   stop)
@@ -634,7 +637,7 @@ If no such sequence is in progress, do nothing."
                     ;; ...but its reincarnation lives on.
                     ;; Or it didn't die in the first place.
                     (list (if (and (equal rev head)
-                                   (equal (magit-patch-id (concat stop "^"))
+                                   (equal (magit-patch-id rev)
                                           (magit-patch-id (car (last orig 2)))))
                               "stop" ; We haven't done anything yet.
                             "same")  ; There are new commits.

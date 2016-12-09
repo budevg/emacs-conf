@@ -27,6 +27,15 @@
 
 ;;; Options
 
+(unless (find-lisp-object-file-name 'magit-submodule-list-mode-hook 'defvar)
+  (add-hook 'magit-submodule-list-mode-hook 'hl-line-mode))
+(defcustom magit-submodule-list-mode-hook '(hl-line-mode)
+  "Hook run after entering Magit-Submodule-List mode."
+  :package-version '(magit . "2.9.0")
+  :group 'magit-modes
+  :type 'hook
+  :options '(hl-line-mode))
+
 (defcustom magit-submodule-list-columns
   '(("Path"     25 magit-modulelist-column-path   nil)
     ("Version"  25 magit-repolist-column-version  nil)
@@ -174,7 +183,7 @@ For each section insert the path and the output of `git describe --tags'."
           (dolist (module modules)
             (let ((default-directory
                     (expand-file-name (file-name-as-directory module))))
-              (magit-insert-section (file module t)
+              (magit-insert-section (submodule module t)
                 (insert (propertize (format col-format module)
                                     'face 'magit-diff-file-heading))
                 (if (not (file-exists-p ".git"))
@@ -195,6 +204,41 @@ For each section insert the path and the output of `git describe --tags'."
     (define-key map [remap magit-visit-thing] 'magit-list-submodules)
     map)
   "Keymap for `submodules' sections.")
+
+(defvar magit-submodule-section-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [C-return] 'magit-submodule-visit)
+    (define-key map "\C-j"     'magit-submodule-visit)
+    (define-key map [remap magit-visit-thing]  'magit-submodule-visit)
+    (define-key map [remap magit-delete-thing] 'magit-submodule-deinit)
+    (define-key map "K" 'magit-file-untrack)
+    (define-key map "R" 'magit-file-rename)
+    map)
+  "Keymap for `submodule' sections.")
+
+(defun magit-submodule-visit (module &optional other-window)
+  "Visit MODULE by calling `magit-status' on it.
+Offer to initialize MODULE if it's not checked out yet.
+With a prefix argument, visit in another window."
+  (interactive (list (or (magit-section-when submodule)
+                         (magit-read-module-path "Visit module"))
+                     current-prefix-arg))
+  (magit-with-toplevel
+    (let ((path (expand-file-name module)))
+      (if (and (not (file-exists-p (expand-file-name ".git" module)))
+               (not (y-or-n-p (format "Initialize submodule '%s' first?"
+                                      module))))
+          (when (file-exists-p path)
+            (dired-jump other-window (concat path "/.")))
+        (magit-run-git-async "submodule" "update" "--init" "--" module)
+        (set-process-sentinel
+         magit-this-process
+         (lambda (process event)
+           (let ((magit-process-raise-error t))
+             (magit-process-sentinel process event))
+           (when (and (eq (process-status      process) 'exit)
+                      (=  (process-exit-status process) 0))
+             (magit-diff-visit-directory path other-window))))))))
 
 ;;;###autoload
 (defun magit-insert-modules-unpulled-from-upstream ()
