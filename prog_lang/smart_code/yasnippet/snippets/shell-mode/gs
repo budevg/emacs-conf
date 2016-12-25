@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gs
+# key: gs
+# --
+rsync -avR \`git diff --name-only\` \`git diff --name-only --cached\` $0
