@@ -86,6 +86,19 @@ be disabled at that position."
   :type '(alist string string)
   :group 'haskell-appearance)
 
+(defcustom haskell-font-lock-keywords
+  ;; `as', `hiding', and `qualified' are part of the import
+  ;; spec syntax, but they are not reserved.
+  ;; `_' can go in here since it has temporary word syntax.
+  '("case" "class" "data" "default" "deriving" "do"
+    "else" "if" "import" "in" "infix" "infixl"
+    "infixr" "instance" "let" "module" "mdo" "newtype" "of"
+    "rec" "pattern" "proc" "then" "type" "where" "_")
+  "Identifiers treated as reserved keywords in Haskell."
+  :group 'haskell-appearance
+  :type '(repeat string))
+
+
 (defun haskell-font-lock-dot-is-not-composition (start)
   "Return non-nil if the \".\" at START is not a composition operator.
 This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
@@ -97,10 +110,20 @@ This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
               (string= " " (string (char-after start)))
               (string= " " (string (char-before start))))))))
 
+(defvar haskell-yesod-parse-routes-mode-keywords
+  '(("^\\([^ \t\n]+\\)\\(?:[ \t]+\\([^ \t\n]+\\)\\)?"
+     (1 'font-lock-string-face)
+     (2 'haskell-constructor-face nil lax))))
+
+(define-derived-mode haskell-yesod-parse-routes-mode text-mode "Yesod parseRoutes mode"
+  "Mode for parseRoutes from Yesod."
+  (setq-local font-lock-defaults '(haskell-yesod-parse-routes-mode-keywords t t nil nil)))
+
 (defcustom haskell-font-lock-quasi-quote-modes
   `(("hsx" . xml-mode)
     ("hamlet" . shakespeare-hamlet-mode)
     ("shamlet" . shakespeare-hamlet-mode)
+    ("whamlet" . shakespeare-hamlet-mode)
     ("xmlQQ" . xml-mode)
     ("xml" . xml-mode)
     ("cmd" . shell-mode)
@@ -109,7 +132,8 @@ This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
     ("jmacroE" . javascript-mode)
     ("r" . ess-mode)
     ("rChan" . ess-mode)
-    ("sql" . sql-mode))
+    ("sql" . sql-mode)
+    ("parseRoutes" . haskell-yesod-parse-routes-mode))
   "Mapping from quasi quoter token to fontification mode.
 
 If a quasi quote is seen in Haskell code its contents will have
@@ -218,16 +242,6 @@ Regexp match data 0 points to the chars."
           ;; no face.  So force evaluation by using `keep'.
           keep)))))
 
-(defconst haskell-font-lock--reverved-ids
-  ;; `as', `hiding', and `qualified' are part of the import
-  ;; spec syntax, but they are not reserved.
-  ;; `_' can go in here since it has temporary word syntax.
-  '("case" "class" "data" "default" "deriving" "do"
-    "else" "if" "import" "in" "infix" "infixl"
-    "infixr" "instance" "let" "module" "mdo" "newtype" "of"
-    "rec" "proc" "then" "type" "where" "_")
-  "Identifiers treated as reserved keywords in Haskell.")
-
 (defun haskell-font-lock--forward-type (&optional ignore)
   "Find where does this type declaration end.
 
@@ -272,7 +286,7 @@ like ::, class, instance, data, newtype, type."
         (setq last-token-was-newline nil))
        ((and (or (member (match-string-no-properties 0)
                          '("<-" "=" "←"))
-                 (member (match-string-no-properties 0) haskell-font-lock--reverved-ids))
+                 (member (match-string-no-properties 0) haskell-font-lock-keywords))
              (not (member (match-string-no-properties 0) ignore)))
         (setq cont nil)
         (setq last-token-was-newline nil))
@@ -303,11 +317,11 @@ like ::, class, instance, data, newtype, type."
     (goto-char end)))
 
 
-(defun haskell-font-lock--put-face-on-type-or-constructor ()
-  "Private function used to put either type or constructor face
-  on an uppercase identifier."
+(defun haskell-font-lock--select-face-on-type-or-constructor ()
+  "Private function used to select either type or constructor face
+on an uppercase identifier."
   (cl-case (haskell-lexeme-classify-by-first-char (char-after (match-beginning 1)))
-    (varid (when (member (match-string 0) haskell-font-lock--reverved-ids)
+    (varid (when (member (match-string 0) haskell-font-lock-keywords)
              ;; Note: keywords parse as keywords only when not qualified.
              ;; GHC parses Control.let as a single but illegal lexeme.
              (when (member (match-string 0) '("class" "instance" "type" "data" "newtype"))
@@ -342,6 +356,15 @@ like ::, class, instance, data, newtype, type."
                   (haskell-font-lock--forward-type))
                 (add-text-properties (match-end 0) (point) '(font-lock-multiline t haskell-type t)))
               'haskell-operator-face))))
+
+(defun haskell-font-lock--put-face-on-type-or-constructor ()
+  "Private function used to put either type or constructor face
+on an uppercase identifier."
+  (let ((face (haskell-font-lock--select-face-on-type-or-constructor)))
+    (when (and face
+               (not (text-property-not-all (match-beginning 0) (match-end 0) 'face nil)))
+      (put-text-property (match-beginning 0) (match-end 0) 'face face))))
+
 
 (defun haskell-font-lock-keywords ()
   ;; this has to be a function because it depends on global value of
@@ -379,7 +402,7 @@ like ::, class, instance, data, newtype, type."
     (setq keywords
           `(;; NOTICE the ordering below is significant
             ;;
-            ("^#.*$" 0 'font-lock-preprocessor-face t)
+            ("^#\\(?:[^\\\n]\\|\\\\\\(?:.\\|\n\\|\\'\\)\\)*\\(?:\n\\|\\'\\)" 0 'font-lock-preprocessor-face t)
 
             ,@(haskell-font-lock-symbols-keywords)
 
@@ -420,11 +443,11 @@ like ::, class, instance, data, newtype, type."
 
             ;; Toplevel Declarations.
             ;; Place them *before* generic id-and-op highlighting.
-            (,topdecl-var  (1 (unless (member (match-string 1) haskell-font-lock--reverved-ids)
+            (,topdecl-var  (1 (unless (member (match-string 1) haskell-font-lock-keywords)
                                 'haskell-definition-face)))
-            (,topdecl-var2 (2 (unless (member (match-string 2) haskell-font-lock--reverved-ids)
+            (,topdecl-var2 (2 (unless (member (match-string 2) haskell-font-lock-keywords)
                                 'haskell-definition-face)))
-            (,topdecl-bangpat  (1 (unless (member (match-string 1) haskell-font-lock--reverved-ids)
+            (,topdecl-bangpat  (1 (unless (member (match-string 1) haskell-font-lock-keywords)
                                 'haskell-definition-face)))
             (,topdecl-sym  (2 (unless (member (match-string 2) '("\\" "=" "->" "→" "<-" "←" "::" "∷" "," ";" "`"))
                                 'haskell-definition-face)))
@@ -435,10 +458,35 @@ like ::, class, instance, data, newtype, type."
             ("(\\(,*\\|->\\))" 0 'haskell-constructor-face)
             ("\\[\\]" 0 'haskell-constructor-face)
 
-            (,(concat "`" haskell-lexeme-qid-or-qsym "`") 0 'haskell-operator-face)
+            ("`"
+             (0 (if (or (elt (syntax-ppss) 3) (elt (syntax-ppss) 4))
+                    (parse-partial-sexp (point) (point-max) nil nil (syntax-ppss)
+                                        'syntax-table)
+                  (when (save-excursion
+                          (goto-char (match-beginning 0))
+                          (haskell-lexeme-looking-at-backtick))
+                    (goto-char (match-end 0))
+                    (unless (text-property-not-all (match-beginning 1) (match-end 1) 'face nil)
+                      (put-text-property (match-beginning 1) (match-end 1) 'face 'haskell-operator-face))
+                    (unless (text-property-not-all (match-beginning 2) (match-end 2) 'face nil)
+                      (put-text-property (match-beginning 2) (match-end 2) 'face 'haskell-operator-face))
+                    (unless (text-property-not-all (match-beginning 4) (match-end 4) 'face nil)
+                      (put-text-property (match-beginning 4) (match-end 4) 'face 'haskell-operator-face))
+                    (add-text-properties
+                     (match-beginning 0) (match-end 0)
+                     '(font-lock-fontified t fontified t font-lock-multiline t))))))
 
-            (,haskell-lexeme-qid-or-qsym
-             (0 (haskell-font-lock--put-face-on-type-or-constructor)))))
+            (,haskell-lexeme-idsym-first-char
+             (0 (if (or (elt (syntax-ppss) 3) (elt (syntax-ppss) 4))
+                    (parse-partial-sexp (point) (point-max) nil nil (syntax-ppss)
+                                        'syntax-table)
+                  (when (save-excursion
+                          (goto-char (match-beginning 0))
+                          (haskell-lexeme-looking-at-qidsym))
+                    (goto-char (match-end 0))
+                    ;; note that we have to put face ourselves here because font-lock
+                    ;; will use match data from the original matcher
+                    (haskell-font-lock--put-face-on-type-or-constructor)))))))
     keywords))
 
 
@@ -454,7 +502,7 @@ like ::, class, instance, data, newtype, type."
       (delete-region (point-min) (point-max))
       (insert string " ") ;; so there's a final property change
       (cl-letf (((symbol-function 'message)
-                 (lambda (fmt &rest args))))
+                 (lambda (_fmt &rest _args))))
         ;; silence messages
         (unless (eq major-mode lang-mode) (funcall lang-mode))
         (font-lock-ensure))
@@ -561,19 +609,65 @@ like ::, class, instance, data, newtype, type."
    ;; - there is only whitespace between
    ;;
    ;; We recognize double dash haddock comments by property
-   ;; 'font-lock-doc-face attached to newline. In case of bounded
+   ;; 'font-lock-doc-face attached to newline. In case of {- -}
    ;; comments newline is outside of comment.
    ((save-excursion
       (goto-char (nth 8 state))
       (or (looking-at-p "\\(?:{- ?\\|-- \\)[|^*$]")
-          (and (looking-at-p "--")              ; are we at double dash comment
+          (and (looking-at-p "--")            ; are we at double dash comment
                (forward-line -1)              ; this is nil on first line
                (eq (get-text-property (line-end-position) 'face)
-                   'font-lock-doc-face)              ; is a doc face
+                   'font-lock-doc-face)       ; is a doc face
                (forward-line)
                (skip-syntax-forward "-")      ; see if there is only whitespace
                (eq (point) (nth 8 state)))))  ; we are back in position
-    'font-lock-doc-face)
+    ;; Here we look inside the comment to see if there are substrings
+    ;; worth marking inside we try to emulate as much of haddock as
+    ;; possible.  First we add comment face all over the comment, then
+    ;; we add special features.
+    (let ((beg (nth 8 state))
+          (end (save-excursion
+                 (parse-partial-sexp (point) (point-max) nil nil state
+                                     'syntax-table)
+                 (point)))
+          (emphasis-open-point nil)
+          (strong-open-point nil))
+      (put-text-property beg end 'face 'font-lock-doc-face)
+
+      (when (fboundp 'add-face-text-property)
+        ;; `add-face-text-property' is not defined in Emacs 23
+
+        ;; iterate over chars, take escaped chars unconditionally
+        ;; mark when a construct is opened, close and face it when
+        ;; it is closed
+
+        (save-excursion
+          (while (< (point) end)
+            (if (looking-at "__\\|\\\\.\\|\\\n\\|[/]")
+                (progn
+                  (cond
+                   ((equal (match-string 0) "/")
+                    (if emphasis-open-point
+                        (progn
+                          (add-face-text-property emphasis-open-point (match-end 0)
+                                                  '(:slant italic))
+                          (setq emphasis-open-point nil))
+                      (setq emphasis-open-point (point))))
+                   ((equal (match-string 0) "__")
+                    (if strong-open-point
+                        (progn
+                          (add-face-text-property strong-open-point (match-end 0)
+                                                  '(:weight bold))
+                          (setq strong-open-point nil))
+                      (setq strong-open-point (point))))
+                   (t
+                    ;; this is a backslash escape sequence, skip over it
+                    ))
+                  (goto-char (match-end 0)))
+              ;; skip chars that are not interesting
+              (goto-char (1+ (point)))
+              (skip-chars-forward "^_\\\\/" end))))))
+    nil)
    (t 'font-lock-comment-face)))
 
 (defun haskell-font-lock-defaults-create ()

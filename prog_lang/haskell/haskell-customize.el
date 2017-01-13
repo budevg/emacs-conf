@@ -159,7 +159,7 @@ pass additional flags to `ghc'."
   :type '(repeat (string :tag "Argument")))
 
 (defcustom haskell-process-args-stack-ghci
-  '("--ghci-options=-ferror-spans")
+  '("--ghci-options=-ferror-spans" "--no-build" "--no-load")
   "Additional arguments for `stack ghci' invocation."
   :group 'haskell-interactive
   :type '(repeat (string :tag "Argument")))
@@ -285,12 +285,6 @@ imports become available?"
   :type 'boolean
   :group 'haskell-interactive)
 
-(defcustom haskell-interactive-mode-scroll-to-bottom
-  nil
-  "Scroll to bottom in the REPL always."
-  :type 'boolean
-  :group 'haskell-interactive)
-
 (defcustom haskell-interactive-popup-errors
   t
   "Popup errors in a separate buffer."
@@ -346,6 +340,21 @@ The default is `haskell-interactive-prompt' with the last > replaced with |."
   t
   "Include the file name of the module being compiled when
 printing compilation messages."
+  :type 'boolean
+  :group 'haskell-interactive)
+
+(defcustom haskell-interactive-mode-read-only
+  t
+  "Non-nil means most GHCi/haskell-interactive-mode output is read-only.
+This does not include the prompt.  Configure
+`haskell-interactive-prompt-read-only' to change the prompt's
+read-only property."
+  :type 'boolean
+  :group 'haskell-interactive)
+
+(defcustom haskell-interactive-prompt-read-only
+  haskell-interactive-mode-read-only
+  "Non-nil means the prompt (and prompt2) is read-only."
   :type 'boolean
   :group 'haskell-interactive)
 

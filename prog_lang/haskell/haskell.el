@@ -49,9 +49,6 @@
     (define-key map (kbd "C-c C-x") 'haskell-process-cabal)
     (define-key map (kbd "C-c C-b") 'haskell-interactive-switch)
     (define-key map (kbd "C-c C-z") 'haskell-interactive-switch)
-    (define-key map (kbd "M-n") 'haskell-goto-next-error)
-    (define-key map (kbd "M-p") 'haskell-goto-prev-error)
-    (define-key map (kbd "C-c M-p") 'haskell-goto-first-error)
     map)
   "Keymap for using `interactive-haskell-mode'.")
 
@@ -309,10 +306,6 @@ If `haskell-process-load-or-reload-prompt' is nil, accept `default'."
   "Get the current process from the current session."
   (haskell-session-process (haskell-session)))
 
-(defun haskell-interactive-buffer ()
-  "Get the interactive buffer of the session."
-  (haskell-session-interactive-buffer (haskell-session)))
-
 ;;;###autoload
 (defun haskell-kill-session-process (&optional session)
   "Kill the process."
@@ -502,7 +495,7 @@ for various things, but is optional."
   (insert-file-contents-literally
    (concat (haskell-session-current-dir (haskell-session))
            "/"
-           (haskell-guess-module-name)
+           (haskell-guess-module-name-from-file-name (buffer-file-name))
            ".imports")))
 
 (defun haskell-interactive-jump-to-error-line ()

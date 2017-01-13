@@ -12,7 +12,7 @@
 ;;          2003      Dave Love <fx@gnu.org>
 ;;          2016      Arthur Fayzrakhmanov
 ;; Keywords: faces files Haskell
-;; Version: 16.1-git
+;; Version: 16.2-git
 ;; URL: https://github.com/haskell/haskell-mode
 
 ;; This file is not part of GNU Emacs.
@@ -150,7 +150,7 @@
 ;; All functions/variables start with `(literate-)haskell-'.
 
 ;; Version of mode.
-(defconst haskell-version "16.1-git"
+(defconst haskell-version "16.2-git"
   "The release version of `haskell-mode'.")
 
 ;;;###autoload
@@ -200,7 +200,7 @@ be set to the preferred literate style."
   (let ((map (make-sparse-keymap)))
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; Editing-specific commands
-    (define-key map (kbd "C-c C-.") 'haskell-mode-format-imports)
+    (define-key map (kbd "C-c C-,") 'haskell-mode-format-imports)
     (define-key map [remap delete-indentation] 'haskell-delete-indentation)
     (define-key map (kbd "C-c C-l") 'haskell-mode-enable-process-minor-mode)
     (define-key map (kbd "C-c C-b") 'haskell-mode-enable-process-minor-mode)
@@ -530,6 +530,12 @@ be set to the preferred literate style."
 
     (goto-char begin)
     (let ((ppss (syntax-ppss)))
+      (when (nth 4 ppss)
+        ;; go to the end of a comment, there is nothing to see inside
+        ;; a comment so we might as well just skip over it
+        ;; immediatelly
+        (setq ppss (parse-partial-sexp (point) (point-max) nil nil ppss
+                                       'syntax-table)))
       (when (nth 8 ppss)
         ;; go to the beginning of a comment or string
         (goto-char (nth 8 ppss))
@@ -567,13 +573,14 @@ be set to the preferred literate style."
               ;; when a generic delimiter is not closed so in case
               ;; string ends at the end of the buffer we will use
               ;; plain string
-              (when (and (equal (match-beginning 3) (match-end 3))
-                         (not (equal (match-beginning 3) (point-max))))
+              (when (and (not (match-beginning 3))
+                         (not (equal (match-end 2) (point-max))))
                 (put-text-property (match-beginning 1) (match-end 1) 'syntax-table (string-to-syntax "|"))
-                (put-text-property (match-beginning 3) (1+ (match-end 3)) 'syntax-table (string-to-syntax "|")))))
+                (put-text-property (match-end 2 ) (1+ (match-end 2)) 'syntax-table (string-to-syntax "|")))))
            ((equal token-kind 'template-haskell-quasi-quote)
             (put-text-property (match-beginning 2) (match-end 2) 'syntax-table (string-to-syntax "\""))
-            (put-text-property (match-beginning 4) (match-end 4) 'syntax-table (string-to-syntax "\""))
+            (when (match-beginning 4)
+              (put-text-property (match-beginning 4) (match-end 4) 'syntax-table (string-to-syntax "\"")))
             (save-excursion
               (goto-char (match-beginning 3))
               (let ((limit (match-end 3)))
@@ -717,8 +724,6 @@ Returns beginning position of qualified part or nil if no qualified part found."
 (define-derived-mode haskell-mode prog-mode "Haskell"
   "Major mode for editing Haskell programs.
 
-For more information see also Info node `(haskell-mode)Getting Started'.
-
 \\<haskell-mode-map>
 
 Literate Haskell scripts are supported via `literate-haskell-mode'.
@@ -765,8 +770,6 @@ example, to enable `interactive-haskell-mode', use the following:
 
     (add-hook 'haskell-mode-hook 'interactive-haskell-mode)
 
-For more details see Info node `(haskell-mode)haskell-mode-hook'.
-
 Minor modes that work well with `haskell-mode':
 
 - `smerge-mode': show and work with diff3 conflict markers used
@@ -802,6 +805,8 @@ Minor modes that work well with `haskell-mode':
                 ;; Get help from font-lock-syntactic-keywords.
                 (parse-sexp-lookup-properties . t)
                 (font-lock-extra-managed-props . (composition haskell-type))))
+  ;; Preprocessor definitions can have backslash continuations
+  (setq-local font-lock-multiline t)
   ;; Haskell's layout rules mean that TABs have to be handled with extra care.
   ;; The safer option is to avoid TABs.  The second best is to make sure
   ;; TABs stops are 8 chars apart, as mandated by the Haskell Report.  --Stef
@@ -1040,6 +1045,8 @@ To be added to `flymake-init-create-temp-buffer-copy'."
     (goto-char (+ (line-beginning-position)
                   col))))
 
+(declare-function haskell-mode-stylish-buffer "haskell-commands")
+
 (defun haskell-mode-before-save-handler ()
   "Function that will be called before buffer's saving."
   (when haskell-stylish-on-save
@@ -1111,15 +1118,36 @@ successful, nil otherwise."
       (if (not (haskell-mode-try-insert-scc-at-point))
           (error "Could not insert or remove SCC"))))
 
-(defun haskell-guess-module-name ()
-  "Guess the current module name of the buffer."
-  (interactive)
-  (let ((components (cl-loop for part
-                             in (reverse (split-string (buffer-file-name) "/"))
+(defun haskell-guess-module-name-from-file-name (file-name)
+  "Guess the module name from FILE-NAME.
+
+Based on given FILE-NAME this function tries to find path
+components that look like module identifiers and composes full
+module path using this information. For example:
+
+    /Abc/Def/Xyz.lhs => Abc.Def.Xyz
+    /Ab-c/Def/Xyz.lhs => Def.Xyz
+    src/Abc/Def/Xyz.hs => Abc.Def.Xyz
+    c:\\src\\Abc\\Def\\Xyz.hs => Abc.Def.Xyz
+    nonmodule.txt => nil
+
+This function usually will be used with `buffer-file-name':
+
+    (haskell-guess-module-name-from-file-name (buffer-file-name))"
+
+  (let* ((file-name-sans-ext (file-name-sans-extension file-name))
+         (components (cl-loop for part
+                             in (reverse (split-string file-name-sans-ext "/"))
                              while (let ((case-fold-search nil))
-                                     (string-match "^[A-Z]+" part))
-                             collect (replace-regexp-in-string "\\.l?hs$" "" part))))
-    (mapconcat 'identity (reverse components) ".")))
+                                     (string-match (concat "^" haskell-lexeme-modid "$") part))
+                             collect part)))
+    (when components
+      (mapconcat 'identity (reverse components) "."))))
+
+(defun haskell-guess-module-name ()
+  "Guess the current module name of the buffer.
+Uses `haskell-guess-module-name-from-file-name'."
+  (haskell-guess-module-name-from-file-name (buffer-file-name)))
 
 (defvar haskell-auto-insert-module-format-string
   "-- | \n\nmodule %s where\n\n"
@@ -1131,7 +1159,7 @@ successful, nil otherwise."
   (when (and (= (point-min)
                 (point-max))
              (buffer-file-name))
-    (insert (format haskell-auto-insert-module-format-string (haskell-guess-module-name)))
+    (insert (format haskell-auto-insert-module-format-string (haskell-guess-module-name-from-file-name (buffer-file-name))))
     (goto-char (point-min))
     (end-of-line)))
 
@@ -1142,6 +1170,7 @@ successful, nil otherwise."
 If optional AND-THEN-FIND-THIS-TAG argument is present it is used
 with function `xref-find-definitions' after new table was
 generated."
+  (interactive)
   (let* ((dir (haskell-cabal--find-tags-dir))
          (command (haskell-cabal--compose-hasktags-command dir)))
     (if (not command)

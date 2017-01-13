@@ -41,6 +41,7 @@
 ;; version
 
 (require 'cl-lib)
+(require 'haskell-lexeme)
 
 ;;;###autoload
 (defgroup haskell-indentation nil
@@ -189,17 +190,20 @@ negative ARG.  Handles bird style literate Haskell too."
         (delete-horizontal-space)
         (newline))
     ;;  - save the current column
-    (let* ((ci (haskell-indentation-current-indentation))
-           (indentations (or (haskell-indentation-find-indentations)
-                             '(0))))
+    (let ((ci (haskell-indentation-current-indentation)))
       ;; - jump to the next line and reindent to at the least same level
       (delete-horizontal-space)
       (newline)
-      (when (haskell-indentation-bird-p)
-        (insert "> "))
-      (haskell-indentation-reindent-to
-       (haskell-indentation-next-indentation (- ci 1) indentations 'nofail)
-       'move))))
+      ;; calculate indentation after newline is inserted because if we
+      ;; break an identifier we might create a keyword, for example
+      ;; "dowhere" => "do where"
+      (let ((indentations (or (haskell-indentation-find-indentations)
+                              '(0))))
+        (when (haskell-indentation-bird-p)
+          (insert "> "))
+        (haskell-indentation-reindent-to
+         (haskell-indentation-next-indentation (- ci 1) indentations 'nofail)
+         'move)))))
 
 (defun haskell-indentation-next-indentation (col indentations &optional nofail)
   "Find the leftmost indentation which is greater than COL.
@@ -384,6 +388,7 @@ and indent when all of the following are true:
 ;; the token at the current parser point or a pseudo-token (see
 ;; `haskell-indentation-read-next-token')
 (defvar current-token)
+(defvar previous-token)
 (defvar left-indent)            ;; most left possible indentation
 (defvar starter-indent)         ;; column at a keyword
 (defvar current-indent)         ;; the most right indentation
@@ -417,8 +422,14 @@ and indent when all of the following are true:
     ;; not bird style
     (catch 'return
       (while (not (bobp))
-        (forward-comment (- (buffer-size)))
-        (beginning-of-line)
+        (let ((point (point)))
+          ;; (forward-comment -1) gets lost if there are unterminated
+          ;; string constants and does not move point anywhere. We fix
+          ;; that case with (forward-line -1)
+          (forward-comment (- (buffer-size)))
+          (if (equal (point) point)
+              (forward-line -1)
+            (beginning-of-line)))
         (let* ((ps (syntax-ppss))
               (start-of-comment-or-string (nth 8 ps))
               (start-of-list-expression (nth 1 ps)))
@@ -446,6 +457,7 @@ and indent when all of the following are true:
           (left-indent haskell-indentation-layout-offset)
           (case-fold-search nil)
           current-token
+          previous-token
           following-token
           possible-indentations
           implicit-layout-active)
@@ -510,6 +522,7 @@ and indent when all of the following are true:
     ("type"     . haskell-indentation-data)
     ("newtype"  . haskell-indentation-data)
     ("import"   . haskell-indentation-import)
+    ("foreign"  . haskell-indentation-foreign)
     ("where"    . haskell-indentation-toplevel-where)
     ("class"    . haskell-indentation-class-declaration)
     ("instance" . haskell-indentation-class-declaration)
@@ -520,7 +533,7 @@ and indent when all of the following are true:
   `(("::" .
      ,(apply-partially 'haskell-indentation-with-starter
                        (apply-partially 'haskell-indentation-separated
-                                        'haskell-indentation-type "->")))
+                                        'haskell-indentation-type '("->" "=>"))))
     ("("  .
      ,(apply-partially 'haskell-indentation-list
                        'haskell-indentation-type ")" ","))
@@ -641,14 +654,16 @@ After a lambda (backslash) there are two possible cases:
     (catch 'return
       (while t
         (cond
-         ((member current-token '(value operator "->"))
+         ((member current-token '(value operator "->" "=>"))
           (haskell-indentation-read-next-token))
 
          ((eq current-token 'end-tokens)
           (when (member following-token
                         '(value operator no-following-token
                                 "(" "[" "{" "::"))
-            (haskell-indentation-add-indentation current-indent)
+            (if (equal following-token "=>")
+                (haskell-indentation-add-indentation starter-indent)
+              (haskell-indentation-add-indentation current-indent))
             (haskell-indentation-add-indentation left-indent))
           (throw 'return nil))
          (t (let ((parser (assoc current-token haskell-indentation-type-list)))
@@ -661,13 +676,13 @@ After a lambda (backslash) there are two possible cases:
   (let ((current-indent (current-column)))
     (catch 'return
       (cond
-       ((member current-token '(value operator "->"))
+       ((member current-token '(value operator "->" "=>"))
         (haskell-indentation-read-next-token))
 
        ((eq current-token 'end-tokens)
         (when (member following-token
                       '(value operator no-following-token
-                              "->" "(" "[" "{" "::"))
+                              "->" "=>" "(" "[" "{" "::"))
           (haskell-indentation-add-indentation current-indent))
         (throw 'return nil))
        (t (let ((parser (assoc current-token haskell-indentation-type-list)))
@@ -682,7 +697,7 @@ For example
    let x :: Int = 12
    do x :: Int <- return 12"
   (haskell-indentation-with-starter
-   (apply-partially #'haskell-indentation-separated #'haskell-indentation-type "->"))
+   (apply-partially #'haskell-indentation-separated #'haskell-indentation-type '("->" "=>")))
   (when (member current-token '("<-" "="))
     (haskell-indentation-statement-right #'haskell-indentation-expression)))
 
@@ -725,6 +740,10 @@ For example
   "Parse import declaration."
   (haskell-indentation-with-starter #'haskell-indentation-expression))
 
+(defun haskell-indentation-foreign ()
+  "Parse foreign import declaration."
+  (haskell-indentation-with-starter (apply-partially #'haskell-indentation-expression '(value operator "import"))))
+
 (defun haskell-indentation-class-declaration ()
   "Parse class declaration."
   (haskell-indentation-with-starter
@@ -754,6 +773,8 @@ For example
   (haskell-indentation-with-starter
    (lambda ()
      (haskell-indentation-read-next-token)
+     (when (equal current-token 'layout-item)
+       (haskell-indentation-read-next-token))
      (when (string= current-token "(")
        (haskell-indentation-list
         #'haskell-indentation-module-export
@@ -911,13 +932,15 @@ parser.  If parsing ends here, set indentation to left-indent."
           '("if" "let" "do" "case" "\\" "(" "{" "[" "::"
             value operator no-following-token)))
 
-(defun haskell-indentation-expression ()
+(defun haskell-indentation-expression (&optional accepted-tokens)
   "Parse an expression until an unknown token is encountered."
   (catch 'return
     (let ((current-indent (current-column)))
+      (unless accepted-tokens
+        (setq accepted-tokens '(value operator)))
       (while t
         (cond
-         ((memq current-token '(value operator))
+         ((memq current-token accepted-tokens)
           (haskell-indentation-read-next-token))
          ((eq current-token 'end-tokens)
           (cond ((string= following-token "where")
@@ -1020,7 +1043,8 @@ layout starts."
                (haskell-indentation-read-next-token))
               ((eq current-token 'end-tokens)
                (when (or (and
-                          (not (string= following-token "{"))
+                          (not (member following-token '("{" operator)))
+                          (not (member previous-token '(operator)))
                           (haskell-indentation-expression-token-p following-token))
                          (string= following-token ";")
                          (and (equal layout-indent 0)
@@ -1170,6 +1194,7 @@ line."
               (> layout-indent (current-column)))
          (setq current-token 'layout-end))
         (t
+         (setq previous-token (haskell-indentation-peek-token))
          (haskell-indentation-skip-token)
          (if (>= (point) indentation-point)
              (progn
@@ -1196,9 +1221,9 @@ line."
          (match-string-no-properties 1))
         ((looking-at "[][(){}[,;]")
          (match-string-no-properties 0))
-        ((looking-at "\\(\\\\\\|->\\|<-\\|::\\|=\\||\\)\\([^-:!#$%&*+./<=>?@\\\\^|~]\\|$\\)")
+        ((looking-at "\\(\\\\\\|->\\|<-\\|::\\|=\\||\\|=>\\)\\([^-:!#$%&*+./<=>?@\\\\^|~]\\|$\\)")
          (match-string-no-properties 1))
-        ((looking-at "\\(→\\|←\\|∷\\)\\([^-:!#$%&*+./<=>?@\\\\^|~]\\|$\\)")
+        ((looking-at "\\(→\\|←\\|∷\\|⇒\\)\\([^-:!#$%&*+./<=>?@\\\\^|~]\\|$\\)")
          (let ((tok (match-string-no-properties 1)))
            (or (cdr (assoc tok haskell-indentation-unicode-tokens)) tok)))
         ((looking-at"[-:!#$%&*+./<=>?@\\\\^|~`]" )
@@ -1207,30 +1232,18 @@ line."
 
 (defun haskell-indentation-skip-token ()
   "Skip to the next token."
-  (let ((case-fold-search nil))
-    (if (or (looking-at "'\\([^\\']\\|\\\\.\\)'")
-            (looking-at "'\\\\\\([^\\']\\|\\\\.\\)*'")
-            (looking-at "\"\\([^\\\"]\\|\\\\.\\)*\"")
-            ;; QuasiQuotes, with help of propertize buffer and string delimeters
-            (looking-at "\\s\"\\S\"*\\s\"")
-            ;; Hierarchical names always start with uppercase
-            (looking-at
-             "[[:upper:]]\\(\\s_\\|\\sw\\|'\\)*\\(\\.\\(\\s_\\|\\sw\\|'\\)+\\)*")
-            ;; Only unqualified vars can start with lowercase.
-            (looking-at "\\(\\s_\\|\\sw\\)\\(\\s_\\|\\sw\\|'\\)*")
-            (looking-at "[0-9][0-9oOxXeE+-]*")
-            (looking-at "[-:!#$%&*+./<=>?@\\\\^|~]+")
-            (looking-at "[](){}[,;]")
-            (looking-at "`[[:alnum:]']*`"))
-        (goto-char (match-end 0))
-      ;; otherwise skip until space found
-      (skip-syntax-forward "^-"))
-    (forward-comment (buffer-size))
-    (while (and (haskell-indentation-bird-p)
-                (bolp)
-                (eq (char-after) ?>))
-      (forward-char)
-      (forward-comment (buffer-size)))))
+  (if (haskell-lexeme-looking-at-token)
+      (goto-char (match-end 0))
+    ;; otherwise skip until space found
+    (skip-syntax-forward "^-"))
+  ;; we have to skip unterminated string fence at the end of line
+  (skip-chars-forward "\n")
+  (forward-comment (buffer-size))
+  (while (and (haskell-indentation-bird-p)
+              (bolp)
+              (eq (char-after) ?>))
+    (forward-char)
+    (forward-comment (buffer-size))))
 
 (provide 'haskell-indentation)
 
