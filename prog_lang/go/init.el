@@ -42,6 +42,8 @@ items follow a style that is consistent with other prog-modes."
                  ;; use flat imenu index
                  (setq-local imenu-create-index-function
                              #'go-mode-create-flat-imenu-index)))
+
+     (setq gofmt-command "goimports")
      (define-key go-mode-map (kbd "C-c p") 'gofmt)
      (define-key go-mode-map (kbd "C-c o") 'go-mode-set-gopath)
      (define-key go-mode-map "\C-m" 'newline-and-indent)
