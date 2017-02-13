@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gw
+# key: gw
+# --
+git worktree add ~/scratch/${1:xxx} origin/$0

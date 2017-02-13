@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: glfs
+# key: glfs
+# --
+GIT_LFS_SKIP_SMUDGE=1 git $0
