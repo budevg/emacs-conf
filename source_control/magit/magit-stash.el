@@ -1,6 +1,6 @@
 ;;; magit-stash.el --- stash support for Magit  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2016  The Magit Project Contributors
+;; Copyright (C) 2008-2017  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -31,6 +31,23 @@
 
 ;;; Options
 
+(defgroup magit-stash nil
+  "List stashes and show stash diffs."
+  :group 'magit-modes)
+
+;;;; Diff options
+
+(defcustom magit-stash-sections-hook
+  '(magit-insert-stash-worktree
+    magit-insert-stash-index
+    magit-insert-stash-untracked)
+  "Hook run to insert sections into stash diff buffers."
+  :package-version '(magit . "2.1.0")
+  :group 'magit-stash
+  :type 'hook)
+
+;;;; Log options
+
 (defcustom magit-stashes-margin
   (list (nth 0 magit-log-margin)
         (nth 1 magit-log-margin)
@@ -52,7 +69,7 @@ AUTHOR controls whether the name of the author is also shown by
 AUTHOR-WIDTH has to be an integer.  When the name of the author
   is shown, then this specifies how much space is used to do so."
   :package-version '(magit . "2.9.0")
-  :group 'magit-refs
+  :group 'magit-stash
   :group 'magit-margin
   :type magit-log-margin--custom-type
   :initialize 'magit-custom-initialize-reset
@@ -64,7 +81,6 @@ AUTHOR-WIDTH has to be an integer.  When the name of the author
 ;;;###autoload (autoload 'magit-stash-popup "magit-stash" nil t)
 (magit-define-popup magit-stash-popup
   "Popup console for stash commands."
-  'magit-commands
   :man-page "git-stash"
   :switches '((?u "Also save untracked files" "--include-untracked")
               (?a "Also save untracked and ignored files" "--all"))
@@ -198,7 +214,8 @@ and forgo removing the stash."
   "Remove a stash from the stash list.
 When the region is active offer to drop all contained stashes."
   (interactive (list (--if-let (magit-region-values 'stash)
-                         (magit-confirm t nil "Drop %i stashes" it)
+                         (or (magit-confirm t nil "Drop %i stashes" it)
+                             (user-error "Abort"))
                        (magit-read-stash "Drop stash"))))
   (dolist (stash (if (listp stash)
                      (nreverse (prog1 stash (setq stash (car stash))))
@@ -358,15 +375,6 @@ instead of \"Stashes:\"."
 
 ;;; Show Stash
 
-(defcustom magit-stash-sections-hook
-  '(magit-insert-stash-worktree
-    magit-insert-stash-index
-    magit-insert-stash-untracked)
-  "Hook run to insert sections into stash buffers."
-  :package-version '(magit . "2.1.0")
-  :group 'magit-log
-  :type 'hook)
-
 ;;;###autoload
 (defun magit-stash-show (stash &optional args files)
   "Show all diffs of a stash in a buffer."
@@ -387,6 +395,7 @@ instead of \"Stashes:\"."
         (concat
          "\s" (propertize (capitalize stash) 'face 'magit-section-heading)
          "\s" (magit-rev-format "%s" stash)))
+  (setq magit-buffer-revision-hash (magit-rev-parse stash))
   (magit-insert-section (stash)
     (run-hooks 'magit-stash-sections-hook)))
 
@@ -423,9 +432,5 @@ instead of \"Stashes:\"."
                                   (magit-git-items "ls-tree" "-z" "--name-only"
                                                    "-r" "--full-tree" rev)))))
 
-;;; magit-stash.el ends soon
 (provide 'magit-stash)
-;; Local Variables:
-;; indent-tabs-mode: nil
-;; End:
 ;;; magit-stash.el ends here

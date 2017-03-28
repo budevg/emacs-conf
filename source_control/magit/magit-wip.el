@@ -1,6 +1,6 @@
 ;;; magit-wip.el --- commit snapshots to work-in-progress refs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2016  The Magit Project Contributors
+;; Copyright (C) 2010-2017  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -24,7 +24,7 @@
 ;;; Commentary:
 
 ;; This library defines tree global modes which automatically commit
-;; snapshots to branch specific work-in-progress refs before and after
+;; snapshots to branch-specific work-in-progress refs before and after
 ;; making changes, and two commands which can be used to do so on
 ;; demand.
 
@@ -37,7 +37,9 @@
 
 (defgroup magit-wip nil
   "Automatically commit to work-in-progress refs."
-  :group 'magit-extensions)
+  :link '(info-link "(magit)Wip Modes")
+  :group 'magit-modes
+  :group 'magit-essentials)
 
 (defcustom magit-wip-after-save-local-mode-lighter " sWip"
   "Lighter for Magit-Wip-After-Save-Local mode."
@@ -280,9 +282,5 @@ many \"branches\" of each wip ref are shown."
         (cl-decf count))
       (cons wipref (nreverse tips)))))
 
-;;; magit-wip.el ends soon
 (provide 'magit-wip)
-;; Local Variables:
-;; indent-tabs-mode: nil
-;; End:
 ;;; magit-wip.el ends here

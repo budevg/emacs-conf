@@ -1,6 +1,6 @@
 ;;; magit-log.el --- inspect Git history  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2016  The Magit Project Contributors
+;; Copyright (C) 2010-2017  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -52,17 +52,8 @@
 
 (defgroup magit-log nil
   "Inspect and manipulate Git history."
+  :link '(info-link "(magit)Logging")
   :group 'magit-modes)
-
-(defgroup magit-margin nil
-  "Information Magit displays in the margin.
-
-If you want to change the DATE-STYLE of all `magit-*-margin'
-options to the same value, you can do so by only customizing
-`magit-log-margin' *before* `magit' is loaded.  If you do so,
-then the respective value for the other options will default
-to what you have set for `magit-log-margin'."
-  :group 'magit-log)
 
 (defcustom magit-log-mode-hook nil
   "Hook run after entering Magit-Log mode."
@@ -72,8 +63,8 @@ to what you have set for `magit-log-margin'."
 (defcustom magit-log-arguments '("-n256" "--graph" "--decorate")
   "The log arguments used in `magit-log-mode' buffers."
   :package-version '(magit . "2.3.0")
+  :group 'magit-git-arguments
   :group 'magit-log
-  :group 'magit-commands
   :type '(repeat (string :tag "Argument")))
 
 (defcustom magit-log-remove-graph-args '("--follow" "--grep" "-G" "-S" "-L")
@@ -247,8 +238,7 @@ AUTHOR-WIDTH has to be an integer.  When the name of the author
 (defcustom magit-reflog-arguments '("-n256")
   "The log arguments used in `magit-reflog-mode' buffers."
   :package-version '(magit . "2.3.0")
-  :group 'magit-log
-  :group 'magit-commands
+  :group 'magit-git-arguments
   :type '(repeat (string :tag "Argument")))
 
 (defcustom magit-reflog-margin
@@ -329,11 +319,13 @@ the upstream isn't ahead of the current branch) show."
 (defcustom magit-log-section-arguments '("-n256" "--decorate")
   "The log arguments used in buffers that show other things besides logs."
   :package-version '(magit . "2.4.0")
+  :group 'magit-git-arguments
   :group 'magit-log
   :group 'magit-status
   :type '(repeat (string :tag "Argument")))
 
 ;;; Commands
+;;;; Popups
 
 (defvar magit-log-popup
   '(:variable magit-log-arguments
@@ -507,6 +499,8 @@ buffer."
                 magit-log-section-arguments))))
     (magit-invoke-popup 'magit-log-refresh-popup nil arg)))
 
+;;;; Refresh Commands
+
 (defun magit-log-refresh (args files)
   "Set the local log arguments for the current buffer."
   (interactive (magit-log-arguments t))
@@ -554,6 +548,8 @@ buffer."
          (user-error "Cannot change log arguments in reflog buffers"))
         ((derived-mode-p 'magit-cherry-mode)
          (user-error "Cannot change log arguments in cherry buffers"))))
+
+;;;; Log Commands
 
 (defvar magit-log-read-revs-map
   (let ((map (make-sparse-keymap)))
@@ -690,6 +686,8 @@ With a prefix argument or when `--follow' is part of
   (interactive)
   (magit-reflog "HEAD"))
 
+;;;; Limit Commands
+
 (defun magit-log-toggle-commit-limit ()
   "Toggle the number of commits the current log buffer is limited to.
 If the number of commits is currently limited, then remove that
@@ -723,6 +721,8 @@ limit.  Otherwise set it to 256."
   (--when-let (--first (string-match "^-n\\([0-9]+\\)?$" it)
                        (car (magit-log-arguments t)))
     (string-to-number (match-string 1 it))))
+
+;;;; Other Commands
 
 (defun magit-log-bury-buffer (&optional arg)
   "Bury the current buffer or the revision buffer in the same frame.
@@ -909,7 +909,7 @@ Do not add this to a hook variable."
           "\\(?1:[^\0]+\\)\0"                      ; sha1
           "\\(?5:[^\0]*\\)\0"                      ; author
           "\\(?:\\(?:[^@]+@{\\(?6:[^}]+\\)}\0"     ; date
-          "\\(?10:merge \\|autosave \\|restart \\|[^:]+: \\)?" ; refsub
+          "\\(?10:merge \\|autosave \\|restart \\|[^:\n]+: \\)?" ; refsub
           "\\(?2:.*\\)?\\)\\|\0\\)$"))             ; msg
 
 (defconst magit-reflog-subject-re
@@ -972,8 +972,9 @@ Do not add this to a hook variable."
                             magit-log-bisect-vis-re
                           magit-log-heading-re)))
       (magit-delete-line)
-      ;; `git reflog show' output sometimes ends with an incomplete
-      ;; element (which has no basis in the data stored in the file).
+      ;; If the reflog entries have been pruned, the output of `git
+      ;; reflog show' includes a partial line that refers to the hash
+      ;; of the youngest expired reflog entry.
       (when (and (eq style 'reflog) (not date))
         (cl-return-from magit-log-wash-rev t))
       (magit-insert-section section (commit hash)
@@ -1002,10 +1003,11 @@ Do not add this to a hook variable."
           (insert (propertize hash 'face 'magit-hash) ?\s))
         (when (and refs (not magit-log-show-refname-after-summary))
           (insert (magit-format-ref-labels refs) ?\s))
-        (when refsub
+        (when (eq style 'reflog)
           (insert (format "%-2s " (1- magit-log-count)))
-          (insert (magit-reflog-format-subject
-                   (substring refsub 0 (if (string-match-p ":" refsub) -2 -1)))))
+          (when refsub
+            (insert (magit-reflog-format-subject
+                     (substring refsub 0 (if (string-match-p ":" refsub) -2 -1))))))
         (when msg
           (insert (propertize msg 'face
                               (pcase (and gpg (aref gpg 0))
@@ -1080,9 +1082,15 @@ Do not add this to a hook variable."
   t)
 
 (defun magit-log-maybe-show-more-commits (section)
-  "Automatically insert more commit sections in a log.
-Only do so if `point' is on the \"show more\" section,
-and `magit-log-auto-more' is non-nil."
+  "When point is at the end of a log buffer, insert more commits.
+
+Log buffers end with a button \"Type + to show more history\".
+When the use of a section movement command puts point on that
+button, then automatically show more commits, without the user
+having to press \"+\".
+
+This function is called `magit-section-movement-hook',
+and exists mostly for backward compatibility reasons."
   (when (and (eq (magit-section-type section) 'longer)
              magit-log-auto-more)
     (magit-log-double-commit-limit)
@@ -1212,7 +1220,7 @@ If there is no blob buffer in the same frame, then do nothing."
 (define-derived-mode magit-log-select-mode magit-log-mode "Magit Select"
   "Mode for selecting a commit from history.
 
-This mode is documented in info node `(magit)Select from log'.
+This mode is documented in info node `(magit)Select from Log'.
 
 \\<magit-mode-map>\
 Type \\[magit-refresh] to refresh the current buffer.
@@ -1356,7 +1364,8 @@ Type \\[magit-reset] to reset HEAD to the commit at point.
         (propertize (concat " Reflog for " ref) 'face 'magit-header-line))
   (magit-insert-section (reflogbuf)
     (magit-git-wash (apply-partially 'magit-log-wash-log 'reflog)
-      "reflog" "show" "--format=%h%x00%aN%x00%gd%x00%gs" "--date=raw" args ref)))
+      "reflog" "show" "--format=%h%x00%aN%x00%gd%x00%gs" "--date=raw"
+      args ref "--")))
 
 (defvar magit-reflog-labels
   '(("commit"      . magit-reflog-commit)
@@ -1495,7 +1504,7 @@ then show the last `magit-log-section-commit-count' commits."
 
 (defun magit-insert-unpulled-cherries ()
   "Insert section showing unpulled commits.
-Like `magit-insert-unpulled-to-upstream' but prefix each commit
+Like `magit-insert-unpulled-from-upstream' but prefix each commit
 which has not been applied yet (i.e. a commit with a patch-id
 not shared with any local commit) with \"+\", and all others with
 \"-\"."
@@ -1518,16 +1527,5 @@ all others with \"-\"."
       (magit-git-wash (apply-partially 'magit-log-wash-log 'cherry)
         "cherry" "-v" (magit-abbrev-arg) "@{upstream}"))))
 
-;;; magit-log.el ends soon
-
-(define-obsolete-variable-alias 'magit-log-section-args
-  'magit-log-section-arguments "Magit 2.2.0")
-(define-obsolete-function-alias 'magit-insert-unpulled-or-recent-commits
-  'magit-insert-unpulled-from-upstream-or-recent "Magit 2.4.0")
-
 (provide 'magit-log)
-;; Local Variables:
-;; coding: utf-8
-;; indent-tabs-mode: nil
-;; End:
 ;;; magit-log.el ends here

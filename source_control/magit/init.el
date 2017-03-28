@@ -8,7 +8,7 @@
         (magit-diff "HEAD" '() (list file))
       (magit-section-toggle (magit-current-section)))))
 
-(setq magit-version "2.8.0")
+(setq magit-version "2.10.3")
 
 (eval-after-load "magit"
   '(progn
