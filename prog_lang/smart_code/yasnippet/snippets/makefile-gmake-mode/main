@@ -71,3 +71,9 @@ $(BUILD_DIR)/%.o: %.cpp
 
 clean:
 	-rm -rf $(BUILD_DIR)
+
+print-%:
+	@echo '$*=$($*)'
+	@echo '  origin = $(origin $*)'
+	@echo '  flavor = $(flavor $*)'
+	@echo '   value = $(value  $*)'
