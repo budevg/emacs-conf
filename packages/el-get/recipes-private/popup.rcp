@@ -1,0 +1,7 @@
+(:name popup
+       :description "Visual Popup Interface Library for Emacs"
+       :type github
+       :pkgname "auto-complete/popup-el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+       )

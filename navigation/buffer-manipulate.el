@@ -32,10 +32,6 @@
       )
 (icomplete-mode t)
 
-(global-set-key [(control \;)] 'ido-switch-buffer)
-(global-set-key [(control \])] 'ido-find-file)
-
-
 (global-set-key [(control right)] 'forward-sexp)
 (global-set-key [(control left)]  'backward-sexp)
 

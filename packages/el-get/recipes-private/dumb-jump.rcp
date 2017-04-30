@@ -1,0 +1,6 @@
+(:name dumb-jump
+       :type github
+       :pkgname "jacktasia/dumb-jump"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+       )

@@ -204,3 +204,12 @@ Fall back to `completing-read' otherwise."
 
 (autoload 'er/expand-region "expand-region.el" nil t)
 (global-set-key (kbd "M-2") #'er/expand-region)
+
+(autoload 'dumb-jump-go "dumb-jump.el" nil t)
+(autoload 'dumb-jump-back "dumb-jump.el" nil t)
+(eval-after-load "dumb-jump"
+  '(progn
+     (setq dumb-jump-force-searcher 'ag)
+     ))
+(global-set-key (kbd "C-]") 'dumb-jump-go)
+(global-set-key (kbd "C-}") 'dumb-jump-back)
