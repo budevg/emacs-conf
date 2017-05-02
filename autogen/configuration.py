@@ -29,7 +29,9 @@ look_and_feel = [Node(path = "look_and_feel/fonts.el",
                 ]
 
 
-navigation = [Node(path = "navigation/init.el",
+navigation = [Node(path = "navigation/swiper",
+                   msg = ""),
+              Node(path = "navigation/init.el",
                    msg = "misc initializations"),
               Node(path = "navigation/dired-init.el",
                    msg = "initialize dired related stuff"),
