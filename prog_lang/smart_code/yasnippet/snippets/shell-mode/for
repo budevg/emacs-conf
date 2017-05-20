@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: for
+# key: for
+# --
+for f in ${1:*}; do ${2:echo $f}; done$0
