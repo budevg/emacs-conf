@@ -19,6 +19,8 @@
 (require 'sh-script)
 (require 'rx)
 
+(declare-function cygwin-convert-file-name-to-windows "cygw32.c" (file &optional absolute-p))
+
 (defvar docker-image-name nil)
 
 (defgroup dockerfile nil
@@ -35,10 +37,19 @@
 (defcustom dockerfile-use-sudo nil
   "Runs docker builder command with sudo.")
 
+(defcustom dockerfile-build-args nil
+  "List of --build-arg to pass to docker build.
+
+Each element of the list will be passed as a separate
+ --build-arg to the docker build command."
+  :type '(repeat string)
+  :group 'dockerfile)
+
 (defvar dockerfile-font-lock-keywords
   `(,(cons (rx (or line-start "onbuild ")
-               (group (or "from" "maintainer" "run" "cmd" "expose" "env"
-                         "add" "copy" "entrypoint" "volume" "user" "workdir" "onbuild"))
+               (group (or "from" "maintainer" "run" "cmd" "expose" "env" "arg"
+                          "add" "copy" "entrypoint" "volume" "user" "workdir" "onbuild"
+                          "label" "stopsignal" "shell" "healthcheck"))
                word-boundary)
            font-lock-keyword-face)
     ,@(sh-font-lock-keywords)
@@ -50,6 +61,7 @@
   (let ((map (make-sparse-keymap))
         (menu-map (make-sparse-keymap)))
     (define-key map "\C-c\C-b" 'dockerfile-build-buffer)
+    (define-key map "\C-c\M-b" 'dockerfile-build-no-cache-buffer)
     (define-key map "\C-c\C-z" 'dockerfile-test-function)
     (define-key map "\C-c\C-c" 'comment-region)
     (define-key map [menu-bar dockerfile-mode] (cons "Dockerfile" menu-map))
@@ -59,12 +71,17 @@
     (define-key menu-map [dfb]
       '(menu-item "Build" dockerfile-build-buffer
                   :help "Send the Dockerfile to docker build"))
+    (define-key menu-map [dfb]
+      '(menu-item "Build without cache" dockerfile-build-no-cache-buffer
+                  :help "Send the Dockerfile to docker build without cache"))
     map))
 
 (defvar dockerfile-mode-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?# "<" table)
     (modify-syntax-entry ?\n ">" table)
+    (modify-syntax-entry ?' "\"" table)
+    (modify-syntax-entry ?= "." table)
     table)
   "Syntax table for `dockerfile-mode'.")
 
@@ -74,16 +91,54 @@
 (unless dockerfile-mode-abbrev-table
   (define-abbrev-table 'dockerfile-mode-abbrev-table ()))
 
+(defun dockerfile-build-arg-string ()
+  "Create a --build-arg string for each element in `dockerfile-build-args'."
+  (mapconcat (lambda (arg) (concat "--build-arg " "\"" arg "\""))
+             dockerfile-build-args " "))
+
+(defun standard-filename (file)
+  "Convert the file name to OS standard.
+If in Cygwin environment, uses Cygwin specific function to convert the
+file name. Otherwise, uses Emacs' standard conversion function."
+  (format "%s" (if (fboundp 'cygwin-convert-file-name-to-windows)
+                   (s-replace "\\" "\\\\" (cygwin-convert-file-name-to-windows file))
+                 (convert-standard-filename file))))
+
+;;;###autoload
 (defun dockerfile-build-buffer (image-name)
   "Build an image based upon the buffer"
   (interactive
    (if (null docker-image-name)
-      (list (read-string "image-name: " nil nil))
+       (list (read-string "image-name: " nil nil))
      (list docker-image-name)))
   (save-buffer)
   (if (stringp image-name)
-      (shell-command
-       (concat (if dockerfile-use-sudo "sudo " "") "docker build -t " image-name " " (file-name-directory (buffer-file-name)) "&")
+      (async-shell-command
+       (format "%sdocker build -t %s %s -f \"%s\" \"%s\""
+               (if dockerfile-use-sudo "sudo " "")
+               image-name
+               (dockerfile-build-arg-string)
+               (standard-filename (buffer-file-name))
+               (standard-filename (file-name-directory (buffer-file-name))))
+       "*docker-build-output*")
+    (print "docker-image-name must be a string, consider surrounding it with double quotes")))
+
+;;;###autoload
+(defun dockerfile-build-no-cache-buffer (image-name)
+  "Build an image based upon the buffer without cache"
+  (interactive
+   (if (null docker-image-name)
+       (list (read-string "image-name: " nil nil))
+     (list docker-image-name)))
+  (save-buffer)
+  (if (stringp image-name)
+      (async-shell-command
+       (format "%s docker build --no-cache -t %s %s -f \"%s\" \"%s\""
+               (if dockerfile-use-sudo "sudo" "")
+               image-name
+               (dockerfile-build-arg-string)
+               (standard-filename (buffer-file-name))
+               (standard-filename (file-name-directory (buffer-file-name))))
        "*docker-build-output*")
     (print "docker-image-name must be a string, consider surrounding it with double quotes")))
 
@@ -97,7 +152,7 @@
 \\{dockerfile-mode-map}
 "
   (set-syntax-table dockerfile-mode-syntax-table)
-  (set (make-local-variable 'require-final-newline) t)
+  (set (make-local-variable 'require-final-newline) mode-require-final-newline)
   (set (make-local-variable 'comment-start) "#")
   (set (make-local-variable 'comment-end) "")
   (set (make-local-variable 'comment-start-skip) "#+ *")
@@ -107,7 +162,7 @@
   (setq local-abbrev-table dockerfile-mode-abbrev-table))
 
 ;;;###autoload
-(add-to-list 'auto-mode-alist '("Dockerfile\\'" . dockerfile-mode))
+(add-to-list 'auto-mode-alist '("Dockerfile.*\\'" . dockerfile-mode))
 
 (provide 'dockerfile-mode)
 
