@@ -37,6 +37,9 @@
 
  (python-mode . ((py-indent-offset . 4)
                  ))
+
+ (js-mode . ((js-indent-level . 4)
+             ))
  )
 "))
 

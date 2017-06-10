@@ -39,6 +39,8 @@ This works on the current region."
 
 (autoload 'web-mode "web-mode" nil t)
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+
 
 (defun my-web-mode-hook ()
   "Hooks for Web mode."
@@ -49,4 +51,8 @@ This works on the current region."
   (define-key web-mode-map (kbd "<backtab>")   'web-mode-fold-or-unfold)
   (set (make-local-variable 'yas--extra-modes) '(html-mode))
   )
-(add-hook 'web-mode-hook  'my-web-mode-hook)
+
+(eval-after-load "web-mode"
+  '(progn
+     (add-hook 'web-mode-hook  'my-web-mode-hook)
+     (setq web-mode-content-types-alist '(("jsx" . "\\.js[x]?\\'")))))
