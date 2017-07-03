@@ -15,6 +15,7 @@
 # OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS)) - add prefix to list
 # make -p - show default rules
 # \`pkg-config --cflags --libs <lib>\` - specify lib compilation flags
+# using '-' before shell command suppresses errors and continues instead of failing
 
 OBJS:= $0
 TARGET:=

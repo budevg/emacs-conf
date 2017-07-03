@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: jt
+# key: jt
+# --
+journalctl --no-pager -l --since '${1:1 min ago}' --until '${2:now}' -u$0
