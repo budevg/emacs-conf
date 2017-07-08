@@ -1,0 +1,7 @@
+(:name groovy-emacs-mode
+       :description "A groovy major mode, grails minor mode, and a groovy inferior mode."
+       :type github
+       :pkgname "Groovy-Emacs-Modes/groovy-emacs-modes"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/groovy")))
+       )

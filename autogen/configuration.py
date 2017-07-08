@@ -153,6 +153,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "init haskell mode"),
              Node(path = "prog_lang/docker/init.el",
                   msg = "docker file mode"),
+             Node(path = "prog_lang/groovy/init.el",
+                  msg = "groovy mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",
