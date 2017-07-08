@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: sr
+# key: sr
+# --
+ssh -q -X -l ${1:root} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $0
