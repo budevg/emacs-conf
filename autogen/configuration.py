@@ -155,6 +155,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "docker file mode"),
              Node(path = "prog_lang/groovy/init.el",
                   msg = "groovy mode"),
+             Node(path = "prog_lang/rust/init.el",
+                  msg = "rust mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",

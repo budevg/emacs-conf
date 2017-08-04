@@ -1,0 +1,6 @@
+(:name rust-mode
+       :type github
+       :pkgname "rust-lang/rust-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/rust")))
+       :description "Emacs mode for Rust")
