@@ -40,11 +40,13 @@ This works on the current region."
 (autoload 'web-mode "web-mode" nil t)
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.js\\'" . web-mode))
 
 
 (defun my-web-mode-hook ()
   "Hooks for Web mode."
   (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-code-indent-offset 2)
   (define-key web-mode-map (kbd "M-3") 'web-mode-comment-or-uncomment)
   (define-key web-mode-map (kbd "C-<down>") (lambda () (interactive) (web-mode-tag-match)))
   (define-key web-mode-map (kbd "C-<up>") (lambda () (interactive) (web-mode-tag-match)))
