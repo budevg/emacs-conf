@@ -49,6 +49,31 @@
   :type 'string
   :group 'ag)
 
+(defcustom ag-arg-literal
+  "--literal"
+  "Ag arg for --literal"
+  :type 'string
+  :group 'ag)
+
+(defcustom ag-arg-group
+  '("--group" "--nogroup")
+  "Ag arg for --[no]group"
+  :type 'list
+  :group 'ag)
+
+(defcustom ag-arg-extra
+  '("--line-number" "--column" "--color"
+    "--color-match" "30;43" "--color-path" "1;32")
+  "Ag arg for extra args"
+  :type 'list
+  :group 'ag)
+
+(defcustom ag-arg-filesearch
+  "--nocolor -S -g"
+  "Ag args for file search"
+  :type 'string
+  :group 'ag)
+
 (defcustom ag-arguments
   (list "--smart-case" "--stats")
   "Additional arguments passed to ag.
@@ -215,14 +240,13 @@ If REGEXP is non-nil, treat STRING as a regular expression."
     (unless (equal (car (last arguments)) "--")
       (setq arguments (append arguments '("--"))))
     (setq arguments
-          (append '("--line-number" "--column" "--color" "--color-match" "30;43"
-                    "--color-path" "1;32")
+          (append ag-arg-extra
                   arguments))
     (if ag-group-matches
-        (setq arguments (cons "--group" arguments))
-      (setq arguments (cons "--nogroup" arguments)))
+        (setq arguments (cons (car ag-arg-group) arguments))
+      (setq arguments (cons (cadr ag-arg-group) arguments)))
     (unless regexp
-      (setq arguments (cons "--literal" arguments)))
+      (setq arguments (cons ag-arg-literal arguments)))
     (when (or (eq system-type 'windows-nt) (eq system-type 'cygwin))
       ;; Use --vimgrep to work around issue #97 on Windows.
       (setq arguments (cons "--vimgrep" arguments)))
@@ -539,7 +563,8 @@ See also `find-dired'."
          (buffer-name (if ag-reuse-buffers
                           "*ag dired*"
                         (format "*ag dired pattern:%s dir:%s*" regexp dir)))
-         (cmd (concat ag-executable " --nocolor -S -g '" regexp "' "
+         (cmd (concat ag-executable " " ag-arg-filesearch
+                      " '" regexp "' "
                       (shell-quote-argument dir)
                       " | grep -v '^$' | sed s/\\'/\\\\\\\\\\'/ | xargs -I '{}' "
                       insert-directory-program " "

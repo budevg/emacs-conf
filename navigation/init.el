@@ -178,13 +178,21 @@ Fall back to `completing-read' otherwise."
 
 ;; ag
 (autoload 'ag "ag.el" nil t)
-(autoload 'ag-dired "ag.el" nil t)
+(autoload 'ag-dired-regexp "ag.el" nil t)
 (autoload 'ag/dwim-at-point "ag.el" nil t)
 (autoload 'wgrep-ag-setup "wgrep-ag")
 (add-hook 'ag-mode-hook 'wgrep-ag-setup)
 (eval-after-load "ag"
   '(progn
-     (setq ag-reuse-buffers t)
+     (setq ag-reuse-buffers t
+           ag-group-matches nil
+           ag-executable "rg"
+           ag-arg-literal "--fixed-strings"
+           ag-arg-group '("--heading" "--no-heading")
+           ag-arg-extra '("--line-number" "--column")
+           ag-arguments '("--smart-case")
+           ag-arg-filesearch "--color never --smart-case --files -g"
+           )
      (define-key ag-mode-map (kbd "q")
        '(lambda () (interactive)
           (let (kill-buffer-query-functions) (kill-buffer))))))
@@ -195,7 +203,7 @@ Fall back to `completing-read' otherwise."
 
 (defun ag-dired-here (pattern)
   (interactive "sFile pattern: ")
-  (ag-dired default-directory pattern))
+  (ag-dired-regexp default-directory (concat "*" pattern "*")))
 
 (global-set-key (kbd "C-f s") 'ag-here)
 (global-set-key (kbd "C-f d") 'ag-dired-here)
@@ -209,7 +217,7 @@ Fall back to `completing-read' otherwise."
 (autoload 'dumb-jump-back "dumb-jump.el" nil t)
 (eval-after-load "dumb-jump"
   '(progn
-     (setq dumb-jump-force-searcher 'ag)
+     (setq dumb-jump-force-searcher 'rg)
      ))
 (global-set-key (kbd "C-]") 'dumb-jump-go)
 (global-set-key (kbd "C-}") 'dumb-jump-back)
