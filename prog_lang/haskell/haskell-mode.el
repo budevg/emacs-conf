@@ -559,8 +559,25 @@ be set to the preferred literate style."
            ((equal token-kind 'number)
             (put-text-property (match-beginning 0) (match-end 0) 'syntax-table (string-to-syntax "w")))
            ((equal token-kind 'char)
-            (put-text-property (match-beginning 0) (1+ (match-beginning 0)) 'syntax-table (string-to-syntax "\""))
-            (put-text-property (1- (match-end 0)) (match-end 0) 'syntax-table (string-to-syntax "\"")))
+            (save-excursion
+              (goto-char (match-beginning 2))
+              (let ((limit (match-end 2)))
+                (save-match-data
+                  (while (re-search-forward "\"" limit t)
+                    (put-text-property (match-beginning 0) (match-end 0) 'syntax-table (string-to-syntax ".")))))
+              ;; Place a generic string delimeter only when an open
+              ;; quote is closed by end-of-line Emacs acts strangely
+              ;; when a generic delimiter is not closed so in case
+              ;; string ends at the end of the buffer we will use
+              ;; plain string
+              (if (and (not (match-beginning 3))
+                       (not (equal (match-end 2) (point-max))))
+                  (progn
+                    (put-text-property (match-beginning 1) (match-end 1) 'syntax-table (string-to-syntax "|"))
+                    (put-text-property (match-end 2 ) (1+ (match-end 2)) 'syntax-table (string-to-syntax "|")))
+                (put-text-property (match-beginning 1) (match-end 1) 'syntax-table (string-to-syntax "\""))
+                (when (not (equal (match-end 2) (point-max)))
+                  (put-text-property (match-end 2 ) (1+ (match-end 2)) 'syntax-table (string-to-syntax "\""))))))
            ((equal token-kind 'string)
             (save-excursion
               (goto-char (match-beginning 2))
@@ -1180,19 +1197,6 @@ generated."
       (when and-then-find-this-tag
         (let ((tags-file-name dir))
           (xref-find-definitions and-then-find-this-tag))))))
-
-(defun haskell-mode-message-line (str)
-  "Echo STR in mini-buffer.
-Given string is shrinken to single line, multiple lines just
-disturbs the programmer."
-  (message "%s" (haskell-mode-one-line str (frame-width))))
-
-(defun haskell-mode-one-line (str width)
-  "Try to fit STR as much as possible on one line according to given WIDTH."
-  (let* ((long-line (replace-regexp-in-string "\n" " " str))
-         (condensed  (replace-regexp-in-string
-                      " +" " " (haskell-string-trim long-line))))
-    (truncate-string-to-width condensed width nil nil "…")))
 
 ;; Provide ourselves:
 (provide 'haskell-mode)
