@@ -41,9 +41,14 @@
 (require 'cl-lib)
 (require 'dash)
 
+(require 'crm)
+
 (eval-when-compile (require 'ido))
 (declare-function ido-completing-read+ 'ido-completing-read+)
 (declare-function Info-get-token 'info)
+
+(eval-when-compile (require 'vc-git))
+(declare-function vc-git--run-command-string 'vc-git)
 
 (defvar magit-wip-before-change-mode)
 
@@ -52,16 +57,22 @@
 (defcustom magit-completing-read-function 'magit-builtin-completing-read
   "Function to be called when requesting input from the user.
 
-For Helm users, the simplest way to get Helm completion is to
-turn on `helm-mode' and leave this option set to the default
-value.  However, if you prefer to not use `helm-mode' but still
-want Magit to use Helm for completion, you can set this option to
-`helm--completing-read-default'."
+If you have enabled `ivy-mode' or `helm-mode', then you don't
+have to customize this option; `magit-builtin-completing-read'
+will work just fine.  However, if you use Ido completion, then
+you do have to use `magit-ido-completion-read', because Ido is
+less well behaved than the former, more modern alternatives.
+
+If you would like to use Ivy or Helm completion with Magit but
+not enable the respective modes globally, then customize this
+option to use `ivy-completing-read'
+or `helm--completing-read-default'."
   :group 'magit-essentials
   :type '(radio (function-item magit-builtin-completing-read)
                 (function-item magit-ido-completing-read)
+                (function-item ivy-completing-read)
                 (function-item helm--completing-read-default)
-                (function :tag "Other")))
+                (function :tag "Other function")))
 
 (defcustom magit-no-confirm-default nil
   "A list of commands which should just use the default choice.
@@ -193,7 +204,7 @@ Global settings:
   When `magit-wip-before-change-mode' is enabled then these actions
   can fairly easily be undone: `discard', `reverse',
   `stage-all-changes', and `unstage-all-changes'.  If and only if
-  this mode is enabled then `safe-with-wip' has the same effect
+  this mode is enabled, then `safe-with-wip' has the same effect
   as adding all of these symbols individually."
   :package-version '(magit . "2.1.0")
   :group 'magit-essentials
@@ -315,7 +326,11 @@ that this wrapper makes the following changes:
 The use of another completing function and/or wrapper obviously
 results in additional differences."
   (let ((reply (funcall magit-completing-read-function
-                        (concat prompt ": ") collection predicate
+                        (concat prompt ": ")
+                        (if (and def (not (member def collection)))
+                            (cons def collection)
+                          collection)
+                        predicate
                         require-match initial-input hist def)))
     (if (string= reply "")
         (if require-match
@@ -323,12 +338,59 @@ results in additional differences."
           nil)
       reply)))
 
+(defun magit--completion-table (collection)
+  (lambda (string pred action)
+    (if (eq action 'metadata)
+        '(metadata (display-sort-function . identity))
+      (complete-with-action action collection string pred))))
+
 (defun magit-builtin-completing-read
   (prompt choices &optional predicate require-match initial-input hist def)
   "Magit wrapper for standard `completing-read' function."
-  (completing-read (magit-prompt-with-default prompt def)
-                   choices predicate require-match
-                   initial-input hist def))
+  (cl-letf (((symbol-function 'completion-pcm--all-completions)
+             #'magit-completion-pcm--all-completions))
+    (completing-read (if (or (bound-and-true-p helm-mode)
+                             (bound-and-true-p ivy-mode))
+                         prompt
+                       (magit-prompt-with-default prompt def))
+                     (magit--completion-table choices)
+                     predicate require-match
+                     initial-input hist def)))
+
+(defvar helm-completion-in-region-default-sort-fn)
+
+(defun magit-completing-read-multiple
+  (prompt choices &optional sep default hist keymap)
+  "Read multiple items from CHOICES, separated by SEP.
+
+Set up the `crm' variables needed to read multiple values with
+`read-from-minibuffer'.
+
+SEP is a regexp matching characters that can separate choices.
+When SEP is nil, it defaults to `crm-default-separator'.
+DEFAULT, HIST, and KEYMAP are passed to `read-from-minibuffer'.
+When KEYMAP is nil, it defaults to `crm-local-completion-map'.
+
+Unlike `completing-read-multiple', the return value is not split
+into a list."
+  (let* ((crm-separator (or sep crm-default-separator))
+         (crm-completion-table (magit--completion-table choices))
+         (choose-completion-string-functions
+          '(crm--choose-completion-string))
+         (minibuffer-completion-table #'crm--collection-fn)
+         (minibuffer-completion-confirm t)
+         (helm-completion-in-region-default-sort-fn nil)
+         (input
+          (cl-letf (((symbol-function 'completion-pcm--all-completions)
+                     #'magit-completion-pcm--all-completions))
+            (read-from-minibuffer
+             (concat prompt (and default (format " (%s)" default)) ": ")
+             nil (or keymap crm-local-completion-map)
+             nil hist default))))
+    (when (string-equal input "")
+      (or (setq input default)
+          (user-error "Nothing selected")))
+    input))
 
 (defun magit-ido-completing-read
   (prompt choices &optional predicate require-match initial-input hist def)
@@ -425,8 +487,8 @@ ACTION is a member of option `magit-slow-confirm'."
 
 (cl-defun magit-confirm (action &optional prompt prompt-n (items nil sitems))
   (declare (indent defun))
-  (setq prompt-n (format (concat (or prompt-n prompt) "? ") (length items))
-        prompt   (format (concat (or prompt (magit-confirm-make-prompt action))
+  (setq prompt-n (format (concat (or prompt-n prompt) "? ") (length items)))
+  (setq prompt   (format (concat (or prompt (magit-confirm-make-prompt action))
                                  "? ")
                          (car items)))
   (cond ((and (not (eq action t))
@@ -475,6 +537,8 @@ ACTION is a member of option `magit-slow-confirm'."
 
 ;;;###autoload
 (defun magit-emacs-Q-command ()
+  "Show a shell command that runs an uncustomized Emacs with only Magit loaded.
+See info node `(magit)Debugging Tools' for more information."
   (interactive)
   (let ((cmd (mapconcat
               #'shell-quote-argument
@@ -500,7 +564,7 @@ ACTION is a member of option `magit-slow-confirm'."
   "Bind variables to submatches according to VARLIST then evaluate BODY.
 Bind the symbols in VARLIST to submatches of the current match
 data, starting with 1 and incrementing by 1 for each symbol.  If
-the last match was against a string then that has to be provided
+the last match was against a string, then that has to be provided
 as STRING."
   (declare (indent 2) (debug (listp form body)))
   (let ((s (cl-gensym "string"))
@@ -516,7 +580,7 @@ as STRING."
 
 (defun magit-delete-match (&optional num)
   "Delete text matched by last search.
-If optional NUM is specified only delete that subexpression."
+If optional NUM is specified, only delete that subexpression."
   (delete-region (match-beginning (or num 0))
                  (match-end (or num 0))))
 
@@ -551,6 +615,44 @@ See http://debbugs.gnu.org/cgi/bugreport.cgi?bug=21573#17
 and https://github.com/magit/magit/issues/2295."
   (and (file-directory-p filename)
        (file-accessible-directory-p filename)))
+
+(when (version<= "25.1" emacs-version)
+  (with-eval-after-load 'vc-git
+    (defun vc-git-conflicted-files (directory)
+      "Return the list of files with conflicts in DIRECTORY."
+      (let* ((status
+              (vc-git--run-command-string directory "diff-files"
+                                          "--name-status"))
+             (lines (when status (split-string status "\n" 'omit-nulls)))
+             files)
+        (dolist (line lines files)
+          (when (string-match "\\([ MADRCU?!]\\)[ \t]+\\(.+\\)" line)
+            (let ((state (match-string 1 line))
+                  (file (match-string 2 line)))
+              (when (equal state "U")
+                (push (expand-file-name file directory) files)))))))))
+
+;; `completion-pcm--all-completions' reverses the completion list.  To
+;; preserve the order of our pre-sorted completions, we'll temporarily
+;; override it with the function below.  bug#24676
+(defun magit-completion-pcm--all-completions (prefix pattern table pred)
+  (if (completion-pcm--pattern-trivial-p pattern)
+      (all-completions (concat prefix (car pattern)) table pred)
+    (let* ((regex (completion-pcm--pattern->regex pattern))
+           (case-fold-search completion-ignore-case)
+           (completion-regexp-list (cons regex completion-regexp-list))
+           (compl (all-completions
+                   (concat prefix
+                           (if (stringp (car pattern)) (car pattern) ""))
+                   table pred)))
+      (if (not (functionp table))
+          compl
+        (let ((poss ()))
+          (dolist (c compl)
+            (when (string-match-p regex c) (push c poss)))
+          ;; This `nreverse' call is the only code change made to the
+          ;; `completion-pcm--all-completions' that shipped with Emacs 25.1.
+          (nreverse poss))))))
 
 ;;; Kludges for Incompatible Modes
 
@@ -597,7 +699,7 @@ or (last of all) the value of EXP."
     ;; Called by `custom-initialize-reset' on behalf of `symbol's
     ;; `defcustom', which is being evaluated for the first time to
     ;; set the initial value, but there's already a default value,
-    ;; which most likely was stablished by one or more `add-hook'
+    ;; which most likely was established by one or more `add-hook'
     ;; calls.
     ;;
     ;; We combine the `standard-value' and the current value, while

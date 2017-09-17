@@ -16,7 +16,7 @@
 ;;	Rémi Vanicat      <vanicat@debian.org>
 ;;	Yann Hodique      <yann.hodique@gmail.com>
 
-;; Package-Requires: ((emacs "24.4") (async "1.9") (dash "2.13.0") (with-editor "2.5.10") (git-commit "2.10.2") (magit-popup "2.10.2"))
+;; Package-Requires: ((emacs "24.4") (async "20170823") (dash "20170810") (with-editor "20170817") (git-commit "20170823") (magit-popup "20170824"))
 ;; Keywords: git tools vc
 ;; Homepage: https://github.com/magit/magit
 
@@ -117,7 +117,7 @@
 (defface magit-head
   '((((class color) (background light)) :inherit magit-branch-local)
     (((class color) (background  dark)) :inherit magit-branch-local))
-  "Face for the symbolic ref \"HEAD\"."
+  "Face for the symbolic ref `HEAD'."
   :group 'magit-faces)
 
 (defface magit-refname
@@ -134,6 +134,11 @@
 (defface magit-refname-wip
   '((t :inherit magit-refname))
   "Face for wip refnames."
+  :group 'magit-faces)
+
+(defface magit-keyword
+  '((t :inherit font-lock-string-face))
+  "Face for parts of commit messages inside brackets."
   :group 'magit-faces)
 
 (defface magit-signature-good
@@ -229,7 +234,7 @@ merge.
   "Merge commit REV into the current branch; and edit message.
 Perform the merge and prepare a commit message but let the user
 edit it.
-\n(git merge --edit --no-ff [ARGS] rev)"
+\n(git merge --edit --no-ff [ARGS] REV)"
   (interactive (list (magit-read-other-branch-or-commit "Merge")
                      (magit-merge-arguments)))
   (magit-merge-assert)
@@ -242,7 +247,7 @@ edit it.
   "Merge commit REV into the current branch; pretending it failed.
 Pretend the merge failed to give the user the opportunity to
 inspect the merge and change the commit message.
-\n(git merge --no-commit --no-ff [ARGS] rev)"
+\n(git merge --no-commit --no-ff [ARGS] REV)"
   (interactive (list (magit-read-other-branch-or-commit "Merge")
                      (magit-merge-arguments)))
   (magit-merge-assert)
@@ -309,7 +314,7 @@ inspect the merge and change the commit message.
   (file-exists-p (magit-git-dir "MERGE_HEAD")))
 
 (defun magit-merge-assert ()
-  (or (not (magit-anything-modified-p))
+  (or (not (magit-anything-modified-p t))
       (magit-confirm 'merge-dirty
         "Merging with dirty worktree is risky.  Continue")
       (user-error "Abort")))
@@ -346,7 +351,8 @@ If no merge is in progress, do nothing."
   :actions '((?m "reset mixed  (HEAD and index)"         magit-reset-head)
              (?s "reset soft   (HEAD only)"              magit-reset-soft)
              (?h "reset hard   (HEAD, index, and files)" magit-reset-hard)
-             (?i "reset index  (index only)"             magit-reset-index))
+             (?i "reset index  (index only)"             magit-reset-index) nil
+             (?f "reset a file"                          magit-file-checkout))
   :max-action-columns 1)
 
 ;;;###autoload
@@ -556,6 +562,14 @@ defaulting to the tag at point.
 
 ;;;; Git Popup
 
+(defcustom magit-shell-command-verbose-prompt t
+  "Whether to show the working directory when reading a command.
+This affects `magit-git-command', `magit-git-command-topdir',
+`magit-shell-command', and `magit-shell-command-topdir'."
+  :package-version '(magit . "2.11.0")
+  :group 'magit-commands
+  :type 'boolean)
+
 (defvar magit-git-command-history nil)
 
 ;;;###autoload (autoload 'magit-run-popup "magit" nil t)
@@ -573,63 +587,66 @@ defaulting to the tag at point.
   :max-action-columns 2)
 
 ;;;###autoload
-(defun magit-git-command (args directory)
-  "Execute a Git subcommand asynchronously, displaying the output.
-With a prefix argument run Git in the root of the current
-repository, otherwise in `default-directory'."
-  (interactive (magit-read-shell-command "Git subcommand (pwd: %s)"))
-  (require 'eshell)
-  (with-temp-buffer
-    (insert args)
-    (setq args (mapcar 'eval (eshell-parse-arguments (point-min)
-                                                     (point-max))))
-    (setq default-directory directory)
-    (let ((magit-git-global-arguments
-           ;; A human will want globbing by default.
-           (remove "--literal-pathspecs"
-                   magit-git-global-arguments)))
-     (magit-run-git-async args)))
+(defun magit-git-command (command)
+  "Execute COMMAND asynchonously; display output.
+
+Interactively, prompt for COMMAND in the minibuffer. \"git \" is
+used as initial input, but can be deleted to run another command.
+
+With a prefix argument COMMAND is run in the top-level directory
+of the current working tree, otherwise in `default-directory'."
+  (interactive (list (magit-read-shell-command nil "git ")))
+  (magit--shell-command command))
+
+;;;###autoload
+(defun magit-git-command-topdir (command)
+  "Execute COMMAND asynchonously; display output.
+
+Interactively, prompt for COMMAND in the minibuffer. \"git \" is
+used as initial input, but can be deleted to run another command.
+
+COMMAND is run in the top-level directory of the current
+working tree."
+  (interactive (list (magit-read-shell-command t "git ")))
+  (magit--shell-command command (magit-toplevel)))
+
+;;;###autoload
+(defun magit-shell-command (command)
+  "Execute COMMAND asynchonously; display output.
+
+Interactively, prompt for COMMAND in the minibuffer.  With a
+prefix argument COMMAND is run in the top-level directory of
+the current working tree, otherwise in `default-directory'."
+  (interactive (list (magit-read-shell-command)))
+  (magit--shell-command command))
+
+;;;###autoload
+(defun magit-shell-command-topdir (command)
+  "Execute COMMAND asynchonously; display output.
+
+Interactively, prompt for COMMAND in the minibuffer.  COMMAND
+is run in the top-level directory of the current working tree."
+  (interactive (list (magit-read-shell-command t)))
+  (magit--shell-command command (magit-toplevel)))
+
+(defun magit--shell-command (command &optional directory)
+  (let ((default-directory (or directory default-directory))
+        (process-environment process-environment))
+    (push "GIT_PAGER=cat" process-environment)
+    (magit-start-process shell-file-name nil
+                         shell-command-switch command))
   (magit-process-buffer))
 
-;;;###autoload
-(defun magit-git-command-topdir (args directory)
-  "Execute a Git subcommand asynchronously, displaying the output.
-Run Git in the top-level directory of the current repository.
-\n(fn)" ; arguments are for internal use
-  (interactive (magit-read-shell-command "Git subcommand (pwd: %s)" t))
-  (magit-git-command args directory))
-
-;;;###autoload
-(defun magit-shell-command (args directory)
-  "Execute a shell command asynchronously, displaying the output.
-With a prefix argument run the command in the root of the current
-repository, otherwise in `default-directory'."
-  (interactive (magit-read-shell-command "Shell command (pwd: %s)"))
-  (require 'eshell)
-  (with-temp-buffer
-    (insert args)
-    (setq args (mapcar 'eval (eshell-parse-arguments (point-min)
-                                                     (point-max))))
-    (setq default-directory directory)
-    (apply #'magit-start-process (car args) nil (cdr args)))
-  (magit-process-buffer))
-
-;;;###autoload
-(defun magit-shell-command-topdir (args directory)
-  "Execute a shell command asynchronously, displaying the output.
-Run the command in the top-level directory of the current repository.
-\n(fn)" ; arguments are for internal use
-  (interactive (magit-read-shell-command "Shell command (pwd: %s)" t))
-  (magit-shell-command args directory))
-
-(defun magit-read-shell-command (prompt &optional root)
-  (let ((dir (if (or root current-prefix-arg)
-                 (or (magit-toplevel)
-                     (user-error "Not inside a Git repository"))
-               default-directory)))
-    (list (magit-read-string (format prompt (abbreviate-file-name dir))
-                             nil 'magit-git-command-history)
-          dir)))
+(defun magit-read-shell-command (&optional toplevel initial-input)
+  (let ((dir (abbreviate-file-name
+              (if (or toplevel current-prefix-arg)
+                  (or (magit-toplevel)
+                      (user-error "Not inside a Git repository"))
+                default-directory))))
+    (read-shell-command (if magit-shell-command-verbose-prompt
+                            (format "Async shell command in %s: " dir)
+                          "Async shell command: ")
+                        initial-input 'magit-git-command-history)))
 
 ;;; Revision Stack
 
@@ -656,7 +673,7 @@ the index number.  That number is incremented by one, and becomes
 the index number of the entry to be inserted.  If you don't want
 to number the inserted revisions, then use nil for INDEX-REGEXP.
 
-If INDEX-REGEXP is non-nil then both POINT-FORMAT and EOB-FORMAT
+If INDEX-REGEXP is non-nil, then both POINT-FORMAT and EOB-FORMAT
 should contain \"%N\", which is replaced with the number that was
 determined in the previous step.
 
@@ -688,7 +705,7 @@ the current buffer according to `magit-pop-revision-stack-format'.
 Revisions can be put on the stack using `magit-copy-section-value'
 and `magit-copy-buffer-revision'.
 
-If the stack is empty or with a prefix argument instead read a
+If the stack is empty or with a prefix argument, instead read a
 revision in the minibuffer.  By using the minibuffer history this
 allows selecting an item which was popped earlier or to insert an
 arbitrary reference or revision without first pushing it onto the
@@ -725,11 +742,11 @@ the minibuffer too."
                             "1"))))
               pnt-args eob-args)
           (when (listp pnt-format)
-            (setq pnt-args (cdr pnt-format)
-                  pnt-format (car pnt-format)))
+            (setq pnt-args (cdr pnt-format))
+            (setq pnt-format (car pnt-format)))
           (when (listp eob-format)
-            (setq eob-args (cdr eob-format)
-                  eob-format (car eob-format)))
+            (setq eob-args (cdr eob-format))
+            (setq eob-format (car eob-format)))
           (when pnt-format
             (when idx-format
               (setq pnt-format
@@ -867,18 +884,20 @@ above."
 Use the function by the same name instead of this variable.")
 
 ;;;###autoload
-(defun magit-version ()
+(defun magit-version (&optional print-dest)
   "Return the version of Magit currently in use.
-When called interactive also show the used versions of Magit,
-Git, and Emacs in the echo area."
-  (interactive)
+If optional argument PRINT-DEST is non-nil, output
+stream (interactively, the echo area, or the current buffer with
+a prefix argument), also print the used versions of Magit, Git,
+and Emacs to it."
+  (interactive (list (if current-prefix-arg (current-buffer) t)))
   (let ((magit-git-global-arguments nil)
         (toplib (or load-file-name buffer-file-name))
         debug)
     (unless (and toplib
                  (equal (file-name-nondirectory toplib) "magit.el"))
-      (setq toplib (locate-library "magit.el"))
-      (setq toplib (and toplib (file-chase-links toplib))))
+      (setq toplib (locate-library "magit.el")))
+    (setq toplib (and toplib (file-chase-links toplib)))
     (push toplib debug)
     (when toplib
       (let* ((topdir (file-name-directory toplib))
@@ -924,12 +943,18 @@ Git, and Emacs in the echo area."
                                     dirname)
                   (setq magit-version (match-string 1 dirname))))))))
     (if (stringp magit-version)
-        (when (called-interactively-p 'any)
-          (message "Magit %s, Git %s, Emacs %s, %s"
-                   (or magit-version "(unknown)")
-                   (or (magit-git-version t) "(unknown)")
-                   emacs-version
-                   system-type))
+        (when print-dest
+          (princ (format "Magit %s, Git %s, Emacs %s, %s"
+                         (or magit-version "(unknown)")
+                         (or (let ((magit-git-debug
+                                    (lambda (err)
+                                      (display-warning '(magit git)
+                                                       err :error))))
+                               (magit-git-version t))
+                             "(unknown)")
+                         emacs-version
+                         system-type)
+                 print-dest))
       (setq debug (reverse debug))
       (setq magit-version 'error)
       (when magit-version
@@ -938,6 +963,39 @@ Git, and Emacs in the echo area."
         ;; The repository is a sparse clone.
         (message "Cannot determine Magit's version %S" debug)))
     magit-version))
+
+(defun magit-debug-git-executable ()
+  "Display a buffer with information about `magit-git-executable'.
+See info node `(magit)Debugging Tools' for more information."
+  (interactive)
+  (with-current-buffer (get-buffer-create "*magit-git-debug*")
+    (pop-to-buffer (current-buffer))
+    (erase-buffer)
+    (insert (format "magit-git-executable: %S" magit-git-executable)
+            (unless (file-name-absolute-p magit-git-executable)
+              (format " [%S]" (executable-find magit-git-executable)))
+            (format " (%s)\n"
+                    (let* ((errmsg nil)
+                           (magit-git-debug (lambda (err) (setq errmsg err))))
+                      (or (magit-git-version t) errmsg))))
+    (insert (format "exec-path: %S\n" exec-path))
+    (--when-let (cl-set-difference
+                 (-filter #'file-exists-p (remq nil (parse-colon-path
+                                                     (getenv "PATH"))))
+                 (-filter #'file-exists-p (remq nil exec-path))
+                 :test #'file-equal-p)
+      (insert (format "  entries in PATH, but not in exec-path: %S\n" it)))
+    (dolist (execdir exec-path)
+      (insert (format "  %s (%s)\n" execdir (car (file-attributes execdir))))
+      (when (file-directory-p execdir)
+        (dolist (exec (directory-files
+                       execdir t (concat
+                                  "\\`git" (regexp-opt exec-suffixes) "\\'")))
+          (insert (format "    %s (%s)\n" exec
+                          (let* ((magit-git-executable exec)
+                                 (errmsg nil)
+                                 (magit-git-debug (lambda (err) (setq errmsg err))))
+                            (or (magit-git-version t) errmsg)))))))))
 
 ;;; (Asserts)
 
@@ -1010,7 +1068,12 @@ library getting in the way.  Then restart Emacs.\n"
     (require 'magit-subtree)
     (require 'magit-ediff)
     (require 'magit-extras)
-    (require 'git-rebase)))
+    (require 'git-rebase)
+    (require 'magit-imenu)
+    (require 'magit-bookmark)))
+
+(eval-after-load 'bookmark
+  '(require 'magit-bookmark))
 
 (if after-init-time
     (progn (magit-startup-asserts)

@@ -75,8 +75,8 @@ specify the depth directly.")
 (defcustom magit-repolist-columns
   '(("Name"    25 magit-repolist-column-ident                  nil)
     ("Version" 25 magit-repolist-column-version                nil)
-    ("L<U"      3 magit-repolist-column-unpulled-from-upstream ((:right-align t)))
-    ("L>U"      3 magit-repolist-column-unpushed-to-upstream   ((:right-align t)))
+    ("B<U"      3 magit-repolist-column-unpulled-from-upstream ((:right-align t)))
+    ("B>U"      3 magit-repolist-column-unpushed-to-upstream   ((:right-align t)))
     ("Path"    99 magit-repolist-column-path                   nil))
   "List of columns displayed by `magit-list-repositories'.
 
@@ -158,7 +158,11 @@ control which repositories are displayed."
                            (nconc (list title width t)
                                   (-flatten props)))
                          magit-repolist-columns)))
-  (tabulated-list-init-header))
+  (tabulated-list-init-header)
+  (setq imenu-prev-index-position-function
+        'magit-imenu--repolist-prev-index-position-function)
+  (setq imenu-extract-index-name-function
+        'magit-imenu--repolist-extract-index-name-function))
 
 ;;;; Columns
 
@@ -197,7 +201,7 @@ Show U if there is at least one unstaged file.
 Show S if there is at least one staged file.
 Only one letter is shown, the first that applies."
   (cond ((magit-untracked-files) "N")
-        ((magit-modified-files)  "U")
+        ((magit-unstaged-files)  "U")
         ((magit-staged-files)    "S")))
 
 (defun magit-repolist-column-unpulled-from-upstream (_id)
@@ -223,6 +227,16 @@ Only one letter is shown, the first that applies."
   (--when-let (magit-get-push-branch nil t)
     (let ((n (car (magit-rev-diff-count "HEAD" it))))
       (propertize (number-to-string n) 'face (if (> n 0) 'bold 'shadow)))))
+
+(defun magit-repolist-column-branches (_id)
+  "Insert number of branches."
+  (let ((n (length (magit-list-local-branches))))
+    (propertize (number-to-string n) 'face (if (> n 1) 'bold 'shadow))))
+
+(defun magit-repolist-column-stashes (_id)
+  "Insert number of stashes."
+  (let ((n (length (magit-list-stashes))))
+    (propertize (number-to-string n) 'face (if (> n 0) 'bold 'shadow))))
 
 ;;; Read Repository
 

@@ -11,7 +11,7 @@
 ;;	Marius Vollmer <marius.vollmer@gmail.com>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
-;; Package-Requires: ((emacs "24.4") (dash "2.13.0") (with-editor "2.5.10"))
+;; Package-Requires: ((emacs "24.4") (dash "20170810") (with-editor "20170817"))
 ;; Keywords: git tools vc
 ;; Homepage: https://github.com/magit/magit
 
@@ -84,7 +84,8 @@
 ;; provided by these commands:
 ;;
 ;;   C-c C-s  Insert a Signed-off-by header.
-;;   C-C C-a  Insert a Acked-by header.
+;;   C-c C-a  Insert a Acked-by header.
+;;   C-c C-m  Insert a Modified-by header.
 ;;   C-c C-t  Insert a Tested-by header.
 ;;   C-c C-r  Insert a Reviewed-by header.
 ;;   C-c C-o  Insert a Cc header.
@@ -191,7 +192,7 @@ called.  If any of them returns nil, then the commit is not
 performed and the buffer is not killed.  The user should then
 fix the issue and try again.
 
-The functions are called with one argument.  If it is non-nil
+The functions are called with one argument.  If it is non-nil,
 then that indicates that the user used a prefix argument to
 force finishing the session despite issues.  Functions should
 usually honor this wish and return non-nil."
@@ -236,8 +237,11 @@ already using it, then you probably shouldn't start doing so."
   :type '(choice (const :tag "use regular fill-column")
                  number))
 
+(make-obsolete-variable 'git-commit-fill-column 'fill-column
+                        "Magit 2.11.0" 'set)
+
 (defcustom git-commit-known-pseudo-headers
-  '("Signed-off-by" "Acked-by" "Cc"
+  '("Signed-off-by" "Acked-by" "Modified-by" "Cc"
     "Suggested-by" "Reported-by" "Tested-by" "Reviewed-by")
   "A list of Git pseudo headers to be highlighted."
   :group 'git-commit
@@ -320,6 +324,7 @@ already using it, then you probably shouldn't start doing so."
            ;; Old bindings to avoid confusion
            (define-key map (kbd "C-c C-x a") 'git-commit-ack)
            (define-key map (kbd "C-c C-x i") 'git-commit-suggested)
+           (define-key map (kbd "C-c C-x m") 'git-commit-modified)
            (define-key map (kbd "C-c C-x o") 'git-commit-cc)
            (define-key map (kbd "C-c C-x p") 'git-commit-reported)
            (define-key map (kbd "C-c C-x r") 'git-commit-review)
@@ -327,6 +332,7 @@ already using it, then you probably shouldn't start doing so."
            (define-key map (kbd "C-c C-x t") 'git-commit-test)))
     (define-key map (kbd "C-c C-a") 'git-commit-ack)
     (define-key map (kbd "C-c C-i") 'git-commit-suggested)
+    (define-key map (kbd "C-c C-m") 'git-commit-modified)
     (define-key map (kbd "C-c C-o") 'git-commit-cc)
     (define-key map (kbd "C-c C-p") 'git-commit-reported)
     (define-key map (kbd "C-c C-r") 'git-commit-review)
@@ -349,6 +355,8 @@ already using it, then you probably shouldn't start doing so."
      :help "Insert an 'Acked-by' header"]
     ["Sign-Off" git-commit-signoff :active t
      :help "Insert a 'Signed-off-by' header"]
+    ["Modified-by" git-commit-modified :active t
+     :help "Insert a 'Modified-by' header"]
     ["Tested-by" git-commit-test :active t
      :help "Insert a 'Tested-by' header"]
     ["Reviewed-by" git-commit-review :active t
@@ -366,9 +374,10 @@ already using it, then you probably shouldn't start doing so."
 
 ;;; Hooks
 
+;;;###autoload
 (defconst git-commit-filename-regexp "/\\(\
 \\(\\(COMMIT\\|NOTES\\|PULLREQ\\|TAG\\)_EDIT\\|MERGE_\\|\\)MSG\
-\\|BRANCH_DESCRIPTION\\)\\'")
+\\|\\(BRANCH\\|EDIT\\)_DESCRIPTION\\)\\'")
 
 (eval-after-load 'recentf
   '(add-to-list 'recentf-exclude git-commit-filename-regexp))
@@ -387,6 +396,7 @@ already using it, then you probably shouldn't start doing so."
        (string-match-p git-commit-filename-regexp buffer-file-name)
        (git-commit-setup)))
 
+;;;###autoload
 (defun git-commit-setup ()
   ;; cygwin git will pass a cygwin path (/cygdrive/c/foo/.git/...),
   ;; try to handle this in window-nt Emacs.
@@ -426,8 +436,7 @@ already using it, then you probably shouldn't start doing so."
     (setq save-place nil))
   (save-excursion
     (goto-char (point-min))
-    (when (= (line-beginning-position)
-             (line-end-position))
+    (when (looking-at "\\`\\(\\'\\|\n[^\n]\\)")
       (open-line 1)))
   (run-hooks 'git-commit-setup-hook)
   (set-buffer-modified-p nil))
@@ -474,6 +483,7 @@ to `git-commit-fill-column'."
   (when (and (numberp git-commit-fill-column)
              (not (local-variable-p 'fill-column)))
     (setq fill-column git-commit-fill-column))
+  (setq-local comment-auto-fill-only-comments nil)
   (turn-on-auto-fill))
 
 (defun git-commit-turn-on-flyspell ()
@@ -579,6 +589,11 @@ With a numeric prefix ARG, go forward ARG comments."
   (interactive (git-commit-self-ident))
   (git-commit-insert-header "Acked-by" name mail))
 
+(defun git-commit-modified (name mail)
+  "Insert a header to signal that you have modified the commit."
+  (interactive (git-commit-self-ident))
+  (git-commit-insert-header "Modified-by" name mail))
+
 (defun git-commit-review (name mail)
   "Insert a header acknowledging that you have reviewed the commit."
   (interactive (git-commit-self-ident))
@@ -671,8 +686,8 @@ Added to `font-lock-extend-region-functions'."
               (summary-end (match-end 0)))
           (when (or (< summary-beg font-lock-beg summary-end)
                     (< summary-beg font-lock-end summary-end))
-            (setq font-lock-beg (min font-lock-beg summary-beg)
-                  font-lock-end (max font-lock-end summary-end))))))))
+            (setq font-lock-beg (min font-lock-beg summary-beg))
+            (setq font-lock-end (max font-lock-end summary-end))))))))
 
 (defun git-commit-mode-font-lock-keywords ()
   `(;; Comments
@@ -718,7 +733,8 @@ Added to `font-lock-extend-region-functions'."
             (with-current-buffer buffer
               (prog1 (buffer-substring-no-properties (point) (point-max))
                 (delete-region (point) (point-max)))))
-           (diff-mode)
+           (let ((diff-default-read-only nil))
+             (diff-mode))
            (let (font-lock-verbose font-lock-support-mode)
              (if (fboundp 'font-lock-ensure)
                  (font-lock-ensure)

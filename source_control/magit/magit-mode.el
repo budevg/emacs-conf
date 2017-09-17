@@ -189,6 +189,43 @@ support additional %-sequences."
                 (function-item magit-restore-window-configuration)
                 (function :tag "Function")))
 
+(defcustom magit-use-sticky-arguments t
+  "How to reuse arguments from existing diff and log buffers.
+
+nil       Always use the default value of the variable
+          `magit-log-arguments' for log commands.  Likewise,
+          always use the default value of the variable
+          `magit-diff-arguments' for diff command calls.
+
+current   If the mode of the current buffer is derived from
+          `magit-log-mode' or `magit-diff-mode', reuse the
+          arguments from that buffer instead of those given by
+          the variable `magit-log-arguments' or
+          `magit-diff-arguments', respectively.
+
+t         Like `current', but if the mode of the current buffer
+          is not derived from `magit-log-mode' or
+          `magit-diff-mode', use the arguments from the current
+          repository's active (i.e. non-locked) `magit-log-mode'
+          or `magit-diff-mode' buffer, respectively, if it
+          exists.
+
+          Note that commands that generate a
+          `magit-revision-mode' or `magit-stash-mode' buffer will
+          also collect their diff arguments from the active
+          `magit-diff-mode' buffer.
+
+In general, there is a separation between the \"sticky\"
+arguments for log and diff buffers, but there is one special
+case: if the current buffer is a log buffer,
+`magit-show-commit' (considered a diff command) uses the file
+filter from the log buffer."
+  :package-version '(magit . "2.11.0")
+  :group 'magit-buffers
+  :type '(choice (const :tag "disabled" nil)
+                 (const :tag "sticky for current" current)
+                 (const :tag "sticky" t)))
+
 (defcustom magit-region-highlight-hook
   '(magit-section-update-region magit-diff-update-hunk-region)
   "Functions used to highlight the region.
@@ -230,10 +267,10 @@ improve performance."
 (defcustom magit-save-repository-buffers t
   "Whether to save file-visiting buffers when appropriate.
 
-If non-nil then all modified file-visiting buffers belonging
+If non-nil, then all modified file-visiting buffers belonging
 to the current repository may be saved before running Magit
 commands and before creating or refreshing Magit buffers.
-If `dontask' then this is done without user intervention, for
+If `dontask', then this is done without user intervention, for
 any other non-nil value the user has to confirm each save.
 
 The default is t to avoid surprises, but `dontask' is the
@@ -876,7 +913,8 @@ Run hooks `magit-pre-refresh-hook' and `magit-post-refresh-hook'."
   (interactive)
   (unless inhibit-magit-refresh
     (let ((start (current-time))
-          (magit--refresh-cache (list (cons 0 0))))
+          (magit--refresh-cache (or magit--refresh-cache
+                                    (list (cons 0 0)))))
       (when magit-refresh-verbose
         (message "Refreshing magit..."))
       (magit-run-hook-with-benchmark 'magit-pre-refresh-hook)
@@ -1036,14 +1074,16 @@ buffer which visits a file in the current repository.  Optional
 argument (the prefix) non-nil means save all with no questions."
   (interactive "P")
   (-when-let (topdir (magit-rev-parse-safe "--show-toplevel"))
-    (save-some-buffers
-     arg (-partial (lambda (topdir)
-                     (and buffer-file-name
-                          ;; Avoid needlessly connecting to unrelated remotes.
-                          (string-prefix-p topdir (file-truename buffer-file-name))
-                          (equal (magit-rev-parse-safe "--show-toplevel")
-                                 topdir)))
-                   topdir))))
+    (let ((remote (file-remote-p topdir)))
+      (save-some-buffers
+       arg (lambda ()
+             (and buffer-file-name
+                  ;; Avoid needlessly connecting to unrelated remotes.
+                  (equal (file-remote-p buffer-file-name)
+                         remote)
+                  (string-prefix-p topdir (file-truename buffer-file-name))
+                  (equal (magit-rev-parse-safe "--show-toplevel")
+                         topdir)))))))
 
 ;;; Restore Window Configuration
 

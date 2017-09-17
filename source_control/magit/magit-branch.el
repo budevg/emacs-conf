@@ -53,23 +53,23 @@
 (defcustom magit-branch-prefer-remote-upstream nil
   "Whether to favor remote upstreams when creating new branches.
 
-When a new branch is created, Magit offers the branch, commit, or
-stash as the default starting point of the new branch.  If there
-is no such thing at point, then it falls back to offer the
-current branch as starting-point.  The user may then accept that
-default or pick something else.
+When a new branch is created, then the branch, commit, or stash
+at point is suggested as the default starting point of the new
+branch, or if there is no such revision at point the current
+branch.  In either case the user may choose another starting
+point.
 
-If the chosen starting-point is a branch, then it may also be set
+If the chosen starting point is a branch, then it may also be set
 as the upstream of the new branch, depending on the value of the
 Git variable `branch.autoSetupMerge'.  By default this is done
 for remote branches, but not for local branches.
 
 You might prefer to always use some remote branch as upstream.
-If the chosen starting-point is (1) a local branch, (2) whose
+If the chosen starting point is (1) a local branch, (2) whose
 name matches a member of the value of this option, (3) the
 upstream of that local branch is a remote branch with the same
 name, and (4) that remote branch can be fast-forwarded to the
-local branch, then the chosen branch is used as starting-point,
+local branch, then the chosen branch is used as starting point,
 but its own upstream is used as the upstream of the new branch.
 
 Members of this option's value are treated as branch names that
@@ -191,12 +191,14 @@ and change branch related variables."
 ;;;###autoload
 (defun magit-checkout (revision)
   "Checkout REVISION, updating the index and the working tree.
-If REVISION is a local branch then that becomes the current
-branch.  If it is something else then `HEAD' becomes detached.
+If REVISION is a local branch, then that becomes the current
+branch.  If it is something else, then `HEAD' becomes detached.
 Checkout fails if the working tree or the staging area contain
 changes.
 \n(git checkout REVISION)."
   (interactive (list (magit-read-other-branch-or-commit "Checkout")))
+  (when (string-match "\\`heads/\\(.+\\)" revision)
+    (setq revision (match-string 1 revision)))
   (magit-run-git "checkout" revision))
 
 ;;;###autoload
@@ -383,19 +385,16 @@ defaulting to the branch at point."
      (if (if (> (length branches) 1)
              (magit-confirm t nil "Delete %i branches" branches)
            (setq branches
-                 (list (magit-read-branch (if current-prefix-arg
+                 (list (magit-read-branch (if force
                                               "Force delete branch"
                                             "Delete branch")
                                           (magit-get-previous-branch)))))
          (unless force
-           (--when-let (-intersection
-                        (-union (magit-list-unmerged-branches)
-                                (magit-list-unmerged-to-upstream-branches))
-                        branches)
+           (--when-let (-remove #'magit-branch-merged-p branches)
              (if (magit-confirm 'delete-unmerged-branch
                    "Delete unmerged branch %s"
                    "Delete %i unmerged branches" it)
-                 (setq force t)
+                 (setq force branches)
                (or (setq branches (-difference branches it))
                    (user-error "Abort")))))
        (user-error "Abort"))
@@ -408,7 +407,7 @@ defaulting to the branch at point."
        (let ((len (length ambiguous)))
          (cond
           ((= len 1)
-           (format "%s is" (--first (not (magit-ref-fullname it)) branches)))
+           (format "%s is" (-first #'magit-ref-ambiguous-p branches)))
           ((= len (length refs))
            (format "These %s names are" len))
           (t
@@ -440,8 +439,22 @@ defaulting to the branch at point."
                      (?d "[d]etach HEAD & delete"     'detach)
                      (?c "[c]heckout master & delete" 'master)
                      (?a "[a]bort"                    'abort)))
-            (`detach (magit-call-git "checkout" "--detach"))
-            (`master (magit-call-git "checkout" "master"))
+            (`detach (unless (or (equal force '(4))
+                                 (member branch force)
+                                 (magit-branch-merged-p branch t)
+                                 (magit-confirm 'delete-unmerged-branch
+                                   "Delete unmerged branch %s" ""
+                                   (list branch)))
+                       (user-error "Abort"))
+                     (magit-call-git "checkout" "--detach"))
+            (`master (unless (or (equal force '(4))
+                                 (member branch force)
+                                 (magit-branch-merged-p branch "master")
+                                 (magit-confirm 'delete-unmerged-branch
+                                   "Delete unmerged branch %s" ""
+                                   (list branch)))
+                       (user-error "Abort"))
+                     (magit-call-git "checkout" "master"))
             (`abort  (user-error "Abort")))
           (setq force t))
         (magit-run-git "branch" (if force "-D" "-d") branch))))))
@@ -567,7 +580,7 @@ variable `branch.<name>.description'."
 
 (defun magit-edit-branch*description-check-buffers ()
   (and buffer-file-name
-       (string-match-p "/BRANCH_DESCRIPTION\\'" buffer-file-name)
+       (string-match-p "/\\(BRANCH\\|EDIT\\)_DESCRIPTION\\'" buffer-file-name)
        (add-hook 'with-editor-post-finish-hook
                  (lambda ()
                    (when (derived-mode-p 'magit-popup-mode)
@@ -605,7 +618,7 @@ already set.  When nil, then always unset."
   (interactive
    (let ((branch (magit-branch-config-branch "Change upstream of branch")))
      (list branch (and (not (magit-get-upstream-branch branch))
-                       (magit-read-upstream-branch)))))
+                       (magit-read-upstream-branch branch)))))
   (if upstream
       (-let (((remote . merge) (magit-split-branch-name upstream)))
         (setf (magit-get (format "branch.%s.remote" branch)) remote)

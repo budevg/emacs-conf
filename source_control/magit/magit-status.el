@@ -29,6 +29,10 @@
 
 (require 'magit)
 
+(require 'subr-x)
+
+(defvar bookmark-make-record-function)
+
 ;;; Options
 
 (defgroup magit-status nil
@@ -66,7 +70,8 @@ all."
              magit-insert-tags-header))
 
 (defcustom magit-status-sections-hook
-  '(magit-insert-status-headers
+  '(magit-insert-campaign-header
+    magit-insert-status-headers
     magit-insert-merge-log
     magit-insert-rebase-sequence
     magit-insert-am-sequence
@@ -149,7 +154,7 @@ Non-interactively DIRECTORY is (re-)initialized unconditionally."
                       (read-directory-name "Create repository in: ")))))
      (-when-let (toplevel (magit-toplevel directory))
        (setq toplevel (expand-file-name toplevel))
-       (unless (y-or-n-p (if (string-equal toplevel directory)
+       (unless (y-or-n-p (if (file-equal-p toplevel directory)
                              (format "Reinitialize existing repository %s? "
                                      directory)
                            (format "%s is a repository.  Create another in %s? "
@@ -162,28 +167,35 @@ Non-interactively DIRECTORY is (re-)initialized unconditionally."
   (magit-status-internal directory))
 
 ;;;###autoload
-(defun magit-status (&optional directory)
+(defun magit-status (&optional directory cache)
   "Show the status of the current Git repository in a buffer.
 With a prefix argument prompt for a repository to be shown.
 With two prefix arguments prompt for an arbitrary directory.
-If that directory isn't the root of an existing repository
+If that directory isn't the root of an existing repository,
 then offer to initialize it as a new repository."
   (interactive
-   (list (and (or current-prefix-arg (not (magit-toplevel)))
-              (magit-read-repository
-               (>= (prefix-numeric-value current-prefix-arg) 16)))))
-  (if directory
-      (let ((toplevel (magit-toplevel directory)))
-        (setq directory (file-name-as-directory (expand-file-name directory)))
-        (if (and toplevel (string-equal directory toplevel))
-            (magit-status-internal directory)
-          (when (y-or-n-p
-                 (if toplevel
-                     (format "%s is a repository.  Create another in %s? "
-                             toplevel directory)
-                   (format "Create repository in %s? " directory)))
-            (magit-init directory))))
-    (magit-status-internal default-directory)))
+   (let ((magit--refresh-cache (list (cons 0 0))))
+     (list (and (or current-prefix-arg (not (magit-toplevel)))
+                (magit-read-repository
+                 (>= (prefix-numeric-value current-prefix-arg) 16)))
+           magit--refresh-cache)))
+  (let ((magit--refresh-cache (or cache (list (cons 0 0)))))
+    (if directory
+        (let ((toplevel (magit-toplevel directory)))
+          (setq directory (file-name-as-directory
+                           (expand-file-name directory)))
+          (if (and toplevel (file-equal-p directory toplevel))
+              (magit-status-internal directory)
+            (when (y-or-n-p
+                   (if toplevel
+                       (format "%s is a repository.  Create another in %s? "
+                               toplevel directory)
+                     (format "Create repository in %s? " directory)))
+              ;; Creating a new repository will invalidate cached
+              ;; values.
+              (setq magit--refresh-cache nil)
+              (magit-init directory))))
+      (magit-status-internal default-directory))))
 
 (put 'magit-status 'interactive-only 'magit-status-internal)
 
@@ -205,7 +217,7 @@ then offer to initialize it as a new repository."
             (display-warning 'magit (format "\
 Magit requires Git >= %s, but on %s the version is %s.
 
-If multiple Git versions are installed on the host then the
+If multiple Git versions are installed on the host, then the
 problem might be that TRAMP uses the wrong executable.
 
 First check the value of `magit-git-executable'.  Its value is
@@ -274,25 +286,20 @@ Type \\[magit-commit-popup] to create a commit.
 \\{magit-status-mode-map}"
   :group 'magit-status
   (hack-dir-local-variables-non-file-buffer)
+  (setq imenu-create-index-function
+        'magit-imenu--status-create-index-function)
+  (setq-local bookmark-make-record-function
+              #'magit-bookmark--status-make-record)
   ;; Avoid listing all files as deleted when visiting a bare repo.
   (when (magit-bare-repo-p)
     (make-local-variable 'magit-status-sections-hook)
     (remove-hook 'magit-status-sections-hook #'magit-insert-staged-changes
                  'local)))
 
-(defvar magit-status-sections-hook-1 nil)
-
 (defun magit-status-refresh-buffer ()
   (magit-git-exit-code "update-index" "--refresh")
   (magit-insert-section (status)
-    (if (-all-p #'functionp magit-status-sections-hook)
-        (run-hooks 'magit-status-sections-hook)
-      (message "`magit-status-sections-hook' contains entries that are \
-no longer valid.\nUsing standard value instead.  Please re-configure")
-      (sit-for 5)
-      (let ((magit-status-sections-hook-1
-             (eval (car (get 'magit-status-sections-hook 'standard-value)))))
-        (run-hooks 'magit-status-sections-hook-1))))
+    (magit-run-section-hook 'magit-status-sections-hook))
   (run-hooks 'magit-status-refresh-hook))
 
 (defun magit-status-maybe-update-revision-buffer (&optional _)
@@ -380,16 +387,16 @@ detached `HEAD'."
           (_       (setq rebase (magit-get-boolean "pull.rebase"))))
         (insert (format "%-10s" (or keyword (if rebase "Rebase: " "Merge: ")))))
       (--when-let (and magit-status-show-hashes-in-headers
+                       (not (string-match-p " " pull))
                        (magit-rev-format "%h" pull))
-        (insert (propertize it 'face 'magit-hash) ?\s))
-      (insert (propertize pull 'face
-                          (if (string= (magit-get "branch" branch "remote") ".")
-                              'magit-branch-local
-                            'magit-branch-remote)))
-      (insert ?\s)
-      (if (magit-rev-verify pull)
-          (insert (or (magit-rev-format "%s" pull) ""))
-        (insert (propertize "is missing" 'face 'font-lock-warning-face)))
+        (insert (propertize it 'face 'magit-hash) " "))
+      (if (string-match-p " " pull)
+          (pcase-let ((`(,url ,branch) (split-string pull " ")))
+            (insert branch " from " url " "))
+        (insert pull " ")
+        (if (magit-rev-verify pull)
+            (insert (or (magit-rev-format "%s" pull) ""))
+          (insert (propertize "is missing" 'face 'font-lock-warning-face))))
       (insert ?\n))))
 
 (cl-defun magit-insert-push-branch-header
@@ -467,6 +474,81 @@ remote in alphabetic order."
       (insert (format "%-10s" "Remote: "))
       (insert (propertize name 'face 'magit-branch-remote) ?\s)
       (insert url ?\n))))
+
+;;;; Campaign Header
+
+(defvar magit-hide-campaign-header
+  (ignore-errors (magit-get-boolean "magit.hideCampaign")))
+
+(defun magit-campaign-remove ()
+  "Remove the fundraising campaign header permanently."
+  (interactive)
+  (magit-call-git "config" "--global" "magit.hideCampaign" "true")
+  (setq magit-hide-campaign-header t)
+  (magit-refresh))
+
+(defun magit-campaign-hide ()
+  "Remove the fundraising campaign header until restart."
+  (interactive)
+  (setq magit-hide-campaign-header t)
+  (magit-refresh))
+
+(defun magit-campaign-visit ()
+  "Visit the fundraising campaign in a browser."
+  (interactive)
+  (browse-url "https://www.kickstarter.com/projects/1681258897/its-magit-the-magical-git-client?ref=2nj0oy"))
+
+(defvar magit-campaign-section-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-k") 'magit-campaign-remove)
+    (define-key map (kbd "C-c C-h") 'magit-campaign-hide)
+    (define-key map [remap magit-visit-thing] 'magit-campaign-visit)
+    map))
+
+(defun magit-insert-campaign-header ()
+  "Insert a header informing users of the fundraiser."
+  (unless (or (< (float-time) 1505512800) ; 2017-09-16 00:00:00 +0200
+              (> (float-time) 1506895200) ; 2017-10-02 00:00:00 +0200
+              magit-hide-campaign-header)
+    (magit-insert-section (campaign nil t)
+      (magit-insert-heading
+        (propertize "<3" 'face '(:foreground "magenta"))
+        (propertize " Please consider backing the Magit fundraiser.")
+        (propertize " Thanks!" 'face '(:foreground "magenta"))
+        " [TAB] to expand"
+        (propertize " <3" 'face '(:foreground "magenta")))
+      (insert "
+Please accept my apologies for this brief interruption.
+
+  C-c C-k   remove this section permanently
+  C-c C-h   remove this section until restart
+  TAB       collapse this section
+
+  RET       visit the fundraising campaign in a browser
+
+--------------------------------------------------------------
+                     The magic must go on
+--------------------------------------------------------------
+
+I am currently running a fundraising campaign on Kickstarter.
+If it succeeds, then I can work on Magit full-time for a whole
+year.  I am still overflowing with ideas, and depend on your
+support to realize them.
+
+I would love to work on Magit for at least another year and
+think that its users would miss out on a lot of significant
+improvements if I were unable to do so.  Magit and I are at
+a crossroad — either I can intensive my efforts or I have
+to give up bringing the long time goals to completion that
+I have been working toward for the past few years.
+
+Magit is still far from fulfilling its potential and now I
+need your help to get it there.  Visit the campaign to learn
+more about the planned improvements and please consider to
+make a contribution.
+
+  Thank you,
+  Jonas Bernoulli\n\n"))))
 
 ;;;; File Sections
 

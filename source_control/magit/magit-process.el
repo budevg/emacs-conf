@@ -43,19 +43,10 @@
 (eval-when-compile (require 'dired))
 (declare-function dired-uncache 'dired)
 
+(eval-when-compile (require 'auth-source))
+(declare-function auth-source-search 'auth-source)
+
 ;;; Options
-
-(defcustom magit-git-output-coding-system
-  (and (eq system-type 'windows-nt) 'utf-8)
-  "Coding system for receiving output from Git.
-
-If non-nil, the Git config value `i18n.logOutputEncoding' should
-be set via `magit-git-global-arguments' to value consistent with
-this."
-  :package-version '(magit . "2.9.0")
-  :group 'magit-process
-  :type '(choice (coding-system :tag "Coding system to decode Git output")
-                 (const :tag "Use system default" nil)))
 
 (defcustom magit-process-connection-type (not (eq system-type 'cygwin))
   "Connection type used for the Git process.
@@ -217,7 +208,11 @@ non-nil, then the password is read from the user instead."
 (define-derived-mode magit-process-mode magit-mode "Magit Process"
   "Mode for looking at Git process output."
   :group 'magit-process
-  (hack-dir-local-variables-non-file-buffer))
+  (hack-dir-local-variables-non-file-buffer)
+  (setq imenu-prev-index-position-function
+        'magit-imenu--process-prev-index-position-function)
+  (setq imenu-extract-index-name-function
+        'magit-imenu--process-extract-index-name-function))
 
 (defun magit-process-buffer (&optional nodisplay)
   "Display the current repository's process buffer.
@@ -295,8 +290,9 @@ as well as the current repository's status buffer are refreshed.
 
 Process output goes into a new section in the buffer returned by
 `magit-process-buffer'."
-  (magit-call-git args)
-  (magit-refresh))
+  (let ((magit--refresh-cache (list (cons 0 0))))
+    (magit-call-git args)
+    (magit-refresh)))
 
 (defvar magit-pre-call-git-hook nil)
 
@@ -536,17 +532,22 @@ Magit status buffer."
       (unless (equal (expand-file-name pwd)
                      (expand-file-name default-directory))
         (insert (file-relative-name pwd default-directory) ?\s))
-      (insert (propertize program 'face 'magit-section-heading))
-      (insert " ")
-      (when (and args (equal program magit-git-executable))
+      (cond
+       ((and args (equal program magit-git-executable))
         (setq args (-split-at (length magit-git-global-arguments) args))
+        (insert (propertize program 'face 'magit-section-heading) " ")
         (insert (propertize (char-to-string magit-ellipsis)
                             'face 'magit-section-heading
                             'help-echo (mapconcat #'identity (car args) " ")))
         (insert " ")
-        (setq args (cadr args)))
-      (insert (propertize (mapconcat #'identity args " ")
-                          'face 'magit-section-heading))
+        (insert (propertize (mapconcat #'shell-quote-argument (cadr args) " ")
+                            'face 'magit-section-heading)))
+       ((and args (equal program shell-file-name))
+        (insert (propertize (cadr args) 'face 'magit-section-heading)))
+       (t
+        (insert (propertize program 'face 'magit-section-heading) " ")
+        (insert (propertize (mapconcat #'shell-quote-argument args " ")
+                            'face 'magit-section-heading))))
       (magit-insert-heading)
       (when errlog
         (insert-file-contents errlog)
@@ -699,7 +700,7 @@ instead."
 (defun magit-process-match-prompt (prompts string)
   "Match STRING against PROMPTS and set match data.
 Return the matched string suffixed with \": \", if needed."
-  (when (--any? (string-match it string) prompts)
+  (when (--any-p (string-match it string) prompts)
     (let ((prompt (match-string 0 string)))
       (cond ((string-suffix-p ": " prompt) prompt)
             ((string-suffix-p ":"  prompt) (concat prompt " "))
@@ -794,11 +795,11 @@ as argument."
 (defun magit-process-finish (arg &optional process-buf command-buf
                                  default-dir section)
   (unless (integerp arg)
-    (setq process-buf (process-buffer arg)
-          command-buf (process-get arg 'command-buf)
-          default-dir (process-get arg 'default-dir)
-          section     (process-get arg 'section)
-          arg         (process-exit-status arg)))
+    (setq process-buf (process-buffer arg))
+    (setq command-buf (process-get arg 'command-buf))
+    (setq default-dir (process-get arg 'default-dir))
+    (setq section     (process-get arg 'section))
+    (setq arg         (process-exit-status arg)))
   (when (featurep 'dired)
     (dired-uncache default-dir))
   (when (buffer-live-p process-buf)

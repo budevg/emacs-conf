@@ -29,6 +29,8 @@
 
 (require 'magit)
 
+(defvar bookmark-make-record-function)
+
 ;;; Options
 
 (defgroup magit-stash nil
@@ -262,7 +264,7 @@ When the region is active offer to drop all contained stashes."
 (defun magit-stash-save (message index worktree untracked
                                  &optional refresh keep noerror ref)
   (if (or (and index     (magit-staged-files t))
-          (and worktree  (magit-modified-files t))
+          (and worktree  (magit-unstaged-files t))
           (and untracked (magit-untracked-files (eq untracked 'all))))
       (magit-with-toplevel
         (magit-stash-store message (or ref "refs/stash")
@@ -299,7 +301,8 @@ When the region is active offer to drop all contained stashes."
         (summary (magit-stash-summary))
         (head "HEAD"))
     (when (and worktree (not index))
-      (setq head (magit-commit-tree "pre-stash index" nil "HEAD")))
+      (setq head (or (magit-commit-tree "pre-stash index" nil "HEAD")
+                     (error "Cannot save the current index state"))))
     (or (setq index (magit-commit-tree (concat "index on " summary) nil head))
         (error "Cannot save the current index state"))
     (and untracked
@@ -343,8 +346,8 @@ When the region is active offer to drop all contained stashes."
 (cl-defun magit-insert-stashes (&optional (ref   "refs/stash")
                                           (heading "Stashes:"))
   "Insert `stashes' section showing reflog for \"refs/stash\".
-If optional REF is non-nil show reflog for that instead.
-If optional HEADING is non-nil use that as section heading
+If optional REF is non-nil, show reflog for that instead.
+If optional HEADING is non-nil, use that as section heading
 instead of \"Stashes:\"."
   (when (magit-rev-verify ref)
     (magit-insert-section (stashes ref (not magit-status-expand-stashes))
@@ -363,7 +366,9 @@ instead of \"Stashes:\"."
 (define-derived-mode magit-stashes-mode magit-reflog-mode "Magit Stashes"
   "Mode for looking at lists of stashes."
   :group 'magit-log
-  (hack-dir-local-variables-non-file-buffer))
+  (hack-dir-local-variables-non-file-buffer)
+  (setq-local bookmark-make-record-function
+              #'magit-bookmark--stashes-make-record))
 
 (cl-defun magit-stashes-refresh-buffer (ref)
   (magit-insert-section (stashesbuf)
@@ -388,7 +393,9 @@ instead of \"Stashes:\"."
 (define-derived-mode magit-stash-mode magit-diff-mode "Magit Stash"
   "Mode for looking at individual stashes."
   :group 'magit-diff
-  (hack-dir-local-variables-non-file-buffer))
+  (hack-dir-local-variables-non-file-buffer)
+  (setq-local bookmark-make-record-function
+              #'magit-bookmark--stash-make-record))
 
 (defun magit-stash-refresh-buffer (stash _const _args _files)
   (setq header-line-format

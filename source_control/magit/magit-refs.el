@@ -29,6 +29,8 @@
 
 (require 'magit)
 
+(defvar bookmark-make-record-function)
+
 ;;; Options
 
 (defgroup magit-refs nil
@@ -113,7 +115,7 @@ tags."
 (defcustom magit-visit-ref-behavior nil
   "Control how `magit-visit-ref' behaves in `magit-refs-mode' buffers.
 
-By default `magit-visit-ref' behaves like `magit-show-commits',
+By default `magit-visit-ref' behaves like `magit-show-commit',
 in all buffers, including `magit-refs-mode' buffers.  When the
 type of the section at point is `commit' then \"RET\" is bound to
 `magit-show-commit', and when the type is either `branch' or
@@ -128,7 +130,7 @@ in another buffer.
 However \"RET\" used to behave differently in `magit-refs-mode'
 buffers, doing surprising things, some of which cannot really be
 described as \"visit this thing\".  If you have grown accustomed
-to such inconsistent, but to you useful, behavior then you can
+to such inconsistent, but to you useful, behavior, then you can
 restore that by adding one or more of the below symbols to the
 value of this option.  But keep in mind that by doing so you
 don't only introduce inconsistencies, you also lose some
@@ -144,7 +146,7 @@ the outcome.
 
   With a prefix argument update the buffer to show commit counts
   and lists of cherry commits relative to the reference at point
-  instead of relative to the current buffer or HEAD.
+  instead of relative to the current buffer or `HEAD'.
 
   Instead of adding this symbol, consider pressing \"C-u y o RET\".
 
@@ -160,7 +162,7 @@ the outcome.
 `checkout-any'
 
   Check out the reference at point.  If that reference is a tag
-  or a remote branch, then this results in a detached HEAD.
+  or a remote branch, then this results in a detached `HEAD'.
 
   Instead of adding this symbol, consider pressing \"b b RET\",
   like you would do in other buffers.
@@ -201,11 +203,15 @@ to visit the commit or branch at point.
 Type \\[magit-branch-popup] to see available branch commands.
 Type \\[magit-merge-popup] to merge the branch or commit at point.
 Type \\[magit-cherry-pick-popup] to apply the commit at point.
-Type \\[magit-reset] to reset HEAD to the commit at point.
+Type \\[magit-reset] to reset `HEAD' to the commit at point.
 
 \\{magit-refs-mode-map}"
   :group 'magit-refs
-  (hack-dir-local-variables-non-file-buffer))
+  (hack-dir-local-variables-non-file-buffer)
+  (setq imenu-create-index-function
+        #'magit-imenu--refs-create-index-function)
+  (setq-local bookmark-make-record-function
+              #'magit-bookmark--refs-make-record))
 
 (defun magit-refs-refresh-buffer (&rest _ignore)
   (setq magit-set-buffer-margin-refresh (not (magit-buffer-margin-p)))
@@ -558,12 +564,11 @@ line is inserted at all."
                              head ref section))
     (magit-refs-insert-cherry-commits-1 head ref section)))
 
-(defun magit-refs-insert-cherry-commits-1 (head ref section)
+(defun magit-refs-insert-cherry-commits-1 (head ref _section)
   (let ((start (point)))
     (magit-git-wash (apply-partially 'magit-log-wash-log 'cherry)
-      "cherry" "-v" "--abbrev" head ref magit-refresh-args)
+      "cherry" "-v" (magit-abbrev-arg) head ref magit-refresh-args)
     (unless (= (point) start)
-      (insert (propertize "\n" 'magit-section section))
       (magit-make-margin-overlay nil t))))
 
 (defun magit-refs-format-margin (commit)

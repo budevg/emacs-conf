@@ -100,12 +100,13 @@ an error while using those is harder to recover from."
     :switches ((?a "Stage all modified and deleted files"   "--all")
                (?e "Allow empty commit"                     "--allow-empty")
                (?v "Show diff of changes to be committed"   "--verbose")
-               (?n "Bypass git hooks"                       "--no-verify")
+               (?h "Disable hooks"                          "--no-verify")
                (?s "Add Signed-off-by line"                 "--signoff")
                (?R "Claim authorship and reset author date" "--reset-author"))
     :options  ((?A "Override the author"  "--author=")
                (?S "Sign using gpg"       "--gpg-sign=" magit-read-gpg-secret-key)
-               (?C "Reuse commit message" "--reuse-message="))
+               (?C "Reuse commit message" "--reuse-message="
+                   magit-read-reuse-message))
     :actions  ((?c "Commit"         magit-commit)
                (?e "Extend"         magit-commit-extend)
                (?f "Fixup"          magit-commit-fixup)
@@ -142,12 +143,19 @@ an error while using those is harder to recover from."
                         (car (or magit-gpg-secret-key-hist keys)))
                        " "))))
 
+(defun magit-read-reuse-message (prompt &optional default)
+  (magit-completing-read prompt (magit-list-refnames)
+                         nil nil nil 'magit-revision-history
+                         (or default
+                             (and (magit-rev-verify "ORIG_HEAD")
+                                  "ORIG_HEAD"))))
+
 ;;; Commands
 
 ;;;###autoload
 (defun magit-commit (&optional args)
-  "Create a new commit on HEAD.
-With a prefix argument amend to the commit at HEAD instead.
+  "Create a new commit on `HEAD'.
+With a prefix argument, amend to the commit at `HEAD' instead.
 \n(git commit [--amend] ARGS)"
   (interactive (if current-prefix-arg
                    (list (cons "--amend" (magit-commit-arguments)))
@@ -366,8 +374,8 @@ actually insert the entry."
         (log (magit-commit-message-buffer)) buf pos)
     (save-window-excursion
       (call-interactively #'magit-diff-visit-file)
-      (setq buf (current-buffer)
-            pos (point)))
+      (setq buf (current-buffer))
+      (setq pos (point)))
     (unless log
       (unless (magit-commit-assert nil)
         (user-error "Abort"))

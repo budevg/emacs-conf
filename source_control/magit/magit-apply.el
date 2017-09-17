@@ -42,7 +42,7 @@
 (defvar auto-revert-verbose)
 ;; For `magit-stage-untracked'
 (declare-function magit-submodule-add 'magit-submodule)
-(declare-function magit-submodule-read-name 'magit-submodule)
+(declare-function magit-submodule-read-name-for-path 'magit-submodule)
 
 (require 'dired)
 
@@ -52,8 +52,8 @@
   "Whether Magit uses the system's trash can.
 
 You should absolutely not disable this and also remove `discard'
-from `magit-no-confirm'.  Even if you have all of the Magit-Wip
-modes enabled you shouldn't do that, because those modes to not
+from `magit-no-confirm'.  You shouldn't do that even if you have
+all of the Magit-Wip modes enabled, because those modes do not
 track any files that are not tracked in the proper branch."
   :package-version '(magit . "2.1.0")
   :group 'magit-essentials
@@ -224,7 +224,7 @@ requiring confirmation."
   (interactive
    (let* ((atpoint (magit-section-when (file)))
           (current (magit-file-relative-name))
-          (choices (nconc (magit-modified-files)
+          (choices (nconc (magit-unstaged-files)
                           (magit-untracked-files)))
           (default (car (member (or atpoint current) choices))))
      (list (if (or current-prefix-arg (not default))
@@ -264,7 +264,8 @@ ignored) files.
                   (`list  (magit-untracked-files))))
          plain repos)
     (dolist (file files)
-      (if (magit-git-repo-p file t)
+      (if (and (not (file-symlink-p file))
+               (magit-git-repo-p file t))
           (push file repos)
         (push file plain)))
     (magit-wip-commit-before-change files " before stage")
@@ -281,9 +282,10 @@ ignored) files.
         (magit-submodule-add
          (let ((default-directory
                  (file-name-as-directory (expand-file-name repo))))
-           (magit-get "remote" (or (magit-get-remote) "origin") "url"))
+           (or (magit-get "remote" (or (magit-get-remote) "origin") "url")
+               (concat (file-name-as-directory ".") repo)))
          repo
-         (magit-submodule-read-name repo))))
+         (magit-submodule-read-name-for-path repo))))
     (magit-wip-commit-after-apply files " after stage")))
 
 ;;;; Unstage
@@ -510,7 +512,7 @@ without requiring confirmation."
                 (sections
                  (magit-discard-apply-n sections 'magit-apply-diffs)))
           (when binaries
-            (let ((modified (magit-modified-files t)))
+            (let ((modified (magit-unstaged-files t)))
               (setq binaries (--separate (member it modified) binaries)))
             (when (cadr binaries)
               (magit-call-git "reset" "--" (cadr binaries)))
