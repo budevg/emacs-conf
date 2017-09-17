@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: gdb
+# key: gdb
+# --
+gdb -ex 'set height 100000' -ex 'set print pretty on'$0

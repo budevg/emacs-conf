@@ -2,4 +2,4 @@
 # name: frestart
 # key: frestart
 # --
-echo b > /proc/sysrq-trigger
+echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger$0
