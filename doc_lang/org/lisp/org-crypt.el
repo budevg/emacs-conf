@@ -1,5 +1,5 @@
 ;;; org-crypt.el --- Public Key Encryption for Org Entries -*- lexical-binding: t; -*-
-;; Copyright (C) 2007-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Emacs Lisp Archive Entry
 ;; Filename: org-crypt.el
@@ -23,7 +23,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -176,14 +176,18 @@ See `org-crypt-disable-auto-save'."
    (let ((start-heading (point)))
      (org-end-of-meta-data)
      (unless (looking-at-p "-----BEGIN PGP MESSAGE-----")
-       (let ((folded (outline-invisible-p))
+       (let ((folded (org-invisible-p))
 	     (crypt-key (org-crypt-key-for-heading))
 	     (beg (point)))
 	 (goto-char start-heading)
 	 (org-end-of-subtree t t)
 	 (org-back-over-empty-lines)
 	 (let ((contents (delete-and-extract-region beg (point))))
-	   (insert (org-encrypt-string contents crypt-key)))
+	   (condition-case err
+	       (insert (org-encrypt-string contents crypt-key))
+	     ;; If encryption failed, make sure to insert back entry
+	     ;; contents in the buffer.
+	     (error (insert contents) (error (nth 1 err)))))
 	 (when folded
 	   (goto-char start-heading)
 	   (outline-hide-subtree))
@@ -200,7 +204,7 @@ See `org-crypt-disable-auto-save'."
 	   (heading-was-invisible-p
 	    (save-excursion
 	      (outline-end-of-heading)
-	      (outline-invisible-p))))
+	      (org-invisible-p))))
        (org-end-of-meta-data)
        (when (looking-at "-----BEGIN PGP MESSAGE-----")
 	 (org-crypt-check-auto-save)

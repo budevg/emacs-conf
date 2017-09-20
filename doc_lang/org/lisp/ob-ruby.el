@@ -1,6 +1,6 @@
 ;;; ob-ruby.el --- Babel Functions for Ruby          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -41,6 +41,9 @@
 (declare-function org-trim "org" (s &optional keep-lead))
 (declare-function run-ruby "ext:inf-ruby" (&optional command name))
 (declare-function xmp "ext:rcodetools" (&optional option))
+
+(defvar inf-ruby-default-implementation)
+(defvar inf-ruby-implementations)
 
 (defvar org-babel-tangle-lang-exts)
 (add-to-list 'org-babel-tangle-lang-exts '("ruby" . "rb"))
@@ -150,12 +153,16 @@ If there is not a current inferior-process-buffer in SESSION
 then create one.  Return the initialized session."
   (unless (string= session "none")
     (require 'inf-ruby)
-    (let ((session-buffer (save-window-excursion
-			    (run-ruby nil session) (current-buffer))))
+    (let* ((cmd (cdr (assoc inf-ruby-default-implementation
+			    inf-ruby-implementations)))
+	   (buffer (get-buffer (format "*%s*" session)))
+	   (session-buffer (or buffer (save-window-excursion
+					(run-ruby cmd session)
+					(current-buffer)))))
       (if (org-babel-comint-buffer-livep session-buffer)
 	  (progn (sit-for .25) session-buffer)
-        (sit-for .5)
-        (org-babel-ruby-initiate-session session)))))
+	(sit-for .5)
+	(org-babel-ruby-initiate-session session)))))
 
 (defvar org-babel-ruby-eoe-indicator ":org_babel_ruby_eoe"
   "String to indicate that evaluation has completed.")

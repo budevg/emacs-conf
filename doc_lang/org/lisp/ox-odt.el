@@ -1,6 +1,6 @@
 ;;; ox-odt.el --- OpenDocument Text Exporter for Org Mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2017 Free Software Foundation, Inc.
 
 ;; Author: Jambunathan K <kjambunathan at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -85,7 +85,8 @@
   :filters-alist '((:filter-parse-tree
 		    . (org-odt--translate-latex-fragments
 		       org-odt--translate-description-lists
-		       org-odt--translate-list-tables)))
+		       org-odt--translate-list-tables
+		       org-odt--translate-image-links)))
   :menu-entry
   '(?o "Export to ODT"
        ((?o "As ODT file" org-odt-export-to-odt)
@@ -112,7 +113,9 @@
     (:odt-table-styles nil nil org-odt-table-styles)
     (:odt-use-date-fields nil nil org-odt-use-date-fields)
     ;; Redefine regular option.
-    (:with-latex nil "tex" org-odt-with-latex)))
+    (:with-latex nil "tex" org-odt-with-latex)
+    ;; Retrieve LaTeX header for fragments.
+    (:latex-header "LATEX_HEADER" nil nil newline)))
 
 
 ;;; Dependencies
@@ -653,7 +656,7 @@ The function should return the string to be exported.
 
 The default value simply returns the value of CONTENTS."
   :group 'org-export-odt
-  :version "24.4"
+  :version "26.1"
   :package-version '(Org . "8.3")
   :type 'function)
 
@@ -673,7 +676,7 @@ TAGS      the tags string, separated with colons (string or nil).
 
 The function result will be used as headline text."
   :group 'org-export-odt
-  :version "25.2"
+  :version "26.1"
   :package-version '(Org . "8.3")
   :type 'function)
 
@@ -694,7 +697,7 @@ The function must accept six parameters:
 
 The function should return the string to be exported."
   :group 'org-export-odt
-  :version "25.2"
+  :version "26.1"
   :package-version '(Org . "8.3")
   :type 'function)
 
@@ -753,7 +756,7 @@ A rule consists in an association whose key is the type of link
 to consider, and value is a regexp that will be matched against
 link's path."
   :group 'org-export-odt
-  :version "25.2"
+  :version "26.1"
   :package-version '(Org . "8.3")
   :type '(alist :key-type (string :tag "Type")
 		:value-type (regexp :tag "Path")))
@@ -847,7 +850,7 @@ ON-OR-OFF                 := t | nil
 For example, with the following configuration
 
 \(setq org-odt-table-styles
-      '((\"TableWithHeaderRowsAndColumns\" \"Custom\"
+      \\='((\"TableWithHeaderRowsAndColumns\" \"Custom\"
          ((use-first-row-styles . t)
           (use-first-column-styles . t)))
         (\"TableWithHeaderColumns\" \"Custom\"
@@ -1868,7 +1871,7 @@ See `org-odt-format-headline-function' for details."
      (let ((style (if (eq todo-type 'done) "OrgDone" "OrgTodo")))
        (format "<text:span text:style-name=\"%s\">%s</text:span> " style todo)))
    (when priority
-     (let* ((style (format "OrgPriority-%s" priority))
+     (let* ((style (format "OrgPriority-%c" priority))
 	    (priority (format "[#%c]" priority)))
        (format "<text:span text:style-name=\"%s\">%s</text:span> "
 	       style priority)))
@@ -2882,15 +2885,10 @@ contextual information."
 
 (defun org-odt--encode-tabs-and-spaces (line)
   (replace-regexp-in-string
-   "\\([\t]\\|\\([ ]+\\)\\)"
+   "\\(\t\\| \\{2,\\}\\)"
    (lambda (s)
-     (cond
-      ((string= s "\t") "<text:tab/>")
-      (t (let ((n (length s)))
-	   (cond
-	    ((= n 1) " ")
-	    ((> n 1) (concat " " (format "<text:s text:c=\"%d\"/>" (1- n))))
-	    (t ""))))))
+     (if (string= s "\t") "<text:tab/>"
+       (format " <text:s text:c=\"%d\"/>" (1- (length s)))))
    line))
 
 (defun org-odt--encode-plain-text (text &optional no-whitespace-filling)
@@ -3673,19 +3671,22 @@ channel."
   "Transcode a VERSE-BLOCK element from Org to ODT.
 CONTENTS is verse block contents.  INFO is a plist holding
 contextual information."
-  ;; Add line breaks to each line of verse.
-  (setq contents (replace-regexp-in-string
-		  "\\(<text:line-break/>\\)?[ \t]*\n"
-		  "<text:line-break/>" contents))
-  ;; Replace tabs and spaces.
-  (setq contents (org-odt--encode-tabs-and-spaces contents))
-  ;; Surround it in a verse environment.
-  (format "\n<text:p text:style-name=\"%s\">%s</text:p>"
-	  "OrgVerse" contents))
+  (format "\n<text:p text:style-name=\"OrgVerse\">%s</text:p>"
+	  (replace-regexp-in-string
+	   ;; Replace leading tabs and spaces.
+	   "^[ \t]+" #'org-odt--encode-tabs-and-spaces
+	   ;; Add line breaks to each line of verse.
+	   (replace-regexp-in-string
+	    "\\(<text:line-break/>\\)?[ \t]*$" "<text:line-break/>" contents))))
 
 
 
 ;;; Filters
+
+;;; Images
+
+(defun org-odt--translate-image-links (data _backend info)
+  (org-export-insert-image-links data info org-odt-inline-image-rules))
 
 ;;;; LaTeX fragments
 
@@ -3738,42 +3739,46 @@ contextual information."
 		    (mathml (format "Creating MathML snippet %d..." count))))
 		 ;; Get an Org-style link to PNG image or the MathML
 		 ;; file.
-		 (org-link
-		  (let ((link (with-temp-buffer
-				(insert latex-frag)
-				(org-format-latex cache-subdir cache-dir
-						  nil display-msg
-						  nil processing-type)
-				(buffer-substring-no-properties
-				 (point-min) (point-max)))))
-		    (if (string-match-p "file:\\([^]]*\\)" link) link
-		      (message "LaTeX Conversion failed.")
-		      nil))))
-	    (when org-link
+		 (link
+		  (with-temp-buffer
+		    (insert latex-frag)
+		    ;; When converting to a PNG image, make sure to
+		    ;; copy all LaTeX header specifications from the
+		    ;; Org source.
+		    (unless (eq processing-type 'mathml)
+		      (let ((h (plist-get info :latex-header)))
+			(when h
+			  (insert "\n"
+				  (replace-regexp-in-string
+				   "^" "#+LATEX_HEADER: " h)))))
+		    (org-format-latex cache-subdir nil nil cache-dir
+				      nil display-msg nil
+				      processing-type)
+		    (goto-char (point-min))
+		    (skip-chars-forward " \t\n")
+		    (org-element-link-parser))))
+	    (if (not (eq 'link (org-element-type link)))
+		(message "LaTeX Conversion failed.")
 	      ;; Conversion succeeded.  Parse above Org-style link to
 	      ;; a `link' object.
-	      (let* ((link
-		      (org-element-map
-			  (org-element-parse-secondary-string org-link '(link))
-			  'link #'identity info t))
-		     (replacement
-		      (cl-case (org-element-type latex-*)
-			;; Case 1: LaTeX environment.  Mimic
-			;; a "standalone image or formula" by
-			;; enclosing the `link' in a `paragraph'.
-			;; Copy over original attributes, captions to
-			;; the enclosing paragraph.
-			(latex-environment
-			 (org-element-adopt-elements
-			  (list 'paragraph
-				(list :style "OrgFormula"
-				      :name
-				      (org-element-property :name latex-*)
-				      :caption
-				      (org-element-property :caption latex-*)))
-			  link))
-			;; Case 2: LaTeX fragment.  No special action.
-			(latex-fragment link))))
+	      (let ((replacement
+		     (cl-case (org-element-type latex-*)
+		       ;;LaTeX environment.  Mimic a "standalone image
+		       ;; or formula" by enclosing the `link' in
+		       ;; a `paragraph'.  Copy over original
+		       ;; attributes, captions to the enclosing
+		       ;; paragraph.
+		       (latex-environment
+			(org-element-adopt-elements
+			 (list 'paragraph
+			       (list :style "OrgFormula"
+				     :name
+				     (org-element-property :name latex-*)
+				     :caption
+				     (org-element-property :caption latex-*)))
+			 link))
+		       ;; LaTeX fragment.  No special action.
+		       (latex-fragment link))))
 		;; Note down the object that link replaces.
 		(org-element-put-property replacement :replaces
 					  (list (org-element-type latex-*)

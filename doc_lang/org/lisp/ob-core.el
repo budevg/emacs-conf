@@ -1,6 +1,6 @@
 ;;; ob-core.el --- Working with Code Blocks          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	Dan Davison
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 (require 'cl-lib)
@@ -82,7 +82,6 @@
 (declare-function org-reverse-string "org" (string))
 (declare-function org-set-outline-overlay-data "org" (data))
 (declare-function org-show-context "org" (&optional key))
-(declare-function org-split-string "org" (string &optional separators))
 (declare-function org-src-coderef-format "org-src" (element))
 (declare-function org-src-coderef-regexp "org-src" (fmt &optional label))
 (declare-function org-table-align "org-table" ())
@@ -175,8 +174,16 @@ This string must include a \"%s\" which will be replaced by the results."
   "Non-nil means show the time the code block was evaluated in the result hash."
   :group 'org-babel
   :type 'boolean
-  :version "25.2"
+  :version "26.1"
   :package-version '(Org . "9.0")
+  :safe #'booleanp)
+
+(defcustom org-babel-uppercase-example-markers nil
+  "When non-nil, begin/end example markers will be inserted in upper case."
+  :group 'org-babel
+  :type 'boolean
+  :version "26.1"
+  :package-version '(Org . "9.1")
   :safe #'booleanp)
 
 (defun org-babel-noweb-wrap (&optional regexp)
@@ -234,11 +241,9 @@ should be asked whether to allow evaluation."
 	 (query (or (equal eval "query")
 		    (and export (equal eval "query-export"))
 		    (if (functionp org-confirm-babel-evaluate)
-			(save-excursion
-			  (goto-char (nth 5 info))
-			  (funcall org-confirm-babel-evaluate
-				   ;; language, code block body
-				   (nth 0 info) (nth 1 info)))
+			(funcall org-confirm-babel-evaluate
+				 ;; Language, code block body.
+				 (nth 0 info) (nth 1 info))
 		      org-confirm-babel-evaluate))))
     (cond
      (noeval nil)
@@ -1432,36 +1437,77 @@ specified in the properties of the current outline entry."
 
 (defun org-babel-balanced-split (string alts)
   "Split STRING on instances of ALTS.
-ALTS is a cons of two character options where each option may be
-either the numeric code of a single character or a list of
-character alternatives.  For example to split on balanced
-instances of \"[ \t]:\" set ALTS to ((32 9) . 58)."
-  (let* ((matches (lambda (ch spec) (if (listp spec) (member ch spec) (equal spec ch))))
-	 (matched (lambda (ch last)
-		    (if (consp alts)
-			(and (funcall matches ch (cdr alts))
-			     (funcall matches last (car alts)))
-		      (funcall matches ch alts))))
-	 (balance 0) (last 0)
-	 quote partial lst)
-    (mapc (lambda (ch)  ; split on [], (), "" balanced instances of [ \t]:
-	    (setq balance (+ balance
-			     (cond ((or (equal 91 ch) (equal 40 ch)) 1)
-				   ((or (equal 93 ch) (equal 41 ch)) -1)
-				   (t 0))))
-	    (when (and (equal 34 ch) (not (equal 92 last)))
-	      (setq quote (not quote)))
-	    (setq partial (cons ch partial))
-	    (when (and (= balance 0) (not quote) (funcall matched ch last))
-	      (setq lst (cons (apply #'string (nreverse
-					       (if (consp alts)
-						   (cddr partial)
-						 (cdr partial))))
-			      lst))
-	      (setq partial nil))
-	    (setq last ch))
-	  (string-to-list string))
-    (nreverse (cons (apply #'string (nreverse partial)) lst))))
+ALTS is a character, or cons of two character options where each
+option may be either the numeric code of a single character or
+a list of character alternatives.  For example, to split on
+balanced instances of \"[ \t]:\", set ALTS to ((32 9) . 58)."
+  (with-temp-buffer
+    (insert string)
+    (goto-char (point-min))
+    (let ((splitp (lambda (past next)
+		    ;; Non-nil when there should be a split after NEXT
+		    ;; character. PAST is the character before NEXT.
+		    (pcase alts
+		      (`(,(and first (pred consp)) . ,(and second (pred consp)))
+		       (and (memq past first) (memq next second)))
+		      (`(,first . ,(and second (pred consp)))
+		       (and (eq past first) (memq next second)))
+		      (`(,(and first (pred consp)) . ,second)
+		       (and (memq past first) (eq next second)))
+		      (`(,first . ,second)
+		       (and (eq past first) (eq next second)))
+		      ((pred (eq next)) t)
+		      (_ nil))))
+	  (partial nil)
+	  (result nil))
+      (while (not (eobp))
+        (cond
+	 ((funcall splitp (char-before) (char-after))
+	  ;; There is a split after point.  If ALTS is two-folds,
+	  ;; remove last parsed character as it belongs to ALTS.
+	  (when (consp alts) (pop partial))
+	  ;; Include elements parsed so far in RESULTS and flush
+	  ;; partial parsing.
+	  (when partial
+	    (push (apply #'string (nreverse partial)) result)
+	    (setq partial nil))
+	  (forward-char))
+	 ((memq (char-after) '(?\( ?\[))
+	  ;; Include everything between balanced brackets.
+	  (let* ((origin (point))
+		 (after (char-after))
+		 (openings (list after)))
+	    (forward-char)
+	    (while (and openings (re-search-forward "[]()]" nil t))
+	      (pcase (char-before)
+		((and match (or ?\[ ?\()) (push match openings))
+		(?\] (when (eq ?\[ (car openings)) (pop openings)))
+		(_ (when (eq ?\( (car openings)) (pop openings)))))
+	    (if (null openings)
+		(setq partial
+		      (nconc (nreverse (string-to-list
+					(buffer-substring origin (point))))
+			     partial))
+	      ;; Un-balanced bracket.  Backtrack.
+	      (push after partial)
+	      (goto-char (1+ origin)))))
+	 ((and (eq ?\" (char-after)) (not (eq ?\\ (char-before))))
+	  ;; Include everything from current double quote to next
+	  ;; non-escaped double quote.
+	  (let ((origin (point)))
+	    (if (re-search-forward "[^\\]\"" nil t)
+		(setq partial
+		      (nconc (nreverse (string-to-list
+					(buffer-substring origin (point))))
+			     partial))
+	      ;; No closing double quote.  Backtrack.
+	      (push ?\" partial)
+	      (forward-char))))
+	 (t (push (char-after) partial)
+	    (forward-char))))
+      ;; Add pending parsing and return result.
+      (when partial (push (apply #'string (nreverse partial)) result))
+      (nreverse result))))
 
 (defun org-babel-join-splits-near-ch (ch list)
   "Join splits where \"=\" is on either end of the split."
@@ -1711,16 +1757,20 @@ NAME, or nil if no such block exists.  Set match data according
 to `org-babel-named-src-block-regexp'."
   (save-excursion
     (goto-char (point-min))
-    (ignore-errors
-      (org-next-block 1 nil (org-babel-named-src-block-regexp-for-name name)))))
+    (let ((regexp (org-babel-named-src-block-regexp-for-name name)))
+      (or (and (looking-at regexp)
+	       (progn (goto-char (match-beginning 1))
+		      (line-beginning-position)))
+	  (ignore-errors (org-next-block 1 nil regexp))))))
 
 (defun org-babel-src-block-names (&optional file)
   "Returns the names of source blocks in FILE or the current buffer."
   (when file (find-file file))
   (save-excursion
     (goto-char (point-min))
-    (let ((re (org-babel-named-src-block-regexp-for-name))
-	  names)
+    (let* ((re (org-babel-named-src-block-regexp-for-name))
+	   (names (and (looking-at re)
+		       (list (match-string-no-properties 9)))))
       (while (ignore-errors (org-next-block 1 nil re))
 	(push (match-string-no-properties 9) names))
       names)))
@@ -2228,21 +2278,22 @@ INFO may provide the values of these header arguments (in the
 		 ((member "prepend" result-params))) ; already there
 		(setq results-switches
 		      (if results-switches (concat " " results-switches) ""))
-		(let ((wrap (lambda (start finish &optional no-escape no-newlines
-				      inline-start inline-finish)
-			      (when inline
-				(setq start inline-start)
-				(setq finish inline-finish)
-				(setq no-newlines t))
-			      (goto-char end)
-			      (insert (concat finish (unless no-newlines "\n")))
-			      (goto-char beg)
-			      (insert (concat start (unless no-newlines "\n")))
-			      (unless no-escape
-				(org-escape-code-in-region (min (point) end) end))
-			      (goto-char end)
-			      (unless no-newlines (goto-char (point-at-eol)))
-			      (setq end (point-marker))))
+		(let ((wrap
+		       (lambda (start finish &optional no-escape no-newlines
+				 inline-start inline-finish)
+			 (when inline
+			   (setq start inline-start)
+			   (setq finish inline-finish)
+			   (setq no-newlines t))
+			 (let ((before-finish (marker-position end)))
+			   (goto-char end)
+			   (insert (concat finish (unless no-newlines "\n")))
+			   (goto-char beg)
+			   (insert (concat start (unless no-newlines "\n")))
+			   (unless no-escape
+			     (org-escape-code-in-region
+			      (min (point) before-finish) before-finish))
+			   (goto-char end))))
 		      (tabulablep
 		       (lambda (r)
 			 ;; Non-nil when result R can be turned into
@@ -2296,13 +2347,13 @@ INFO may provide the values of these header arguments (in the
 		    (insert (org-macro-escape-arguments
 			     (org-babel-chomp result "\n"))))
 		   (t (goto-char beg) (insert result)))
-		  (setq end (point-marker))
+		  (setq end (copy-marker (point) t))
 		  ;; possibly wrap result
 		  (cond
 		   ((assq :wrap (nth 2 info))
 		    (let ((name (or (cdr (assq :wrap (nth 2 info))) "RESULTS")))
 		      (funcall wrap (concat "#+BEGIN_" name)
-			       (concat "#+END_" (car (org-split-string name)))
+			       (concat "#+END_" (car (split-string name)))
 			       nil nil (concat "{{{results(@@" name ":") "@@)}}}")))
 		   ((member "html" result-params)
 		    (funcall wrap "#+BEGIN_EXPORT html" "#+END_EXPORT" nil nil
@@ -2333,11 +2384,12 @@ INFO may provide the values of these header arguments (in the
 		   ((and (not (funcall tabulablep result))
 			 (not (member "file" result-params)))
 		    (let ((org-babel-inline-result-wrap
-			   ;; Hard code {{{results(...)}}} on top of customization.
+			   ;; Hard code {{{results(...)}}} on top of
+			   ;; customization.
 			   (format "{{{results(%s)}}}"
 				   org-babel-inline-result-wrap)))
-		      (org-babel-examplify-region beg end results-switches inline)
-		      (setq end (point))))))
+		      (org-babel-examplify-region
+		       beg end results-switches inline)))))
 		;; Possibly indent results in par with #+results line.
 		(when (and (not inline) (numberp indent) (> indent 0)
 			   ;; In this case `table-align' does the work
@@ -2350,6 +2402,7 @@ INFO may provide the values of these header arguments (in the
 			(message "Code block returned no value.")
 		      (message "Code block produced no output."))
 		  (message "Code block evaluation complete.")))
+	    (set-marker end nil)
 	    (when outside-scope (narrow-to-region visible-beg visible-end))
 	    (set-marker visible-beg nil)
 	    (set-marker visible-end nil)))))))
@@ -2435,15 +2488,12 @@ file's directory then expand relative links."
 	      result)
 	    (if description (concat "[" description "]") ""))))
 
-(defvar org-babel-capitalize-example-region-markers nil
-  "Make true to capitalize begin/end example markers inserted by code blocks.")
-
 (defun org-babel-examplify-region (beg end &optional results-switches inline)
   "Comment out region using the inline `==' or `: ' org example quote."
   (interactive "*r")
   (let ((maybe-cap
 	 (lambda (str)
-	   (if org-babel-capitalize-example-region-markers (upcase str) str))))
+	   (if org-babel-uppercase-example-markers (upcase str) str))))
     (if inline
 	(save-excursion
 	  (goto-char beg)
@@ -2463,7 +2513,9 @@ file's directory then expand relative links."
 				     (funcall maybe-cap "#+begin_example")
 				     results-switches)
 			   (funcall maybe-cap "#+begin_example\n")))
-		 (if (markerp end) (goto-char end) (forward-char (- end beg)))
+		 (let ((p (point)))
+		   (if (markerp end) (goto-char end) (forward-char (- end beg)))
+		   (org-escape-code-in-region p (point)))
 		 (insert (funcall maybe-cap "#+end_example\n")))))))))
 
 (defun org-babel-update-block-body (new-body)
@@ -2847,24 +2899,20 @@ Otherwise if CELL looks like lisp (meaning it starts with a
 lisp, otherwise return it unmodified as a string.  Optional
 argument INHIBIT-LISP-EVAL inhibits lisp evaluation for
 situations in which is it not appropriate."
-  (if (and (stringp cell) (not (equal cell "")))
-      (or (org-babel--string-to-number cell)
-          (if (and (not inhibit-lisp-eval)
-		   (or (member (substring cell 0 1) '("(" "'" "`" "["))
-		       (string= cell "*this*")))
-              (eval (read cell) t)
-            (if (string= (substring cell 0 1) "\"")
-		(read cell)
-	      (progn (set-text-properties 0 (length cell) nil cell) cell))))
-    cell))
+  (cond ((not (org-string-nw-p cell)) cell)
+	((org-babel--string-to-number cell))
+	((and (not inhibit-lisp-eval)
+	      (or (memq (string-to-char cell) '(?\( ?' ?` ?\[))
+		  (string= cell "*this*")))
+	 (eval (read cell) t))
+	((eq (string-to-char cell) ?\") (read cell))
+	(t (org-no-properties cell))))
 
 (defun org-babel--string-to-number (string)
   "If STRING represents a number return its value.
-
 Otherwise return nil."
-  (when (string-match "\\`-?[0-9]*\\.?[0-9]*\\'" string)
-    (string-to-number string)))
-(define-obsolete-function-alias 'org-babel-number-p 'org-babel--string-to-number "Org 9.0")
+  (and (string-match-p "\\`-?[0-9]*\\.?[0-9]*\\'" string)
+       (string-to-number string)))
 
 (defun org-babel-import-elisp-from-file (file-name &optional separator)
   "Read the results located at FILE-NAME into an elisp table.
@@ -2904,10 +2952,6 @@ can be specified as the REGEXP argument."
                 (string-match regexp (substring string -1)))
       (setq string (substring string 0 -1)))
     string))
-
-(defun org-babel-local-file-name (file)
-  "Return the local name component of FILE."
-  (or (file-remote-p file 'localname) file))
 
 (defun org-babel-process-file-name (name &optional no-quote-p)
   "Prepare NAME to be used in an external process.

@@ -1,6 +1,6 @@
 ;;; ob-ref.el --- Babel Functions for Referencing External Data -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	 Dan Davison
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -131,7 +131,7 @@ the variable."
 	  ;; if ref is indexed grab the indices -- beware nested indices
 	  (when (and (string-match "\\[\\([^\\[]+\\)\\]$" ref)
 		     (let ((str (substring ref 0 (match-beginning 0))))
-		       (= (cl-count ?( str) (cl-count ?) str))))
+		       (= (cl-count ?\( str) (cl-count ?\) str))))
 	    (setq index (match-string 1 ref))
 	    (setq ref (substring ref 0 (match-beginning 0))))
 	  ;; assign any arguments to pass to source block

@@ -124,7 +124,7 @@ contains a list of strings to be passed as options to
     (and value
          (string-match "\\(\\S-+\\)[ \t]+\\(\\S-+\\)\\(.*\\)" value)
          (let (options limit)
-           (dolist (arg (org-split-string (match-string 3 value))
+           (dolist (arg (split-string (match-string 3 value))
                         ;; Return value.
                         (list :options (nreverse options) :limit limit))
              (let* ((s (split-string arg ":"))
@@ -235,7 +235,7 @@ Return new parse tree."
 	      ;; Update `org-bibtex-html-entries-alist'.
 	      (goto-char (point-min))
 	      (while (re-search-forward
-		      "a name=\"\\([-_a-zA-Z0-9:]+\\)\">\\(\\w+\\)" nil t)
+		      "a name=\"\\([-_a-zA-Z0-9:]+\\)\">\\([^<]+\\)" nil t)
 		(push (cons (match-string 1) (match-string 2))
 		      org-bibtex-html-entries-alist)))
 	    ;; Open produced HTML file, wrap references within a block and

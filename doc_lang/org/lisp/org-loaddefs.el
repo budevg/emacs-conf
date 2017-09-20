@@ -388,6 +388,13 @@ Mark current src block.
 
 ;;;***
 
+;;;### (autoloads nil "ob-hledger" "ob-hledger.el" (0 0 0 0))
+;;; Generated autoloads from ob-hledger.el
+
+(if (fboundp 'register-definition-prefixes) (register-definition-prefixes "ob-hledger" '("org-babel-")))
+
+;;;***
+
 ;;;### (autoloads nil "ob-io" "ob-io.el" (0 0 0 0))
 ;;; Generated autoloads from ob-io.el
 
@@ -576,13 +583,6 @@ compatible with `org-babel-get-src-block-info', which see.
 
 ;;;***
 
-;;;### (autoloads nil "ob-scala" "ob-scala.el" (0 0 0 0))
-;;; Generated autoloads from ob-scala.el
-
-(if (fboundp 'register-definition-prefixes) (register-definition-prefixes "ob-scala" '("org-babel-")))
-
-;;;***
-
 ;;;### (autoloads nil "ob-scheme" "ob-scheme.el" (0 0 0 0))
 ;;; Generated autoloads from ob-scheme.el
 
@@ -676,6 +676,13 @@ used to limit the exported source code blocks by language.
 
 ;;;***
 
+;;;### (autoloads nil "ob-vala" "ob-vala.el" (0 0 0 0))
+;;; Generated autoloads from ob-vala.el
+
+(if (fboundp 'register-definition-prefixes) (register-definition-prefixes "ob-vala" '("org-babel-")))
+
+;;;***
+
 ;;;### (autoloads nil "org-agenda" "org-agenda.el" (0 0 0 0))
 ;;; Generated autoloads from org-agenda.el
 
@@ -696,7 +703,6 @@ T     Call `org-todo-list' to display the global todo list, select only
 m     Call `org-tags-view' to display headlines with tags matching
       a condition  (the user is prompted for the condition).
 M     Like `m', but select only TODO entries, no ordinary headlines.
-L     Create a timeline for the current buffer.
 e     Export views to associated files.
 s     Search entries for keywords.
 S     Search entries for keywords, only with TODO keywords.
@@ -836,8 +842,9 @@ as a whole, to include whitespace.
   with a colon, this will mean that the (non-regexp) snippets of the
   Boolean search must match as full words.
 
-This command searches the agenda files, and in addition the files listed
-in `org-agenda-text-search-extra-files'.
+This command searches the agenda files, and in addition the files
+listed in `org-agenda-text-search-extra-files' unless a restriction lock
+is active.
 
 \(fn &optional TODO-ONLY STRING EDIT-AT)" t nil)
 
@@ -963,17 +970,19 @@ archive file is.
 
 (autoload 'org-archive-subtree "org-archive" "\
 Move the current subtree to the archive.
-The archive can be a certain top-level heading in the current file, or in
-a different file.  The tree will be moved to that location, the subtree
-heading be marked DONE, and the current time will be added.
+The archive can be a certain top-level heading in the current
+file, or in a different file.  The tree will be moved to that
+location, the subtree heading be marked DONE, and the current
+time will be added.
 
-When called with a single prefix argument FIND-DONE, find whole trees without any
-open TODO items and archive them (after getting confirmation from the user).
-When called with a double prefix argument, find whole trees with timestamps before
-today and archive them (after getting confirmation from the user).
-If the cursor is not at a headline when these commands are called, try all level
-1 trees.  If the cursor is on a headline, only try the direct children of
-this heading.
+When called with a single prefix argument FIND-DONE, find whole
+trees without any open TODO items and archive them (after getting
+confirmation from the user).  When called with a double prefix
+argument, find whole trees with timestamps before today and
+archive them (after getting confirmation from the user).  If the
+cursor is not at a headline when these commands are called, try
+all level 1 trees.  If the cursor is on a headline, only try the
+direct children of this heading.
 
 \(fn &optional FIND-DONE)" t nil)
 
@@ -1032,11 +1041,6 @@ Extract anniversaries from BBDB for display in the agenda.
 
 \(fn)" nil nil)
 
-(autoload 'org-bbdb-anniversaries-future "org-bbdb" "\
-Return list of anniversaries for today and the next n-1 days (default n=7).
-
-\(fn &optional N)" nil nil)
-
 (if (fboundp 'register-definition-prefixes) (register-definition-prefixes "org-bbdb" '("org-bbdb-")))
 
 ;;;***
@@ -1072,6 +1076,9 @@ template stores its notes.
 With a `\\[universal-argument] \\[universal-argument]' prefix argument, go to the last note stored.
 
 When called with a `C-0' (zero) prefix, insert a template at point.
+
+When called with a `C-1' (one) prefix, force prompting for a date when
+a datetree entry is made.
 
 ELisp programs can set KEYS to a string associated with a template
 in `org-capture-templates'.  In this case, interactive selection
@@ -1336,7 +1343,8 @@ Try very hard to provide sensible version strings.
 Find or create an entry for date D.
 If KEEP-RESTRICTION is non-nil, do not widen the buffer.
 When it is nil, the buffer will be widened to make sure an existing date
-tree can be found.
+tree can be found.  If it is the sympol `subtree-at-point', then the tree
+will be built under the headline at point.
 
 \(fn D &optional KEEP-RESTRICTION)" nil nil)
 
@@ -1344,9 +1352,9 @@ tree can be found.
 Find or create an ISO week entry for date D.
 Compared to `org-datetree-find-date-create' this function creates
 entries ordered by week instead of months.
-If KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it
-is nil, the buffer will be widened to make sure an existing date
-tree can be found.
+When it is nil, the buffer will be widened to make sure an existing date
+tree can be found.  If it is the sympol `subtree-at-point', then the tree
+will be built under the headline at point.
 
 \(fn D &optional KEEP-RESTRICTION)" nil nil)
 
@@ -1358,6 +1366,62 @@ tree can be found.
 ;;; Generated autoloads from org-docview.el
 
 (if (fboundp 'register-definition-prefixes) (register-definition-prefixes "org-docview" '("org-docview-")))
+
+;;;***
+
+;;;### (autoloads nil "org-duration" "org-duration.el" (0 0 0 0))
+;;; Generated autoloads from org-duration.el
+
+(autoload 'org-duration-set-regexps "org-duration" "\
+Set duration related regexps.
+
+\(fn)" t nil)
+
+(autoload 'org-duration-p "org-duration" "\
+Non-nil when string S is a time duration.
+
+\(fn S)" nil nil)
+
+(autoload 'org-duration-to-minutes "org-duration" "\
+Return number of minutes of DURATION string.
+
+When optional argument CANONICAL is non-nil, ignore
+`org-duration-units' and use standard time units value.
+
+A bare number is translated into minutes.  The empty string is
+translated into 0.0.
+
+Return value as a float.  Raise an error if duration format is
+not recognized.
+
+\(fn DURATION &optional CANONICAL)" nil nil)
+
+(autoload 'org-duration-from-minutes "org-duration" "\
+Return duration string for a given number of MINUTES.
+
+Format duration according to `org-duration-format' or FMT, when
+non-nil.
+
+When optional argument CANONICAL is non-nil, ignore
+`org-duration-units' and use standard time units value.
+
+Raise an error if expected format is unknown.
+
+\(fn MINUTES &optional FMT CANONICAL)" nil nil)
+
+(autoload 'org-duration-h:mm-only-p "org-duration" "\
+Non-nil when every duration in TIMES has \"H:MM\" or \"H:MM:SS\" format.
+
+TIMES is a list of duration strings.
+
+Return nil if any duration is expressed with units, as defined in
+`org-duration-units'.  Otherwise, if any duration is expressed
+with \"H:MM:SS\" format, return `h:mm:ss'.  Otherwise, return
+`h:mm'.
+
+\(fn TIMES)" nil nil)
+
+(if (fboundp 'register-definition-prefixes) (register-definition-prefixes "org-duration" '("org-duration-")))
 
 ;;;***
 
@@ -1518,7 +1582,7 @@ offer additional commands in a menu.
 ;;;### (autoloads nil "org-gnus" "org-gnus.el" (0 0 0 0))
 ;;; Generated autoloads from org-gnus.el
 
-(if (fboundp 'register-definition-prefixes) (register-definition-prefixes "org-gnus" '("org-")))
+(if (fboundp 'register-definition-prefixes) (register-definition-prefixes "org-gnus" '("org-gnus-")))
 
 ;;;***
 
@@ -1938,12 +2002,6 @@ Show info about the current field, and highlight any reference at point.
 
 \(fn ARG)" t nil)
 
-(autoload 'org-table-current-dline "org-table" "\
-Find out what table data line we are in.
-Only data lines count for this.
-
-\(fn)" t nil)
-
 (autoload 'org-table-goto-column "org-table" "\
 Move the cursor to the Nth column in the current table line.
 With optional argument ON-DELIM, stop with point before the left delimiter
@@ -2039,13 +2097,14 @@ any of (?a ?A ?n ?N ?t ?T ?f ?F) where the capital letters indicate that
 sorting should be done in reverse order.
 
 If the SORTING-TYPE is ?f or ?F, then GETKEY-FUNC specifies
-a function to be called to extract the key.  It must return either
-a string or a number that should serve as the sorting key for that
-row.  It will then use COMPARE-FUNC to compare entries.  If GETKEY-FUNC
-is specified interactively, the comparison will be either a string or
-numeric compare based on the type of the first key in the table.
+a function to be called to extract the key.  It must return a value
+that is compatible with COMPARE-FUNC, the function used to compare
+entries.
 
-\(fn WITH-CASE &optional SORTING-TYPE GETKEY-FUNC COMPARE-FUNC)" t nil)
+A non-nil value for INTERACTIVE? is used to signal that this
+function is being called interactively.
+
+\(fn &optional WITH-CASE SORTING-TYPE GETKEY-FUNC COMPARE-FUNC INTERACTIVE\\=\\?)" t nil)
 
 (autoload 'org-table-cut-region "org-table" "\
 Copy region in table to the clipboard and blank all relevant fields.
@@ -2108,9 +2167,12 @@ blank, and the content is appended to the field above.
 
 (autoload 'org-table-edit-field "org-table" "\
 Edit table field in a different window.
-This is mainly useful for fields that contain hidden parts.  When called
-with a `\\[universal-argument]' prefix, just make the full field visible so that it can be
-edited in place.
+This is mainly useful for fields that contain hidden parts.
+
+When called with a `\\[universal-argument]' prefix, just make the full field
+visible so that it can be edited in place.
+
+When called with a `\\[universal-argument] \\[universal-argument]' prefix, toggle `org-table-follow-field-mode'.
 
 \(fn ARG)" t nil)
 
@@ -2202,14 +2264,21 @@ For details, see the Org mode manual.
 
 This function can also be called from Lisp programs and offers
 additional arguments: EQUATION can be the formula to apply.  If this
-argument is given, the user will not be prompted.  SUPPRESS-ALIGN is
-used to speed-up recursive calls by by-passing unnecessary aligns.
+argument is given, the user will not be prompted.
+
+SUPPRESS-ALIGN is used to speed-up recursive calls by by-passing
+unnecessary aligns.
+
 SUPPRESS-CONST suppresses the interpretation of constants in the
-formula, assuming that this has been done already outside the function.
-SUPPRESS-STORE means the formula should not be stored, either because
-it is already stored, or because it is a modified equation that should
-not overwrite the stored one.  SUPPRESS-ANALYSIS prevents any call to
-`org-table-analyze'.
+formula, assuming that this has been done already outside the
+function.
+
+SUPPRESS-STORE means the formula should not be stored, either
+because it is already stored, or because it is a modified
+equation that should not overwrite the stored one.
+
+SUPPRESS-ANALYSIS prevents analyzing the table and checking
+location of point.
 
 \(fn &optional ARG EQUATION SUPPRESS-ALIGN SUPPRESS-CONST SUPPRESS-STORE SUPPRESS-ANALYSIS)" t nil)
 
@@ -2717,9 +2786,9 @@ Store an org-link to the current location.
 This link is added to `org-stored-links' and can later be inserted
 into an Org buffer with `org-insert-link' (`\\[org-insert-link]').
 
-For some link types, a `\\[universal-argument]' prefix ARG is interpreted.
-For links to Usenet articles, ARG negates `org-gnus-prefer-web-links'.
-For file links, ARG negates `org-context-in-file-links'.
+For some link types, a `\\[universal-argument]' prefix ARG is interpreted.  A single
+`\\[universal-argument]' negates `org-context-in-file-links' for file links or
+`org-gnus-prefer-web-links' for links to Usenet articles.
 
 A `\\[universal-argument] \\[universal-argument]' prefix ARG forces skipping storing functions that are not
 part of Org core.
@@ -3193,6 +3262,17 @@ The file is stored under the name chosen in
 ;;;### (autoloads nil "ox-latex" "ox-latex.el" (0 0 0 0))
 ;;; Generated autoloads from ox-latex.el
 
+(autoload 'org-latex-make-preamble "ox-latex" "\
+Return a formatted LaTeX preamble.
+INFO is a plist used as a communication channel.  Optional
+argument TEMPLATE, when non-nil, is the header template string,
+as expected by `org-splice-latex-header'.  When SNIPPET? is
+non-nil, only includes packages relevant to image generation, as
+specified in `org-latex-default-packages-alist' or
+`org-latex-packages-alist'.
+
+\(fn INFO &optional TEMPLATE SNIPPET\\=\\?)" nil nil)
+
 (autoload 'org-latex-export-as-latex "ox-latex" "\
 Export current buffer as a LaTeX buffer.
 
@@ -3590,6 +3670,69 @@ the project.
 ;;;### (autoloads nil "ox-texinfo" "ox-texinfo.el" (0 0 0 0))
 ;;; Generated autoloads from ox-texinfo.el
 
+(autoload 'org-texinfo-export-to-texinfo "ox-texinfo" "\
+Export current buffer to a Texinfo file.
+
+If narrowing is active in the current buffer, only export its
+narrowed part.
+
+If a region is active, export that region.
+
+A non-nil optional argument ASYNC means the process should happen
+asynchronously.  The resulting file should be accessible through
+the `org-export-stack' interface.
+
+When optional argument SUBTREEP is non-nil, export the sub-tree
+at point, extracting information from the headline properties
+first.
+
+When optional argument VISIBLE-ONLY is non-nil, don't export
+contents of hidden elements.
+
+When optional argument BODY-ONLY is non-nil, only write code
+between \"\\begin{document}\" and \"\\end{document}\".
+
+EXT-PLIST, when provided, is a property list with external
+parameters overriding Org default settings, but still inferior to
+file-local settings.
+
+Return output file's name.
+
+\(fn &optional ASYNC SUBTREEP VISIBLE-ONLY BODY-ONLY EXT-PLIST)" t nil)
+
+(autoload 'org-texinfo-export-to-info "ox-texinfo" "\
+Export current buffer to Texinfo then process through to INFO.
+
+If narrowing is active in the current buffer, only export its
+narrowed part.
+
+If a region is active, export that region.
+
+A non-nil optional argument ASYNC means the process should happen
+asynchronously.  The resulting file should be accessible through
+the `org-export-stack' interface.
+
+When optional argument SUBTREEP is non-nil, export the sub-tree
+at point, extracting information from the headline properties
+first.
+
+When optional argument VISIBLE-ONLY is non-nil, don't export
+contents of hidden elements.
+
+When optional argument BODY-ONLY is non-nil, only write code
+between \"\\begin{document}\" and \"\\end{document}\".
+
+EXT-PLIST, when provided, is a property list with external
+parameters overriding Org default settings, but still inferior to
+file-local settings.
+
+When optional argument PUB-DIR is set, use it as the publishing
+directory.
+
+Return INFO file's name.
+
+\(fn &optional ASYNC SUBTREEP VISIBLE-ONLY BODY-ONLY EXT-PLIST)" t nil)
+
 (autoload 'org-texinfo-publish-to-texinfo "ox-texinfo" "\
 Publish an org file to Texinfo.
 
@@ -3615,6 +3758,27 @@ command to convert it.
 
 ;;;### (autoloads nil "ox" "ox.el" (0 0 0 0))
 ;;; Generated autoloads from ox.el
+
+(autoload 'org-export-get-backend "ox" "\
+Return export back-end named after NAME.
+NAME is a symbol.  Return nil if no such back-end is found.
+
+\(fn NAME)" nil nil)
+
+(autoload 'org-export-get-environment "ox" "\
+Collect export options from the current buffer.
+
+Optional argument BACKEND is an export back-end, as returned by
+`org-export-create-backend'.
+
+When optional argument SUBTREEP is non-nil, assume the export is
+done against the current sub-tree.
+
+Third optional argument EXT-PLIST is a property list with
+external parameters overriding Org default settings, but still
+inferior to file-local settings.
+
+\(fn &optional BACKEND SUBTREEP EXT-PLIST)" nil nil)
 
 (autoload 'org-export-as "ox" "\
 Transcode current Org buffer into BACKEND code.

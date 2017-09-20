@@ -1,6 +1,6 @@
 ;;; ob-J.el --- Babel Functions for J                -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
 ;; Author: Oleh Krehel
 ;; Keywords: literate programming, reproducible research
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -38,7 +38,7 @@
 (defcustom org-babel-J-command "jconsole"
   "Command to call J."
   :group 'org-babel
-  :version "25.2"
+  :version "26.1"
   :package-version '(Org . "9.0")
   :type 'string)
 
@@ -89,7 +89,7 @@ This function is called by `org-babel-execute-src-block'"
        (org-babel-J-eval-string full-body)))))
 
 (defun org-babel-J-eval-string (str)
-  "Sends STR to the `j-console-cmd' session and exectues it."
+  "Sends STR to the `j-console-cmd' session and executes it."
   (let ((session (j-console-ensure-session)))
     (with-current-buffer (process-buffer session)
       (goto-char (point-max))

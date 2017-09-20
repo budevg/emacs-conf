@@ -1,6 +1,6 @@
 ;;; org-footnote.el --- Footnote support in Org      -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;; Commentary:
@@ -345,7 +345,7 @@ to rename."
 	(t nil)))
 
 (defun org-footnote--collect-references (&optional anonymous)
-  "Collect all labelled footnote references in current buffer.
+  "Collect all labeled footnote references in current buffer.
 
 Return an alist where associations follow the pattern
 
@@ -712,14 +712,18 @@ Return the number of footnotes removed."
     (let ((def-re (format "^\\[fn:%s\\]" (regexp-quote label)))
 	  (ndef 0))
       (while (re-search-forward def-re nil t)
-	(let ((full-def (org-footnote-at-definition-p)))
-	  (when full-def
-	    ;; Remove the footnote, and all blank lines before it.
-	    (goto-char (nth 1 full-def))
-	    (skip-chars-backward " \r\t\n")
-	    (unless (bolp) (forward-line))
-	    (delete-region (point) (nth 2 full-def))
-	    (cl-incf ndef))))
+	(pcase (org-footnote-at-definition-p)
+	  (`(,_ ,start ,end ,_)
+	   ;; Remove the footnote, and all blank lines before it.
+	   (delete-region (progn
+			    (goto-char start)
+			    (skip-chars-backward " \r\t\n")
+			    (if (bobp) (point) (line-beginning-position 2)))
+			  (progn
+			    (goto-char end)
+			    (skip-chars-backward " \r\t\n")
+			    (if (bobp) (point) (line-beginning-position 2))))
+	   (cl-incf ndef))))
       ndef)))
 
 (defun org-footnote-delete (&optional label)

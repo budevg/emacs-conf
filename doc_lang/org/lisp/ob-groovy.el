@@ -1,6 +1,6 @@
 ;;; ob-groovy.el --- Babel Functions for Groovy      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2017 Free Software Foundation, Inc.
 
 ;; Author: Miro Bezjak
 ;; Keywords: literate programming, reproducible research
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;; Currently only supports the external execution.  No session support yet.

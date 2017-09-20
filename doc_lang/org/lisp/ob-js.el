@@ -1,6 +1,6 @@
 ;;; ob-js.el --- Babel Functions for Javascript      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research, js
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -55,7 +55,7 @@
   :type 'string)
 
 (defvar org-babel-js-function-wrapper
-  "require('sys').print(require('sys').inspect(function(){%s}()));"
+  "require('sys').print(require('sys').inspect(function(){\n%s\n}()));"
   "Javascript code to print value of body.")
 
 (defun org-babel-execute:js (body params)

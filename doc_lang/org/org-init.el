@@ -4,9 +4,7 @@
 (setq org-log-done t)
 (setq org-confirm-babel-evaluate nil)
 (setq org-babel-tangle-lang-exts '())
-(setq org-babel-load-languages '((perl . t)
-                                 (ruby . t)
-                                 (sh . t)
+(setq org-babel-load-languages '((shell . t)
                                  (python . t)
                                  (emacs-lisp . t)))
 

@@ -1,6 +1,6 @@
 ;;; ob-gnuplot.el --- Babel Functions for Gnuplot    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -40,7 +40,7 @@
 ;;; Code:
 (require 'ob)
 
-(declare-function org-time-string-to-time "org" (s &optional buffer pos))
+(declare-function org-time-string-to-time "org" (s &optional zone))
 (declare-function org-combine-plists "org" (&rest plists))
 (declare-function orgtbl-to-generic "org-table" (table params))
 (declare-function gnuplot-mode "ext:gnuplot-mode" ())
@@ -187,7 +187,7 @@ This function is called by `org-babel-execute-src-block'."
 		     script-file
 		     (if (member system-type '(cygwin windows-nt ms-dos))
 			 t nil)))))
-            (message output))
+            (message "%s" output))
         (with-temp-buffer
           (insert (concat body "\n"))
           (gnuplot-mode)

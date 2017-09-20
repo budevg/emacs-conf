@@ -1,6 +1,6 @@
 ;;; org-protocol.el --- Intercept Calls from Emacsclient to Trigger Custom Actions -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2008-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 ;;
 ;; Authors: Bastien Guerry <bzg@gnu.org>
 ;;       Daniel M German <dmg AT uvic DOT org>
@@ -22,7 +22,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Commentary:
@@ -194,7 +194,14 @@ Example:
           :working-suffix \".org\"
           :base-url \"http://localhost/org/\"
           :working-directory \"/home/user/org/\"
-          :rewrites ((\"org/?$\" . \"index.php\")))))
+          :rewrites ((\"org/?$\" . \"index.php\")))
+         (\"Hugo based blog\"
+          :base-url \"https://www.site.com/\"
+          :working-directory \"~/site/content/post/\"
+          :online-suffix \".html\"
+          :working-suffix \".md\"
+          :rewrites ((\"\\(https://site.com/[0-9]+/[0-9]+/[0-9]+/\\)\" . \".md\")))))
+
 
    The last line tells `org-protocol-open-source' to open
    /home/user/org/index.php, if the URL cannot be mapped to an existing
@@ -498,7 +505,6 @@ Now template ?b will be used."
 	 (org-capture-link-is-already-stored t)) ;; avoid call to org-store-link
     (setq org-stored-links
 	  (cons (list url title) org-stored-links))
-    (kill-new orglink)
     (org-store-link-props :type type
 			  :link url
 			  :description title
@@ -521,7 +527,9 @@ The location for a browser's bookmark should look like this:
   ;; As we enter this function for a match on our protocol, the return value
   ;; defaults to nil.
   (let ((result nil)
-        (f (plist-get (org-protocol-parse-parameters fname nil '(:url)) :url)))
+	(f (org-protocol-sanitize-uri
+	    (plist-get (org-protocol-parse-parameters fname nil '(:url))
+		       :url))))
     (catch 'result
       (dolist (prolist org-protocol-project-alist)
         (let* ((base-url (plist-get (cdr prolist) :base-url))
@@ -555,8 +563,12 @@ The location for a browser's bookmark should look like this:
 		      ;; Try to match a rewritten URL and map it to
 		      ;; a real file.  Compare redirects without
 		      ;; suffix.
-		      (when (string-match-p (car rewrite) f2)
-			(throw 'result (concat wdir (cdr rewrite))))))))
+		      (when (string-match (car rewrite) f1)
+			(let ((replacement
+			       (concat (directory-file-name
+					(replace-match "" nil nil f1 1))
+				       (cdr rewrite))))
+			  (throw 'result (concat wdir replacement))))))))
 	      ;; -- end of redirects --
 
               (if (file-readable-p the-file)
@@ -596,11 +608,14 @@ CLIENT is ignored."
   (let ((sub-protocols (append org-protocol-protocol-alist
 			       org-protocol-protocol-alist-default)))
     (catch 'fname
-      (let ((the-protocol (concat (regexp-quote org-protocol-the-protocol) ":/+")))
+      (let ((the-protocol (concat (regexp-quote org-protocol-the-protocol)
+				  ":/+")))
         (when (string-match the-protocol fname)
           (dolist (prolist sub-protocols)
-            (let ((proto (concat the-protocol
-				 (regexp-quote (plist-get (cdr prolist) :protocol)) "\\(:/+\\|\\?\\)")))
+            (let ((proto
+		   (concat the-protocol
+			   (regexp-quote (plist-get (cdr prolist) :protocol))
+			   "\\(:/+\\|\\?\\)")))
               (when (string-match proto fname)
                 (let* ((func (plist-get (cdr prolist) :function))
                        (greedy (plist-get (cdr prolist) :greedy))
@@ -613,12 +628,14 @@ CLIENT is ignored."
                   (when (fboundp func)
                     (unless greedy
                       (throw 'fname
-			     (condition-case nil
-				 (funcall func (org-protocol-parse-parameters result new-style))
-			       (error
-				(warn "Please update your org protocol handler to deal with new-style links.")
-				(funcall func result)))))
-		    ;; Greedy protocol handlers are responsible for parsing their own filenames
+			     (if new-style
+				 (funcall func (org-protocol-parse-parameters
+						result new-style))
+			       (warn "Please update your Org Protocol handler \
+to deal with new-style links.")
+			       (funcall func result))))
+		    ;; Greedy protocol handlers are responsible for
+		    ;; parsing their own filenames.
 		    (funcall func result)
                     (throw 'fname t))))))))
       fname)))
@@ -651,11 +668,13 @@ The visited file needs to be part of a publishing project in
 `org-publish-project-alist' for this to work.  The function
 delegates most of the work to `org-protocol-create'."
   (interactive)
-  (require 'org-publish)
+  (require 'ox-publish)
   (let ((all (or (org-publish-get-project-from-filename buffer-file-name))))
     (if all (org-protocol-create (cdr all))
-      (message "Not in an org-project.  Did you mean `%s'?"
-               (substitute-command-keys "`\\[org-protocol-create]'")))))
+      (message "%s"
+	       (substitute-command-keys
+		"Not in an Org project.  \
+Did you mean `\\[org-protocol-create]'?")))))
 
 (defun org-protocol-create (&optional project-plist)
   "Create a new org-protocol project interactively.

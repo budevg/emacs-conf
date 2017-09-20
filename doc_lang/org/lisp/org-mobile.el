@@ -1,5 +1,5 @@
 ;;; org-mobile.el --- Code for Asymmetric Sync With a Mobile Device -*- lexical-binding: t; -*-
-;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -308,40 +308,29 @@ Also exclude files matching `org-mobile-files-exclude-regexp'."
 This will create the index file, copy all agenda files there, and also
 create all custom agenda views, for upload to the mobile phone."
   (interactive)
-  (let ((a-buffer (get-buffer org-agenda-buffer-name)))
-    (let ((org-agenda-curbuf-name org-agenda-buffer-name)
-	  (org-agenda-buffer-name "*SUMO*")
-	  (org-agenda-tag-filter org-agenda-tag-filter)
-	  (org-agenda-redo-command org-agenda-redo-command))
-      (save-excursion
-	(save-restriction
-	  (save-window-excursion
-	    (run-hooks 'org-mobile-pre-push-hook)
-	    (org-mobile-check-setup)
-	    (org-mobile-prepare-file-lists)
-	    (message "Creating agendas...")
-	    (let ((inhibit-redisplay t)
-		  (org-agenda-files (mapcar 'car org-mobile-files-alist)))
-	      (org-mobile-create-sumo-agenda))
-	    (message "Creating agendas...done")
-	    (org-save-all-org-buffers) ; to save any IDs created by this process
-	    (message "Copying files...")
-	    (org-mobile-copy-agenda-files)
-	    (message "Writing index file...")
-	    (org-mobile-create-index-file)
-	    (message "Writing checksums...")
-	    (org-mobile-write-checksums)
-	    (run-hooks 'org-mobile-post-push-hook))))
-      (setq org-agenda-buffer-name org-agenda-curbuf-name
-	    org-agenda-this-buffer-name org-agenda-curbuf-name))
-    (redraw-display)
-    (when (buffer-live-p a-buffer)
-      (if (not (get-buffer-window a-buffer))
-    	  (kill-buffer a-buffer)
-    	(let ((cw (selected-window)))
-    	  (select-window (get-buffer-window a-buffer))
-    	  (org-agenda-redo)
-    	  (select-window cw)))))
+  (let ((org-agenda-buffer-name "*SUMO*")
+	(org-agenda-tag-filter org-agenda-tag-filter)
+	(org-agenda-redo-command org-agenda-redo-command))
+    (save-excursion
+      (save-restriction
+	(save-window-excursion
+	  (run-hooks 'org-mobile-pre-push-hook)
+	  (org-mobile-check-setup)
+	  (org-mobile-prepare-file-lists)
+	  (message "Creating agendas...")
+	  (let ((inhibit-redisplay t)
+		(org-agenda-files (mapcar 'car org-mobile-files-alist)))
+	    (org-mobile-create-sumo-agenda))
+	  (message "Creating agendas...done")
+	  (org-save-all-org-buffers) ; to save any IDs created by this process
+	  (message "Copying files...")
+	  (org-mobile-copy-agenda-files)
+	  (message "Writing index file...")
+	  (org-mobile-create-index-file)
+	  (message "Writing checksums...")
+	  (org-mobile-write-checksums)
+	  (run-hooks 'org-mobile-post-push-hook)))))
+  (org-agenda-maybe-redo)
   (message "Files for mobile viewer staged"))
 
 (defvar org-mobile-before-process-capture-hook nil
@@ -478,7 +467,7 @@ agenda view showing the flagged items."
 	  (make-directory target-dir 'parents))
 	(if org-mobile-use-encryption
 	    (org-mobile-encrypt-and-move file target-path)
-	  (copy-file file target-path 'ok-if-exists))
+	  (copy-file file target-path 'ok-if-already-exists))
 	(setq check (shell-command-to-string
 		     (concat (shell-quote-argument org-mobile-checksum-binary)
 			     " "
@@ -659,7 +648,7 @@ The table of checksums is written to the file mobile-checksums."
   (org-with-point-at pom
     (concat "olp:"
 	    (org-mobile-escape-olp (file-name-nondirectory buffer-file-name))
-	    "/"
+	    ":"
 	    (mapconcat 'org-mobile-escape-olp
 		       (org-get-outline-path)
 		       "/")
@@ -698,13 +687,13 @@ encryption program does not understand them."
   (let ((encfile (concat infile "_enc")))
     (org-mobile-encrypt-file infile encfile)
     (when outfile
-      (copy-file encfile outfile 'ok-if-exists)
+      (copy-file encfile outfile 'ok-if-already-exists)
       (delete-file encfile))))
 
 (defun org-mobile-encrypt-file (infile outfile)
   "Encrypt INFILE to OUTFILE, using `org-mobile-encryption-password'."
   (shell-command
-   (format "openssl enc -aes-256-cbc -salt -pass %s -in %s -out %s"
+   (format "openssl enc -md md5 -aes-256-cbc -salt -pass %s -in %s -out %s"
 	   (shell-quote-argument (concat "pass:"
 					 (org-mobile-encryption-password)))
 	   (shell-quote-argument (expand-file-name infile))
@@ -713,7 +702,7 @@ encryption program does not understand them."
 (defun org-mobile-decrypt-file (infile outfile)
   "Decrypt INFILE to OUTFILE, using `org-mobile-encryption-password'."
   (shell-command
-   (format "openssl enc -d -aes-256-cbc -salt -pass %s -in %s -out %s"
+   (format "openssl enc -md md5 -d -aes-256-cbc -salt -pass %s -in %s -out %s"
 	   (shell-quote-argument (concat "pass:"
 					 (org-mobile-encryption-password)))
 	   (shell-quote-argument (expand-file-name infile))

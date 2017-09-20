@@ -1,22 +1,24 @@
 ;;; org-lint.el --- Linting for Org documents        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015-2016  Free Software Foundation
+;; Copyright (C) 2015-2017 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: outlines, hypermedia, calendar, wp
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -87,6 +89,7 @@
 ;;   - spurious macro arguments or invalid macro templates
 ;;   - special properties in properties drawer
 ;;   - obsolete syntax for PROPERTIES drawers
+;;   - Invalid EFFORT property value
 ;;   - missing definition for footnote references
 ;;   - missing reference for footnote definitions
 ;;   - non-footnote definitions in footnote section
@@ -97,6 +100,7 @@
 ;;   - indented diary-sexps
 ;;   - obsolete QUOTE section
 ;;   - obsolete "file+application" link
+;;   - blank headlines with tags
 
 
 ;;; Code:
@@ -239,6 +243,10 @@
     :description "Report obsolete syntax for properties drawers"
     :categories '(obsolete properties))
    (make-org-lint-checker
+    :name 'invalid-effort-property
+    :description "Report invalid duration in EFFORT property"
+    :categories '(properties))
+   (make-org-lint-checker
     :name 'undefined-footnote-reference
     :description "Report missing definition for footnote references"
     :categories '(footnote))
@@ -278,7 +286,12 @@
    (make-org-lint-checker
     :name 'file-application
     :description "Report obsolete \"file+application\" link"
-    :categories '(link obsolete)))
+    :categories '(link obsolete))
+   (make-org-lint-checker
+    :name 'empty-headline-with-tags
+    :description "Report ambiguous empty headlines with tags"
+    :categories '(headline)
+    :trust 'low))
   "List of all available checkers.")
 
 (defun org-lint--collect-duplicates
@@ -340,7 +353,7 @@ called with one argument, the key used for comparison."
   (org-lint--collect-duplicates
    ast
    'target
-   (lambda (target) (org-split-string (org-element-property :value target)))
+   (lambda (target) (split-string (org-element-property :value target)))
    (lambda (target _) (org-element-property :begin target))
    (lambda (key)
      (format "Duplicate target <<%s>>" (mapconcat #'identity key " ")))))
@@ -534,6 +547,16 @@ Use :header-args: instead"
 		      "Incorrect contents for PROPERTIES drawer"
 		    "Incorrect location for PROPERTIES drawer"))))))))
 
+(defun org-lint-invalid-effort-property (ast)
+  (org-element-map ast 'node-property
+    (lambda (p)
+      (when (equal "EFFORT" (org-element-property :key p))
+	(let ((value (org-element-property :value p)))
+	  (and (org-string-nw-p value)
+	       (not (org-duration-p value))
+	       (list (org-element-property :begin p)
+		     (format "Invalid effort duration format: %S" value))))))))
+
 (defun org-lint-link-to-local-file (ast)
   (org-element-map ast 'link
     (lambda (l)
@@ -716,7 +739,7 @@ Use \"export %s\" instead"
     (org-element-map ast 'footnote-reference
       (lambda (f)
 	(let ((label (org-element-property :label f)))
-	  (and label
+	  (and (eq 'standard (org-element-property :type f))
 	       (not (member label definitions))
 	       (list (org-element-property :begin f)
 		     (format "Missing definition for footnote [%s]"
@@ -977,7 +1000,7 @@ Use \"export %s\" instead"
 	      (unless (memq allowed-values '(:any nil))
 		(let ((values (cdr header))
 		      groups-alist)
-		  (dolist (v (if (stringp values) (org-split-string values)
+		  (dolist (v (if (stringp values) (split-string values)
 			       (list values)))
 		    (let ((valid-value nil))
 		      (catch 'exit
@@ -1013,6 +1036,15 @@ Use \"export %s\" instead"
 				    (car header)))
 			   reports))))))))))))
     reports))
+
+(defun org-lint-empty-headline-with-tags (ast)
+  (org-element-map ast '(headline inlinetask)
+    (lambda (h)
+      (let ((title (org-element-property :raw-value h)))
+	(and (string-match-p "\\`:[[:alnum:]_@#%:]+:\\'" title)
+	     (list (org-element-property :begin h)
+		   (format "Headline containing only tags is ambiguous: %S"
+			   title)))))))
 
 
 ;;; Reports UI
