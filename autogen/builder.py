@@ -36,16 +36,22 @@ class ConfigBuilder(object):
             if not os.path.exists(pkg_dir.dir):
                 print pkg_dir.dir
                 os.makedirs(pkg_dir.dir)
+    def _newline(self):
+        self._data.append("")
 
     def _create(self):
         self._optimize_startup_time_start()
         self._gen_config_path()
+        self._newline()
         self._gen_exec_path()
+        self._newline()
+        self._gen_tmpdir()
+        self._newline()
         self._gen_env()
         self._gen_load_packages()
         self._gen_frame_config()
         self._optimize_startup_time_end()
-        self._data.append("")
+        self._newline()
         self._write_init_file()
 
     def _optimize_startup_time_start(self):
@@ -74,14 +80,24 @@ class ConfigBuilder(object):
                 if not m:
                     continue
                 path_elements = m.group(1).split(":")
-                self._data.append('''
-(setq exec-path (append (list %s) exec-path))
-''' % " ".join('"%s"' % e for e in path_elements))
-                self._data.append('''
-(setenv "PATH"
-        (concat "%s:"
-         (getenv "PATH")))
-''' % ":".join(path_elements))
+                self._data.append('(setq exec-path (append (list %s) exec-path))' %
+                                  " ".join('"%s"' % e for e in path_elements))
+                self._data.append('(setenv "PATH" (concat "%s:" (getenv "PATH")))' %
+                                  ":".join(path_elements))
+
+    def _gen_tmpdir(self):
+        bashrc = os.path.expanduser("~/.bashrc")
+        if not os.path.exists(bashrc):
+            return
+
+        with open(bashrc) as f:
+            for line in f:
+                m = re.match(r"^export TMPDIR=(.*)$", line)
+                if not m:
+                    continue
+                tmpdir = m.group(1)
+                self._data.append('(setq temporary-file-directory "%s")' % tmpdir)
+                self._data.append('(setenv "TMPDIR" "%s")' % tmpdir)
 
     def _gen_env(self):
         for k, v in {"PAGER" : "cat"}.iteritems():
