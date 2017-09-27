@@ -1,0 +1,7 @@
+(:name emacs-racer
+       :description "Racer support for Emacs"
+       :type github
+       :pkgname "racer-rust/emacs-racer"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/rust")))
+)
