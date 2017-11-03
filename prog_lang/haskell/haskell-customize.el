@@ -176,7 +176,8 @@ pass additional flags to `ghc'."
   :type '(repeat (string :tag "Argument")))
 
 (defcustom haskell-process-args-stack-ghci
-  '("--ghci-options=-ferror-spans" "--no-build" "--no-load")
+  '("--ghci-options=-ferror-spans" "--no-build" "--no-load"
+    "--ghci-options=-fshow-loaded-modules")
   "Additional arguments for `stack ghci' invocation."
   :group 'haskell-interactive
   :type '(repeat (string :tag "Argument")))
@@ -197,6 +198,13 @@ See `haskell-process-do-cabal' for more details."
 (defcustom haskell-process-show-debug-tips
   t
   "Show debugging tips when starting the process."
+  :type 'boolean
+  :group 'haskell-interactive)
+
+(defcustom haskell-process-show-overlays
+  t
+  "Show in-buffer overlays for errors/warnings.
+Flycheck users might like to disable this."
   :type 'boolean
   :group 'haskell-interactive)
 
@@ -404,8 +412,7 @@ properties; such as an indentation mode) that don't know what
 extensions to use can use this variable. Examples: hlint,
 hindent, structured-haskell-mode, tool-de-jour, etc.
 
-You can set this per-project with a .dir-locals.el file, in the
-same vein as `haskell-indent-spaces'."
+You can set this per-project with a .dir-locals.el file"
   :group 'haskell
   :type '(repeat 'string))
 

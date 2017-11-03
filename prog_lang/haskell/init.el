@@ -9,6 +9,7 @@
 (autoload 'haskell-interactive-bring "haskell" nil t)
 (autoload 'haskell-mode-tag-find "haskell" nil t)
 (autoload 'haskell-mode-jump-to-def-or-tag "haskell-commands" nil t)
+(autoload 'haskell-mode-stylish-buffer "haskell-commands" nil t)
 (autoload 'haskell-process-do-type "haskell-commands" nil t)
 (autoload 'haskell-process-load-or-reload "haskell" nil t)
 (autoload 'haskell-doc-current-info "haskell-doc" nil t)
@@ -22,6 +23,7 @@
      (define-key haskell-mode-map (kbd "C-/") 'haskell-mode-jump-to-def-or-tag)
      (define-key haskell-mode-map (kbd "C-.") 'haskell-who-calls)
      (define-key haskell-mode-map (kbd "C-?") 'pop-tag-mark)
+     (define-key haskell-mode-map (kbd "C-c C-p") 'haskell-mode-stylish-buffer)
      (define-key haskell-mode-map (kbd "C-c C-c") 'haskell-process-load-file)
      (define-key haskell-mode-map (kbd "C-c C-t") '(lambda () (interactive) (haskell-process-do-type t)))
      (custom-set-variables
