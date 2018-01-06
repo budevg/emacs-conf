@@ -67,18 +67,8 @@ If N is negative, search forwards for the -Nth following match."
 (global-set-key [f3] 'multi-term)
 (eval-after-load "multi-term"
   '(progn
-     (setq term-bind-key-alist
-           (append term-bind-key-alist
-                   '(("C-<up>" . term-send-up)
-                     ("<up>" . previous-line)
-                     ("C-<down>" . term-send-down)
-                     ("<down>" . next-line)
-                     ("<right>" . forward-char)
-                     ("<left>" . backward-char)
-                     ("<home>" . move-beginning-of-line)
-                     ("<end>" . move-end-of-line)
-                     )))
-       (add-hook 'term-mode-hook (lambda () (cua-mode t)))))
+     (add-hook 'term-mode-hook (lambda () (yas-minor-mode -1)))
+     ))
 
 (defun dot-dircolors ()
   (interactive)

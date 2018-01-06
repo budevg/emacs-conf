@@ -2,11 +2,11 @@
 
 ;; Author: Andy Stewart <lazycat.manatee@gmail.com>
 ;; Maintainer: Andy Stewart <lazycat.manatee@gmail.com>
-;; Copyright (C) 2008, 2009, 2014 Andy Stewart, all rights reserved.
+;; Copyright (C) 2008 ~ 2016 Andy Stewart, all rights reserved.
 ;; Copyright (C) 2010, ahei, all rights reserved.
 ;; Created: <2008-09-19 23:02:42>
-;; Version: 1.1
-;; Last-Updated: 2014-08-27 14:58:52
+;; Version: 1.4
+;; Last-Updated: 2017-03-03 13:48:38
 ;; URL: http://www.emacswiki.org/emacs/download/multi-term.el
 ;; Keywords: term, terminal, multiple buffer
 ;; Compatibility: GNU Emacs 23.2.1, GNU Emacs 24.4 (and prereleases)
@@ -28,7 +28,7 @@
 
 ;; Features that might be required by this library:
 ;;
-;;  `term' `cl' `advice'
+;;  `term' `cl-lib' `advice'
 ;;
 
 ;;; Commentary:
@@ -127,9 +127,23 @@
 
 ;;; Change log:
 ;;
+;; 2017/03/03
+;;      * Switch to cl-lib
+;;
+;; 2016/06/19
+;;      * Add Hogren's patch: `term-send-delete-word' and binding to key 'M-d'.
+;;
+;; 2015/02/20
+;;      * Binding C-Backspace to `term-send-backward-kill-word' to follow emacs behaviour.
+;;
+;; 2014/12/04
+;;      * Ernesto Rodriguez Reina <erreina@gmail.com>
+;;      Fixed the bug of cursor not return to the position it was before opened the dedicated terminal window when
+;;      `multi-term-dedicated-close-back-to-open-buffer-p' and `multi-term-dedicated-select-after-open-p' are t.
+;;
 ;; 2014/08/27
 ;;      * Kevin Peng <kkpengboy@gmail.com>
-;;      Keep multi-term buffer list make multi-term-next/prev can switch temrinal buffer even terminal buffer's name is changed. 
+;;      Keep multi-term buffer list make multi-term-next/prev can switch temrinal buffer even terminal buffer's name is changed.
 ;;
 ;; 2014/07/21
 ;;      * Andy Stewart
@@ -257,7 +271,7 @@
 
 ;;; Require:
 (require 'term)
-(require 'cl)
+(require 'cl-lib)
 (require 'advice)
 
 ;;; Code:
@@ -349,7 +363,9 @@ If this option is nil, don't switch other `multi-term' buffer."
     ("M-n" . term-send-down)
     ("M-M" . term-send-forward-kill-word)
     ("M-N" . term-send-backward-kill-word)
+    ("<C-backspace>" . term-send-backward-kill-word)
     ("M-r" . term-send-reverse-search-history)
+    ("M-d" . term-send-delete-word)
     ("M-," . term-send-raw)
     ("M-." . comint-dynamic-complete))
   "The key alist that will need to be bind.
@@ -524,9 +540,9 @@ Will prompt you shell name when you type `C-u' before this command."
                  multi-term-dedicated-close-buffer)
             (switch-to-buffer multi-term-dedicated-close-buffer)
           ))
-    (multi-term-dedicated-open)
     (if multi-term-dedicated-close-back-to-open-buffer-p
         (setq multi-term-dedicated-close-buffer (current-buffer)))
+    (multi-term-dedicated-open)
     ))
 
 ;;;###autoload
@@ -573,6 +589,11 @@ Because term-send-input have bug that will duplicate input when you C-a and C-m 
   "Search history reverse."
   (interactive)
   (term-send-raw-string "\C-r"))
+
+(defun term-send-delete-word ()
+  "Delete word in term mode."
+  (interactive)
+  (term-send-raw-string "\ed"))
 
 (defun term-send-quote ()
   "Quote the next character in term-mode.
@@ -679,7 +700,7 @@ If DIRECTION `PREVIOUS', switch to the previous term.
 Option OFFSET for skip OFFSET number term buffer."
   (if multi-term-buffer-list
       (let ((buffer-list-len (length multi-term-buffer-list))
-            (my-index (position (current-buffer) multi-term-buffer-list)))
+            (my-index (cl-position (current-buffer) multi-term-buffer-list)))
         (if my-index
             (let ((target-index (if (eq direction 'NEXT)
                                     (mod (+ my-index offset) buffer-list-len)
@@ -696,7 +717,7 @@ So this function unbinds some keys with `term-raw-map',
 and binds some keystroke with `term-raw-map'."
   (let (bind-key bind-command)
     ;; Unbind base key that conflict with user's keys-tokes.
-    (dolist (unbind-key term-unbind-key-list)
+    (cl-dolist (unbind-key term-unbind-key-list)
       (cond
        ((stringp unbind-key) (setq unbind-key (read-kbd-macro unbind-key)))
        ((vectorp unbind-key) nil)
@@ -705,7 +726,7 @@ and binds some keystroke with `term-raw-map'."
     ;; Add some i use keys.
     ;; If you don't like my keystroke,
     ;; just modified `term-bind-key-alist'
-    (dolist (element term-bind-key-alist)
+    (cl-dolist (element term-bind-key-alist)
       (setq bind-key (car element))
       (setq bind-command (cdr element))
       (cond
@@ -770,9 +791,9 @@ Otherwise return nil."
     (walk-windows
      (lambda (w)
        (with-selected-window w
-         (incf window-number)
+         (cl-incf window-number)
          (if (window-dedicated-p w)
-             (incf dedicated-window-number)))))
+             (cl-incf dedicated-window-number)))))
     (if (and (> dedicated-window-number 0)
              (= (- window-number dedicated-window-number) 1))
         t nil)))
@@ -784,7 +805,7 @@ Dedicated window can't deleted by command `delete-other-windows'."
   (let ((multi-term-dedicated-active-p (multi-term-window-exist-p multi-term-dedicated-window)))
     (if multi-term-dedicated-active-p
         (let ((current-window (selected-window)))
-          (dolist (win (window-list))
+          (cl-dolist (win (window-list))
             (when (and (window-live-p win)
                        (not (eq current-window win))
                        (not (window-dedicated-p win)))
