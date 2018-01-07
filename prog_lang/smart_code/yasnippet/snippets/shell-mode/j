@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: j
+# key: j
+# --
+journalctl --no-pager -u$0
