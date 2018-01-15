@@ -21,9 +21,9 @@
   (let ((current-directory-path (expand-file-name default-directory)))
     (shell)
     (end-of-buffer)
-    (insert-string "cd \"" )
-    (insert-string current-directory-path)
-    (insert-string "\"" )
+    (insert "cd \"" )
+    (insert current-directory-path)
+    (insert "\"" )
     (comint-send-input)))
 
 (global-set-key [(f2)] 'shell)

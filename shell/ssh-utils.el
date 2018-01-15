@@ -1,11 +1,11 @@
 (defun ssh-authorize ()
   (interactive)
   (end-of-buffer)
-  (insert-string "cat <<EOF >>~/.ssh/authorized_keys")
+  (insert "cat <<EOF >>~/.ssh/authorized_keys")
   (comint-send-input)
   (insert-file-contents "~/.ssh/id_rsa.pub")
   (comint-send-input)
-  (insert-string "EOF")
+  (insert "EOF")
   (comint-send-input))
 
 (autoload 'remote-edit-file "remote-edit" nil t)
