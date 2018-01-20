@@ -30,6 +30,9 @@
       '(haskell-process-show-debug-tips nil)
       '(haskell-process-log t)
       '(haskell-process-use-presentation-mode t))
+
+     (add-to-list 'haskell-process-args-stack-ghci
+                  "--ghci-options=-fshow-loaded-modules")
      ))
 
 (eval-after-load "haskell-interactive-mode"

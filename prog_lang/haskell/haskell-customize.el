@@ -176,8 +176,7 @@ pass additional flags to `ghc'."
   :type '(repeat (string :tag "Argument")))
 
 (defcustom haskell-process-args-stack-ghci
-  '("--ghci-options=-ferror-spans" "--no-build" "--no-load"
-    "--ghci-options=-fshow-loaded-modules")
+  '("--ghci-options=-ferror-spans" "--no-build" "--no-load")
   "Additional arguments for `stack ghci' invocation."
   :group 'haskell-interactive
   :type '(repeat (string :tag "Argument")))
