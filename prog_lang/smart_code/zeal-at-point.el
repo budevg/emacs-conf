@@ -103,7 +103,7 @@
     (php-mode . "php")
     (processing-mode . "processing")
     (puppet-mode . "puppet")
-    (python-mode . "python 3")
+    (python-mode . "python")
     (ruby-mode . "ruby")
     (rust-mode . "rust")
     (sass-mode . "sass")
