@@ -1,0 +1,6 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: wgetr
+# key: wgetr
+# binding: direct-keybinding
+# --
+wget -r -nc -nH --cut-dirs=14 $1

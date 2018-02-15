@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: pthread
+# key: pthread
+# --
+ps -emo psr,ppid,pid,tid,user,stat,pcpu,comm,wchan:32 --sort=-pcpu

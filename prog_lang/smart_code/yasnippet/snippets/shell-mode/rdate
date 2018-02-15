@@ -1,0 +1,6 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: rdate
+# key: rdate
+# binding: direct-keybinding
+# --
+`(remove ?\n (shell-command-to-string "date +%Y_%m_%d-%H_%M_%S"))`
