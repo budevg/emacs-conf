@@ -1,0 +1,7 @@
+(:name nix-mode
+       :description "A Nix editing mode"
+       :type github
+       :pkgname "NixOS/nix-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/nix")))
+       )
