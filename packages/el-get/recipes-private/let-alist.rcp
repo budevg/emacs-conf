@@ -1,0 +1,8 @@
+(:name let-alist
+       :description "Easily let-bind values of an assoc-list by their names."
+       :builtin "25.0.50"
+       :type elpa
+       :website "https://elpa.gnu.org/packages/let-alist.html"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib")))
+       )

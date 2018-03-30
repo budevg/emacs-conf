@@ -1,0 +1,8 @@
+(:name magit-popup
+       :website "https://github.com/magit/magit-popup"
+       :description "Define prefix-infix-suffix command combos"
+       :type github
+       :pkgname "magit/magit-popup"
+       :depends (emacs-async dash)
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "source_control/magit"))))
