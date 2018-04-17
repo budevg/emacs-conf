@@ -1,8 +1,9 @@
-;;; multiple-cursors.el --- An experiment in multiple cursors for emacs.
+;;; multiple-cursors.el --- Multiple cursors for emacs.
 
-;; Copyright (C) 2012 Magnar Sveen
+;; Copyright (C) 2012-2016 Magnar Sveen
 
 ;; Author: Magnar Sveen <magnars@gmail.com>
+;; Version: 1.4.0
 ;; Keywords: editing cursors
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -60,12 +61,15 @@
 ;; ### Mark one more occurrence
 
 ;;  - `mc/mark-next-like-this`: Adds a cursor and region at the next part of the buffer forwards that matches the current region.
+;;  - `mc/mark-next-like-this-word`: Adds a cursor and region at the next part of the buffer forwards that matches the current region, if  no region is selected it selects the word at the point.
+;;  - `mc/mark-next-like-this-symbol`: Adds a cursor and region at the next part of the buffer forwards that matches the current region, if  no region is selected it selects the symbol at the point.
 ;;  - `mc/mark-next-word-like-this`: Like `mc/mark-next-like-this` but only for whole words.
 ;;  - `mc/mark-next-symbol-like-this`: Like `mc/mark-next-like-this` but only for whole symbols.
 ;;  - `mc/mark-previous-like-this`: Adds a cursor and region at the next part of the buffer backwards that matches the current region.
 ;;  - `mc/mark-previous-word-like-this`: Like `mc/mark-previous-like-this` but only for whole words.
 ;;  - `mc/mark-previous-symbol-like-this`: Like `mc/mark-previous-like-this` but only for whole symbols.
 ;;  - `mc/mark-more-like-this-extended`: Use arrow keys to quickly mark/skip next/previous occurances.
+;;  - `mc/add-cursor-on-click`: Bind to a mouse event to add cursors by clicking. See tips-section.
 
 ;; ### Mark many occurrences
 
@@ -83,6 +87,7 @@
 ;;  - `set-rectangular-region-anchor`: Think of this one as `set-mark` except you're marking a rectangular region.
 ;;  - `mc/mark-sgml-tag-pair`: Mark the current opening and closing tag.
 ;;  - `mc/insert-numbers`: Insert increasing numbers for each cursor, top to bottom.
+;;  - `mc/insert-letters`: Insert increasing letters for each cursor, top to bottom.
 ;;  - `mc/sort-regions`: Sort the marked regions alphabetically.
 ;;  - `mc/reverse-regions`: Reverse the order of the marked regions.
 
@@ -97,6 +102,10 @@
 ;;
 ;; - Try pressing `mc/mark-next-like-this` with no region selected. It will just add a cursor
 ;;   on the next line.
+;;
+;; - Try pressing `mc/mark-next-like-this-word` or
+;;   `mc/mark-next-like-this-symbol` with no region selected. It will
+;;   mark the symbol and add a cursor at the next occurance
 ;;
 ;; - Try pressing `mc/mark-all-like-this-dwim` on a tagname in html-mode.
 ;;
@@ -114,6 +123,18 @@
 ;;
 ;; BTW, I highly recommend adding `mc/mark-next-like-this` to a key binding that's
 ;; right next to the key for `er/expand-region`.
+
+;; ### Binding mouse events
+
+;; To override a mouse event, you will likely have to also unbind the
+;; `down-mouse` part of the event. Like this:
+;;
+;;     (global-unset-key (kbd "M-<down-mouse-1>"))
+;;     (global-set-key (kbd "M-<mouse-1>") 'mc/add-cursor-on-click)
+;;
+;; Or you can do like me and find an unused, but less convenient, binding:
+;;
+;;     (global-set-key (kbd "C-S-<mouse-1>") 'mc/add-cursor-on-click)
 
 ;; ## Unknown commands
 
@@ -165,11 +186,17 @@
 
 ;;; Code:
 
+(defgroup multiple-cursors nil
+  "Multiple cursors for emacs."
+  :group 'editing)
+
 (require 'mc-edit-lines)
 (require 'mc-cycle-cursors)
 (require 'mc-mark-more)
+(require 'mc-mark-pop)
 (require 'rectangular-region-mode)
 (require 'mc-separate-operations)
+(require 'mc-hide-unmatched-lines-mode)
 
 (provide 'multiple-cursors)
 
