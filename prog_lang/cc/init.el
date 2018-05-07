@@ -1,12 +1,12 @@
 (eval-after-load "cc-mode"
-  '(progn 
+  '(progn
      (defun my-c-mode-hook ()
        (c-set-style "linux")
        (setq c-basic-offset 2)
        (setq tab-width 2)
        (font-lock-add-keywords nil
                                '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
-     
+
      (defun my-c++-mode-hook ()
        (c-set-style "linux")
        (setq c-basic-offset 2)
@@ -38,6 +38,7 @@
 
 
      (define-key c-mode-map "\C-m" 'newline-and-indent)
+     (define-key c-mode-base-map "\C-d" nil)
      (define-key c++-mode-map "\C-m" 'newline-and-indent)))
 
 (autoload 'systemtap-mode "systemtap-mode")
