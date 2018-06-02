@@ -3,7 +3,6 @@
        :description "YASnippet is a template system for Emacs."
        :type github
        :pkgname "capitaomorte/yasnippet"
-       :build `(("git" "submodule" "update" "--init" "--" "snippets")
-                ,(concat "cp -r *.el snippets "
+       :build `(,(concat "cp -r *.el "
                          (in-emacs-d "prog_lang/smart_code/yasnippet")))
        )

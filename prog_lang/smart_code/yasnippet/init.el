@@ -1,6 +1,12 @@
 
 (defun load-yasnippet ()
-  (setq yas-snippet-dirs (in-emacs-d "prog_lang/smart_code/yasnippet/snippets"))
+  (setq yas-snippet-dirs
+        (list (in-emacs-d "prog_lang/smart_code/yasnippet/snippets")))
+  (setq yas-prompt-functions '(yas-x-prompt
+                               yas-dropdown-prompt
+                               yas-completing-prompt
+                               yas-maybe-ido-prompt
+                               yas-no-prompt))
   (setq yas-verbosity 0)
   (require 'yasnippet)
   (yas-global-mode 1)

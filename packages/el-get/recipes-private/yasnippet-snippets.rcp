@@ -1,0 +1,6 @@
+(:name yasnippet-snippets
+       :description "A collection of yasnippet snippets for many languages"
+       :type github
+       :pkgname "AndreaCrotti/yasnippet-snippets"
+       :build `(,(concat "cp -r *.el snippets "
+                         (in-emacs-d "prog_lang/smart_code/yasnippet"))))
