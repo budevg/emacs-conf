@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: cmain
+# key: cmain
+# --
+{ pkgs ? import <nixpkgs> {}
+}:
+with pkgs;
+stdenv.mkDerivation {
+  name = "c-project";
+  buildInputs = [autoreconfHook];
+}
