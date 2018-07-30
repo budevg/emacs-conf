@@ -24,13 +24,13 @@
   :group 'nix)
 
 (defcustom nix-shell-executable "nix-shell"
-  "Location of nix-shell executable."
+  "Location of ‘nix-shell’ executable."
   :group 'nix-shell
   :type 'string)
 
 ;;;###autoload
 (defun nix-shell (path attribute)
-  "Run nix-shell in a terminal.
+  "Run ‘nix-shell’ in a terminal.
 
 PATH path containing Nix expressions.
 ATTRIBUTE attribute name in nixpkgs to use."
@@ -42,6 +42,18 @@ ATTRIBUTE attribute name in nixpkgs to use."
   (term-mode)
   (term-char-mode)
   (switch-to-buffer "*nix-shell*"))
+
+;;;###autoload
+(defun nix-unpack (path attribute)
+  "Get source from a Nix derivation.
+
+PATH used for base of Nix expresions.
+
+ATTRIBUTE from PATH to get Nix expressions from."
+  (interactive (list (read-string "Nix path: " "<nixpkgs>")
+					 (read-string "Nix attribute name: ")))
+  (async-shell-command (format "%s '%s' -A '%s' --run unpackPhase"
+							   nix-shell-executable path attribute)))
 
 (provide 'nix-shell)
 ;;; nix-shell.el ends here
