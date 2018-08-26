@@ -58,3 +58,8 @@ This works on the current region."
   '(progn
      (add-hook 'web-mode-hook  'my-web-mode-hook)
      (setq web-mode-content-types-alist '(("jsx" . "\\.js[x]?\\'")))))
+
+
+(autoload 'emmet-mode "emmet-mode" nil t)
+(add-hook 'web-mode-hook 'emmet-mode)
+(add-hook 'css-mode-hook  'emmet-mode)
