@@ -96,7 +96,7 @@ class ConfigBuilder(object):
                 if not m:
                     continue
                 tmpdir = m.group(1)
-                self._data.append('(setq temporary-file-directory "%s")' % tmpdir)
+                self._data.append('(setq temporary-file-directory "%s/")' % tmpdir)
                 self._data.append('(setenv "TMPDIR" "%s")' % tmpdir)
 
     def _gen_env(self):
