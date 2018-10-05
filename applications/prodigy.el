@@ -4,7 +4,7 @@
 
 ;; Author: Johan Andersson <johan.rejeep@gmail.com>
 ;; Maintainer: Johan Andersson <johan.rejeep@gmail.com>
-;; Version: 0.6.0
+;; Version: 0.7.0
 ;; URL: http://github.com/rejeep/prodigy.el
 ;; Package-Requires: ((s "1.8.0") (dash "2.4.0") (f "0.14.0") (emacs "24"))
 
@@ -41,7 +41,7 @@
 
 (eval-when-compile
   (declare-function discover-add-context-menu "discover")
-  (declare-function magit-status "magit"))
+  (declare-function magit-status-internal "magit"))
 
 (defgroup prodigy nil
   "Manage external services from within Emacs."
@@ -90,12 +90,23 @@ An example is restarting a service."
 (defcustom prodigy-kill-process-buffer-on-stop nil
   "Will kill process buffer on stop if this is true."
   :group 'prodigy
-  :type 'boolean)
+  :type '(radio
+          (const :tag "Always kill buffer" t)
+          (const :tag "Kill buffer unless it is visible" unless-visible)
+          (const :tag "Never kill buffer" nil)))
 
 (defcustom prodigy-timer-interval 1
   "How often to check for process changes, in seconds."
   :group 'prodigy
   :type 'number)
+
+(defcustom prodigy-file-manager 'dired
+  "A default set of file managers to use with `prodigy-jump-file-manager'"
+  :group 'prodigy
+  :type '(radio
+          (const :tag "Use `dired', default emacs file manager" dired)
+          (const :tag "Use `deer', ranger's file manager" deer)
+          (function :tag "Custom predicate")))
 
 (defvar prodigy-mode-hook nil
   "Mode hook for `prodigy-mode'.")
@@ -124,7 +135,7 @@ An example is restarting a service."
     (define-key map (kbd "f n") 'prodigy-add-name-filter)
     (define-key map (kbd "F") 'prodigy-clear-filters)
     (define-key map (kbd "j m") 'prodigy-jump-magit)
-    (define-key map (kbd "j d") 'prodigy-jump-dired)
+    (define-key map (kbd "j d") 'prodigy-jump-file-manager)
     (define-key map (kbd "M-n") 'prodigy-next-with-status)
     (define-key map (kbd "M-p") 'prodigy-prev-with-status)
     (define-key map (kbd "C-w") 'prodigy-copy-cmd)
@@ -162,6 +173,9 @@ The list is a property list with the following properties:
 `cwd'
   Run command with this as `default-directory'.
 
+`sudo'
+  Run command as `sudo'
+
 `port'
   Specify service port for use with open function.
 
@@ -175,7 +189,14 @@ The list is a property list with the following properties:
   Function called before process is started with async callback.
 
 `stop-signal'
-  Signal to send to processes to stop (defaults to 'int).
+  How to signal processes when stopping it.  This property can have
+  any of the following values:
+   * `int' - Will use the function `interrupt-process'.
+   * `kill' - Will use the function `kill-process'.
+   * `quit' - Will use the function `quit-process'.
+   * `stop' - Will use the function `stop-process'.
+   * If neither of the above, the function `signal-process' will be
+     called with that value.
 
 `path'
   Use this to add directories to PATH when starting service process.
@@ -193,6 +214,12 @@ The list is a property list with the following properties:
 
 `kill-process-buffer-on-stop'
   Kill associated process buffer when process stops.
+  Possible values are:
+   * t - always kill the buffer.
+   * `unless-visible' - kill the buffer unless it is visible in some
+     window in any frame.
+   * `never' - never kill the buffer.
+   * nil or not set - use the value of `prodigy-kill-process-buffer-on-stop'.
 
 `truncate-output'
  Truncates the process ouptut buffer.  If set to t, truncates to
@@ -357,6 +384,40 @@ return a string.")
     ["Open in browser" prodigy-browse]))
 
 
+;;;; Internal macros
+
+(defmacro prodigy-callback-with-plist (function &rest properties)
+  "Call FUNCTION with PROPERTIES as plist."
+  `(if (help-function-arglist ,function nil)
+       (apply
+        ,function
+        ,(cons
+          'list
+          (apply
+           'append
+           (-map
+            (lambda (property)
+              `(,(intern (concat ":" (symbol-name property))) ,property)) properties))))
+     (funcall ,function)))
+
+(defmacro prodigy-with-refresh (&rest body)
+  "Execute BODY and then refresh."
+  `(progn ,@body (prodigy-refresh)))
+
+(defmacro prodigy-with-service-process-buffer (service &rest body)
+  "Switch to SERVICE process buffer and yield BODY.
+
+Buffer will be writable for BODY."
+  (declare (indent 1))
+  `(let ((buffer (get-buffer-create (prodigy-buffer-name ,service))))
+     (let ((inhibit-read-only t))
+       (-if-let (buffer-window (car (get-buffer-window-list buffer)))
+           (with-selected-window buffer-window
+             ,@body)
+         (with-current-buffer buffer
+           ,@body)))))
+
+
 ;;;; Service accessors
 
 (defun prodigy-service-tags (service)
@@ -437,7 +498,8 @@ SERVICE tag that has and return that."
 
 If SERVICE kill-process-buffer-on-stop exists, use that.  If not, find the first
 SERVICE tag that has and return that."
-  (prodigy-service-or-first-tag-with service :kill-process-buffer-on-stop))
+  (or (prodigy-service-or-first-tag-with service :kill-process-buffer-on-stop)
+      prodigy-kill-process-buffer-on-stop))
 
 (defun prodigy-service-path (service)
   "Return list of SERVICE path extended with all tags path."
@@ -488,24 +550,6 @@ first SERVICE tag that has and return that."
 
 
 ;;;; Internal functions
-
-(defmacro prodigy-callback-with-plist (function &rest properties)
-  "Call FUNCTION with PROPERTIES as plist."
-  `(if (help-function-arglist ,function nil)
-       (apply
-        ,function
-        ,(cons
-          'list
-          (apply
-           'append
-           (-map
-            (lambda (property)
-              `(,(intern (concat ":" (symbol-name property))) ,property)) properties))))
-     (funcall ,function)))
-
-(defmacro prodigy-with-refresh (&rest body)
-  "Execute BODY and then refresh."
-  `(progn ,@body (prodigy-refresh)))
 
 (defun prodigy-taggable-tags (taggable)
   "Return list of tags objects for TAGGABLE."
@@ -564,12 +608,25 @@ the timeouts stop."
       (progn (pop-to-buffer buffer) (prodigy-view-mode))
     (message "Nothing to show for %s" (plist-get service :name))))
 
+(defun prodigy-process-buffer-visible-p (service)
+  "Return non-nil if process buffer for SERVICE is visible.
+
+All windows from all frames are considered."
+  (-when-let (buffer (get-buffer (prodigy-buffer-name service)))
+    (-any?
+     (lambda (window) (equal (window-buffer window) buffer))
+     (-mapcat 'window-list (frame-list)))))
+
 (defun prodigy-maybe-kill-process-buffer (service)
   "Kill SERVICE buffer if kill-process-buffer-on-stop is t."
-  (let ((kill-process-buffer-on-stop (prodigy-service-kill-process-buffer-on-stop service)))
-    (when (or kill-process-buffer-on-stop prodigy-kill-process-buffer-on-stop)
-      (-when-let (buffer (get-buffer (prodigy-buffer-name service)))
-        (kill-buffer buffer)))))
+  (let* ((kill-process-buffer (prodigy-service-kill-process-buffer-on-stop service)))
+    (-when-let (buffer (get-buffer (prodigy-buffer-name service)))
+      (cond
+       ((eq kill-process-buffer 'unless-visible)
+        (unless (prodigy-process-buffer-visible-p service)
+          (kill-buffer buffer)))
+       ((eq kill-process-buffer t)
+        (kill-buffer buffer))))))
 
 (defun prodigy-service-started-p (service)
   "Return true if SERVICE is started, false otherwise."
@@ -619,6 +676,8 @@ has that property and return its value."
 
 If ID is nil, use id stopped, which is the default service
 status."
+  (unless prodigy-status-list
+    (prodigy-define-default-status-list))
   (unless id (setq id 'stopped))
   (-first
    (lambda (status)
@@ -732,7 +791,7 @@ The completion system used is determined by
 (defun prodigy-url (service)
   "Return SERVICE url."
   (or
-   (plist-get service :url)
+   (prodigy-service-url service)
    (-when-let (port (prodigy-service-port service))
      (format "http://localhost:%d" port))))
 
@@ -776,16 +835,6 @@ DIRECTION is either 'up or 'down."
     (unless found
       (prodigy-goto-pos pos))))
 
-(defmacro prodigy-with-service-process-buffer (service &rest body)
-  "Switch to SERVICE process buffer and yield BODY.
-
-Buffer will be writable for BODY."
-  (declare (indent 1))
-  `(let ((buffer (get-buffer-create (prodigy-buffer-name ,service))))
-     (with-current-buffer buffer
-       (let ((inhibit-read-only t))
-         ,@body))))
-
 (defun prodigy-process-output (output)
   "Apply each of `prodigy-output-filters' to OUTPUT."
   (--each prodigy-output-filters
@@ -795,9 +844,12 @@ Buffer will be writable for BODY."
 (defun prodigy-insert-output (service output)
   "Switch to SERVICE process view buffer and insert OUTPUT."
   (prodigy-with-service-process-buffer service
-    (save-excursion
+    (let ((current-position (point))
+          (at-buffer-end (equal (point) (point-max))))
       (goto-char (point-max))
-      (insert (prodigy-process-output output)))))
+      (insert (prodigy-process-output output))
+      (unless at-buffer-end
+        (goto-char current-position)))))
 
 (defun prodigy-truncate-buffer (service _)
   "Truncate SERVICE process view buffer to its maximum size."
@@ -939,6 +991,20 @@ Note that the return value is always a list."
 
 ;;;; Process handling
 
+(defun prodigy-start-sudo-process (name buffer program &rest program-args)
+  "Prompt the user for a password and start a process with sudo.
+NAME, BUFFER, PROGRAM, and PROGRAM-ARGS are as in `start-process.'"
+  (let* ((sudo-args (cons program program-args))
+         (pwd (read-passwd (concat "Sudo password for `" (mapconcat #'identity sudo-args " ") "': ")))
+         (process
+         (start-process-shell-command
+          name buffer (concat "sudo " (mapconcat #'shell-quote-argument sudo-args " ")))))
+    (process-send-string process pwd)
+    (clear-string pwd)
+    (process-send-string process "\r")
+    (process-send-eof process)
+    process))
+
 (defun prodigy-start-service (service &optional callback)
   "Start process associated with SERVICE unless already started.
 
@@ -956,6 +1022,7 @@ the process is put in failed status."
                  (f-full cwd)
                default-directory))
            (name (plist-get service :name))
+           (sudo (plist-get service :sudo))
            (command (prodigy-service-command service))
            (args (prodigy-service-args service))
            (exec-path (append (prodigy-service-path service) exec-path))
@@ -965,7 +1032,8 @@ the process is put in failed status."
            (create-process
             (lambda ()
               (unless process
-                (setq process (apply 'start-process (append (list name nil command) args)))))))
+                (setq process (apply (if sudo 'prodigy-start-sudo-process 'start-process)
+                                     (append (list name nil  command) args)))))))
       (-when-let (init (prodigy-service-init service))
         (funcall init))
       (-when-let (init-async (prodigy-service-init-async service))
@@ -1019,9 +1087,17 @@ put in stopped status."
     (-when-let (process (plist-get service :process))
       (when (process-live-p process)
         (prodigy-set-status service 'stopping)
-        (if force
-            (kill-process process)
-          (signal-process process (or (prodigy-service-stop-signal service) 'int)))
+        (let ((stop-signal (prodigy-service-stop-signal service)))
+          (cond ((eq stop-signal 'int)
+                 (interrupt-process process))
+                ((or force (eq stop-signal 'kill))
+                 (kill-process process))
+                ((eq stop-signal 'quit)
+                 (quit-process process))
+                ((eq stop-signal 'stop)
+                 (stop-process process))
+                (t
+                 (signal-process process (or stop-signal 'int)))))
         (let ((tryout 0))
           (prodigy-every 1
               (lambda (next)
@@ -1079,7 +1155,7 @@ started."
   (prodigy-goto-first-line))
 
 (defun prodigy-last ()
-  "Go to lsat service."
+  "Go to last service."
   (interactive)
   (prodigy-goto-last-line))
 
@@ -1143,9 +1219,15 @@ started."
   "Copy cmd at line."
   (interactive)
   (let* ((service (prodigy-service-at-pos))
+         (envs (s-join " "
+                       (-map (lambda (env-var-value)
+                                 (s-join "=" env-var-value))
+                               (prodigy-service-env service))))
+         (envs-string (if (not (s-equals? envs ""))
+                          (concat "env " envs " ")))
          (cmd (prodigy-service-command service))
          (args (prodigy-service-args service))
-         (cmd-str (concat cmd " " (s-join " " args))))
+         (cmd-str (concat envs-string cmd " " (s-join " " args))))
     (kill-new cmd-str)
     (message "%s" cmd-str)))
 
@@ -1228,13 +1310,14 @@ SIGNINT signal."
   "Jump to magit status mode for service at point."
   (interactive)
   (-when-let (service (prodigy-service-at-pos))
-    (magit-status (prodigy-service-cwd service))))
+    (magit-status-internal (prodigy-service-cwd service))))
 
-(defun prodigy-jump-dired ()
-  "Jump to dired mode for service at point."
+(defun prodigy-jump-file-manager ()
+  "Jump to folder for service at point using selected file
+manager mode defined by `prodigy-file-manager'."
   (interactive)
   (-when-let (service (prodigy-service-at-pos))
-    (dired (prodigy-service-cwd service))))
+    (funcall prodigy-file-manager (prodigy-service-cwd service))))
 
 (defun prodigy-next-with-status ()
   "Move to next service with status."
@@ -1340,11 +1423,7 @@ The old service process is transfered to the new service."
 (define-derived-mode prodigy-mode tabulated-list-mode "Prodigy"
   "Special mode for prodigy buffers."
   (buffer-disable-undo)
-  (kill-all-local-variables)
   (setq truncate-lines t)
-  (setq mode-name "Prodigy")
-  (setq major-mode 'prodigy-mode)
-  (use-local-map prodigy-mode-map)
   (add-hook 'post-command-hook 'prodigy-set-default-directory)
   (setq tabulated-list-format prodigy-list-format)
   (setq tabulated-list-entries 'prodigy-list-entries)
@@ -1356,7 +1435,24 @@ The old service process is transfered to the new service."
   (hl-line-mode 1)
   (when (featurep 'discover)
     (prodigy-discover-initialize))
-  (run-mode-hooks 'prodigy-mode-hook))
+  (setq imenu-prev-index-position-function
+        #'prodigy--imenu-prev-index-position-function)
+  (setq imenu-extract-index-name-function
+        #'prodigy--imenu-extract-index-name-function))
+
+(defun prodigy--imenu-prev-index-position-function ()
+  "Move point to previous line in prodigy buffer.
+This function is used as a value for
+`imenu-prev-index-position-function'."
+  (unless (bobp)
+    (forward-line -1)))
+
+(defun prodigy--imenu-extract-index-name-function ()
+  "Return imenu name for line at point.
+This function is used as a value for
+`imenu-extract-index-name-function'.  Point should be at the
+beginning of the line."
+  (elt (tabulated-list-get-entry) 1))
 
 ;;;###autoload
 (define-derived-mode prodigy-view-mode special-mode "Prodigy-view"
