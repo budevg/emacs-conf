@@ -20,6 +20,7 @@
   (add-hook 'ruby-mode-hook 'iy-ac-tab-noconflict)
   (add-hook 'markdown-mode-hook 'iy-ac-tab-noconflict)
   (add-hook 'org-mode-hook 'iy-ac-tab-noconflict)
+  (setq yas-prompt-functions '(yas-ido-prompt))
   )
 
 (run-with-idle-timer 2 nil 'load-yasnippet)
