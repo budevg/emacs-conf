@@ -1,0 +1,17 @@
+# -*- mode: snippet -*-
+# name: shell
+# key: shell
+# --
+{ pkgs ? import <nixpkgs> {} }:
+
+with pkgs;
+
+stdenv.mkDerivation {
+  name = "todo";
+
+  buildInputs = [];
+
+  shellHook = ''
+    echo "hello nix shell"
+  '';
+}$0
