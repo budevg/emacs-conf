@@ -74,12 +74,15 @@ class ConfigBuilder(object):
         if not os.path.exists(bashrc):
             return
 
+        home = os.path.expanduser("~")
+
         with open(bashrc) as f:
             for line in f:
                 m = re.match(r"^PATH=(.*):\$PATH$", line)
                 if not m:
                     continue
-                path_elements = m.group(1).split(":")
+                path_elements = [e.replace("$HOME", home)
+                                 for e in m.group(1).split(":")]
                 self._data.append('(setq exec-path (append (list %s) exec-path))' %
                                   " ".join('"%s"' % e for e in path_elements))
                 self._data.append('(setenv "PATH" (concat "%s:" (getenv "PATH")))' %
@@ -90,12 +93,14 @@ class ConfigBuilder(object):
         if not os.path.exists(bashrc):
             return
 
+        home = os.path.expanduser("~")
+
         with open(bashrc) as f:
             for line in f:
                 m = re.match(r"^export TMPDIR=(.*)$", line)
                 if not m:
                     continue
-                tmpdir = m.group(1)
+                tmpdir = m.group(1).replace("$HOME", home)
                 self._data.append('(setq temporary-file-directory "%s/")' % tmpdir)
                 self._data.append('(setenv "TMPDIR" "%s")' % tmpdir)
 
