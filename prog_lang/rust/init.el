@@ -6,4 +6,5 @@
   '(progn
      (define-key rust-mode-map [(control /)] 'racer-find-definition)
      (define-key rust-mode-map [(control \?)] 'pop-tag-mark)
+     (define-key rust-mode-map (kbd "C-c p") 'rust-format-buffer)
      ))
