@@ -11,3 +11,7 @@
 ;; remember to run
 ;; >> cd ~/tools/bin; ln -s /usr/bin/google-chrome chromium
 (setq browse-url-browser-function 'browse-url-chromium)
+(eval-after-load "eww"
+  '(progn
+     (setq eww-download-directory temporary-file-directory)
+     ))
