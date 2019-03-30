@@ -218,9 +218,9 @@ only escape sequences defined in Haskell Report.")
 
 (defconst haskell-lexeme--char-literal-rx
   (rx-to-string `(: (group "'")
-                    (| (: (group (regexp "[[:alpha:]_([]")) (group "'")) ; exactly one char
+                    (| (: (group (regexp "[[:alpha:]_:([]")) (group "'")) ; exactly one char
                        (: (group (| (regexp "\\\\[^\n][^'\n]*") ; allow quote just after first backslash
-                                    (regexp "[^[:alpha:]_(['\n][^'\n]*")))
+                                    (regexp "[^[:alpha:]_:(['\n][^'\n]*")))
                           (| (group "'") "\n" (regexp "\\'"))))))
   "Regexp matching a character literal lookalike.
 
