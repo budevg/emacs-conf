@@ -1,0 +1,6 @@
+(:name dired-hacks
+       :description "Collection of useful dired additions."
+       :type github
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation/dired-hacks")))
+       :pkgname "Fuco1/dired-hacks")

@@ -1,4 +1,7 @@
 
+(autoload 'dired-subtree-cycle "dired-subtree" "" t)
+(autoload 'dired-narrow "dired-narrow" "" t)
+
 (eval-after-load "dired"
   '(progn
      (defun my-dired-init ()
@@ -8,6 +11,8 @@
        (autoload 'dired-single-buffer-mouse "dired-single" "" t)
        (autoload 'dired-single-magic-buffer "dired-single" "" t)
        (autoload 'dired-single-toggle-buffer-name "dired-single" "" t)
+       (define-key dired-mode-map [tab] 'dired-subtree-cycle)
+       (define-key dired-mode-map [(control n)] 'dired-narrow)
        (define-key dired-mode-map [return] 'dired-single-buffer)
        (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
        (define-key dired-mode-map "^"
