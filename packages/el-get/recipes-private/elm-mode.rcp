@@ -1,0 +1,8 @@
+(:name elm-mode
+       :description "Major mode for Elm"
+       :type github
+       :pkgname "jcollard/elm-mode"
+       :depends (f let-alist s reformatter)
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/elm")))
+       )
