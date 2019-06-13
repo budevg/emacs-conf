@@ -1,0 +1,42 @@
+# -*- mode: snippet -*-
+# name: mains
+# key: mains
+# expand-env: ((yas-indent-line 'fixed))
+# --
+module Main exposing (main)
+
+import Browser
+import Html exposing (..)
+import Html.Attributes exposing (..)
+
+
+type Model
+    = Model
+
+
+init : Model
+init =
+    Model
+
+
+type Msg
+    = Msg
+
+
+update : Msg -> Model -> Model
+update msg model =
+    model
+
+
+view : Model -> Html Msg
+view model =
+    div [] [ text "hello world !" ]
+
+
+main =
+    Browser.sandbox
+        { init = init
+        , update = update
+        , view = view
+        }
+$0
