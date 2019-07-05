@@ -8,7 +8,7 @@
         (magit-diff "HEAD" '() (list file))
       (magit-section-toggle (magit-current-section)))))
 
-(setq magit-version "2.13")
+(setq magit-version "2.90.1")
 
 (eval-after-load "magit"
   '(progn
@@ -70,4 +70,5 @@
      (defadvice magit-status (around magit-fullscreen activate)
        ad-do-it
        (delete-other-windows))
+     (autoload 'magit-gitignore-popup "magit-gitignore" nil t)
      ))

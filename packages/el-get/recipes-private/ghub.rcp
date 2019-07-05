@@ -2,5 +2,5 @@
        :type github
        :description "Minuscule client for the Github API"
        :build `(,(concat "cp *.el "
-                         (in-emacs-d "source_control")))
+                         (in-emacs-d "source_control/ghub")))
        :pkgname "magit/ghub")

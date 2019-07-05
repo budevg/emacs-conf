@@ -172,6 +172,8 @@ build_system = [Node(path = "build_system/init.el",
 
 source_control = [Node(path = "source_control/magit/init.el",
                        msg = "load magit"),
+                  Node(path = "source_control/ghub",
+                       msg = "load ghub"),
                   Node(path = "source_control/init.el",
                        msg = "load git/svn support"),
                   Node(path = "source_control/local.el",

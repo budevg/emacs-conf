@@ -4,7 +4,7 @@
        :type github
        :pkgname "magit/magit"
        :branch "master"
-       :depends (dash emacs-async ghub let-alist magit-popup with-editor)
+       :depends (dash emacs-async ghub let-alist magit-popup with-editor treepy)
        :build `(,(concat "cp lisp/*.el "
                          (in-emacs-d "source_control/magit")))
        )

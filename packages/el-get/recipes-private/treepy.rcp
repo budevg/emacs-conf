@@ -1,0 +1,7 @@
+(:name treepy
+       :description "A set of generic functions for traversing tree-like data structures recursively and/or iteratively."
+       :type github
+       :pkgname "volrath/treepy.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib")))
+       )
