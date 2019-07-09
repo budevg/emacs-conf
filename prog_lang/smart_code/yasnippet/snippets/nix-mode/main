@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: main
+# key: main
+# --
+{ pkgs ? import <nixpkgs> {} }:
+with pkgs;
+mkShell {
+  buildInputs = [
+  ];
+  ENV_VAR = "env_var";
+}
