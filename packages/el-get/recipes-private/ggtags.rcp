@@ -1,0 +1,8 @@
+(:name ggtags
+       :description "Use GNU Global in Emacs."
+       :type github
+       :pkgname "leoliu/ggtags"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+
+       )

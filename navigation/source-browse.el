@@ -8,26 +8,22 @@
 (autoload 'moccur "color-moccur" nil t)
 (global-set-key [(shift f9)] 'moccur)
 
-;; cscope
-(autoload 'cscope-index-files "xcscope" nil t)
-(autoload 'cscope-find-this-symbol "xcscope" nil t)
-(autoload 'cscope-find-global-definition "xcscope" nil t)
-(autoload 'cscope-pop-mark "xcscope" nil t)
-(autoload 'cscope-find-functions-calling-this-function "xcscope" nil t)
-(autoload 'cscope-find-this-file "xcscope" nil t)
+(autoload 'ggtags-find-tag-dwim "ggtags" nil t)
+(autoload 'ggtags-find-definition "ggtags" nil t)
+(autoload 'ggtags-find-reference "ggtags" nil t)
+(autoload 'ggtags-find-tag-regexp "ggtags" nil t)
+(autoload 'ggtags-find-other-symbol "ggtags" nil t)
+(define-key global-map [(meta f9)]  'ggtags-find-other-symbol)
+(define-key global-map [(control /)]  'ggtags-find-definition)
+(define-key global-map [(control \?)]  'xref-pop-marker-stack)
+(define-key global-map [(control \.)]  'ggtags-find-reference)
 
-(defun cscope-update-indexer ()
-  (interactive)
-  (shell-command-to-string "cp /usr/bin/cscope-indexer ~/tools/bin/cscope-indexer")
-  (shell-command-to-string "sed -i 's/cc|hh/cc|hh|S|go/' ~/tools/bin/cscope-indexer"))
-
-(setq cscope-do-not-update-database t)
-(define-key global-map [(meta f9)]  'cscope-find-this-symbol)
-(define-key global-map [(control /)]  'cscope-find-global-definition)
-(define-key global-map [(control \?)]  'cscope-pop-mark)
-(define-key global-map [(control \.)]  'cscope-find-functions-calling-this-function)
-(define-key global-map [(control \,)]  'cscope-find-this-file)
-
+(eval-after-load "ggtags"
+  '(progn
+     (setq ggtags-highlight-tag nil)
+     (setq ggtags-update-on-save nil)
+     (setq ggtags-global-window-height nil)
+     ))
 
 (defun ctags-build ()
   (interactive)
