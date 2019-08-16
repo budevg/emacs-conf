@@ -2,4 +2,4 @@
 # name: axel
 # key: axel
 # --
-axel -an 10 $0
+stty columns 80; axel -an 10 $0
