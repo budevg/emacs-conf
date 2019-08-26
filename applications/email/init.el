@@ -1,55 +1,73 @@
 
-;; something about ourselves
-(setq
- email-send-addresses '("user@gmail.com")
- auth-sources '("~/.authinfo.gpg")
- user-full-name  "xxx yyy"
- message-signature
- (concat
-  "Best Regards,\n"
-  "xxx yyy\n"))
-
-(defvar *user-mails*
-  "user@gmail\\.com\\|user2@gmail\\.com")
-
+(setq user-mail-address "xxx@yyy.com"
+      user-full-name  "xxx yyy"
+      message-signature (concat
+                         "Best Regards,\n"
+                         "xxx yyy\n")
+      )
 
 (setq message-send-mail-function 'smtpmail-send-it
+      message-kill-buffer-on-exit t
+      smtpmail-default-smtp-server "xxx.com"
+      smtpmail-local-domain "xxx.com"
+      smtpmail-smtp-user "xxx"
+      smtpmail-smtp-server "xxx.com"
       smtpmail-stream-type 'starttls
-      smtpmail-default-smtp-server "smtp.gmail.com"
-      smtpmail-smtp-server "smtp.gmail.com"
-      smtpmail-smtp-service 587)
-
-(defun email-send-switch (&optional email)
-  (interactive)
-  (let ((user-mail (or email
-                       (ido-completing-read
-                        "switch email to: " email-send-addresses))))
-    (setq user-mail-address user-mail
-          smtpmail-smtp-user user-mail
-          smtpmail-auth-credentials `(("smtp.gmail.com" 587 ,user-mail nil)))))
-
-;; by default first element in mail-addresses is used
-(email-send-switch (car email-send-addresses))
-
-;; don't keep message buffers around
-(setq message-kill-buffer-on-exit t)
+      smtpmail-smtp-service 1587
+      )
 
 (setq auth-source-cache-expiry nil
-      auth-source-save-behavior nil)
+      auth-source-save-behavior nil
+      auth-sources '("~/.authinfo.gpg")
+      )
 
 
-(when (file-exists-p "~/tools/mu/mu4e")
-  (progn
-    (setq load-path (append (list "~/tools/mu/mu4e") load-path))
-    (autoload 'mu4e "mu4e" nil t)
-    (eval-after-load "mu4e"
-      '(progn
-         (load "mu4e-init")))))
 
-(eval-after-load "gnus"
-  '(progn
-     (load "gnus-init")))
+(when (executable-find "mu")
+  (let* ((mu-dir (file-truename (file-name-directory (executable-find "mu"))))
+         (mu4e-lisp-dir (file-truename (concat mu-dir "../share/emacs/site-lisp/mu4e")))
+         )
+    (progn
+      (add-to-list 'load-path mu4e-lisp-dir)
+      (autoload 'mu4e "mu4e" nil t)
+      (eval-after-load "mu4e"
+        '(progn
+           (setq mu4e-maildir (expand-file-name "~/Mail")
 
+                 mu4e-inbox-folder  "/inbox"
+                 mu4e-drafts-folder "/drafts"
+                 mu4e-sent-folder   "/sent"
+                 mu4e-trash-folder  "/deleted"
+
+                 ;;mu4e-sent-messages-behavior 'delete
+
+                 mu4e-maildir-shortcuts '(("/inbox" . ?i)
+                                          ("/sent"  . ?s)
+                                          ("/deleted" . ?t)
+                                          )
+
+                 mu4e-bookmarks `( ,(make-mu4e-bookmark
+                                     :name  "Unread messages"
+                                     :query "flag:unread AND NOT flag:trashed"
+                                     :key ?u)
+                                   ,(make-mu4e-bookmark
+                                     :name "Today's messages"
+                                     :query "date:today..now"
+                                     :key ?t)
+                                   ,(make-mu4e-bookmark
+                                     :name "Last 7 days"
+                                     :query "date:7d..now"
+                                     :key ?w)
+                                   ,(make-mu4e-bookmark
+                                     :name "Flagged messages"
+                                     :query "flag:flagged"
+                                     :key ?f))
+
+
+                 mu4e~get-mail-password-regexp "^Password: $"
+                 mu4e-get-mail-command "offlineimap"
+                 )
+           )))))
 
 (defun dot-offlineimap ()
   (interactive)

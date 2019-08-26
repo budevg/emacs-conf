@@ -1,7 +1,7 @@
-import subprocess
-def my_get_output(msg):
-  # Bunch of boilerplate to catch the output of a command:
-  pipe = subprocess.Popen("/usr/bin/ssh-askpass %s" % msg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-  (output, errout) = pipe.communicate()
-  assert pipe.returncode == 0 and not errout
-  return output.strip().lstrip('"').rstrip('"')
+#!/usr/bin/python
+import re, os
+def get_password_emacs(machine, login, port):
+    s = "machine %s login %s port %s password ([^ ]*)" % (machine, login, port)
+    p = re.compile(s)
+    authinfo = os.popen("gpg -q --no-tty -d ~/.authinfo.gpg").read()
+    return p.search(authinfo).group(1).strip()
