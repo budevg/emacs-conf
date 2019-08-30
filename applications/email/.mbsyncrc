@@ -1,0 +1,48 @@
+IMAPAccount AAA
+Host outlook.office365.com
+Port 993
+User AAA@outlook.com
+PassCmd "gpg -q --for-your-eyes-only --no-tty -d ~/scratch/aaa.gpg"
+SSLType IMAPS
+SSLVersions TLSv1.2
+CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+IMAPStore AAA-remote
+Account AAA
+
+MaildirStore AAA-local
+Subfolders Verbatim
+Path ~/scratch/Mail/AAA/
+Inbox ~/scratch/Mail/AAA/Inbox/
+
+Channel AAA
+Master :AAA-remote:
+Slave :AAA-local:
+Patterns *
+Create Both
+SyncState *
+
+
+IMAPAccount BBB
+Host imap.gmail.com
+Port 993
+User BBB@gmail.com
+PassCmd "gpg -q --for-your-eyes-only --no-tty -d ~/scratch/bbb.gpg"
+SSLType IMAPS
+SSLVersions TLSv1.2
+CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+IMAPStore BBB-remote
+Account BBB
+
+MaildirStore BBB-local
+Subfolders Verbatim
+Path ~/scratch/Mail/BBB/
+Inbox ~/scratch/Mail/BBB/Inbox
+
+Channel BBB
+Master :BBB-remote:
+Slave :BBB-local:
+Patterns *
+Create Both
+SyncState *
