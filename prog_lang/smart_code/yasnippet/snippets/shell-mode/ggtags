@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ggtags
+# key: ggtags
+# --
+GTAGSLABEL=pygments GTAGSCONF=~/.nix-profile/share/gtags/gtags.conf gtags -v$0
