@@ -20,6 +20,7 @@ Master :AAA-remote:
 Slave :AAA-local:
 Patterns *
 Create Both
+Expunge Both
 SyncState *
 
 
@@ -45,4 +46,5 @@ Master :BBB-remote:
 Slave :BBB-local:
 Patterns *
 Create Both
+Expunge Both
 SyncState *

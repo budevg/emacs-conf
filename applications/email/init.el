@@ -116,6 +116,15 @@
 
                  mu4e-context-policy 'pick-first
                  )
+           (define-key mu4e-view-mode-map (kbd "C-w")
+             (lambda ()
+               (interactive)
+               (let ((url (get-text-property (point) 'shr-url)))
+                 (when url
+                   (kill-new url)
+                   (message "%s" url))
+                 ))
+             )
            )))))
 
 (defun dot-offlineimap ()
