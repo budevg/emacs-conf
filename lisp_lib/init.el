@@ -46,3 +46,9 @@
         (t (message (concat title ": " msg)))))
 
 (autoload 'defhydra "hydra" nil t)
+
+(defun setenv-from-bashrc (name)
+  (setenv
+   name
+   (shell-command-to-string
+    (format "bash -c '. ~/.bashrc; echo -n $%s'" name))))
