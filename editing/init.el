@@ -46,8 +46,16 @@
 
 (global-set-key "\C-w" 'backward-delete-word)
 
-(autoload 'er/expand-region "expand-region" nil t)
-(global-set-key "\M-e" 'er/expand-region)
+(defun copy-loc ()
+  (interactive)
+  (let* ((f (buffer-file-name))
+         (l (line-number-at-pos))
+         (s (format "%s:%s" f l))
+         )
+    (kill-new s)
+    (message s)))
+
+(global-set-key (kbd "M-e") 'copy-loc)
 
 (defun switch-to-hexl-mode ()
   (interactive)
