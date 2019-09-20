@@ -1,10 +1,10 @@
 ;;; ob-sql.el --- Babel Functions for SQL            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2019 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -111,8 +111,24 @@ Pass nil to omit that arg."
 	       (when database (concat "-d" database))))))
 
 (defun org-babel-sql-dbstring-oracle (host port user password database)
-  "Make Oracle command line args for database connection."
-  (format "%s/%s@%s:%s/%s" user password host port database))
+  "Make Oracle command line arguments for database connection.
+
+If HOST and PORT are nil then don't pass them.  This allows you
+to use names defined in your \"TNSNAMES\" file.  So you can
+connect with
+
+  <user>/<password>@<host>:<port>/<database>
+
+or
+
+  <user>/<password>@<database>
+
+using its alias."
+  (cond ((and user password database host port)
+	 (format "%s/%s@%s:%s/%s" user password host port database))
+	((and user password database)
+	 (format "%s/%s@%s" user password database))
+	(t (user-error "Missing information to connect to database"))))
 
 (defun org-babel-sql-dbstring-mssql (host user password database)
   "Make sqlcmd command line args for database connection.
@@ -127,7 +143,7 @@ SQL Server on Windows and Linux platform."
 	     " "))
 
 (defun org-babel-sql-dbstring-sqsh (host user password database)
-  "Make sqsh commmand line args for database connection.
+  "Make sqsh command line args for database connection.
 \"sqsh\" is one method to access Sybase or MS SQL via Linux platform"
   (mapconcat #'identity
              (delq nil
@@ -241,6 +257,7 @@ SET NEWPAGE 0
 SET TAB OFF
 SET SPACE 0
 SET LINESIZE 9999
+SET TRIMOUT ON TRIMSPOOL ON
 SET ECHO OFF
 SET FEEDBACK OFF
 SET VERIFY OFF

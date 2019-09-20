@@ -1,12 +1,12 @@
 ;;; ob-lisp.el --- Babel Functions for Common Lisp   -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2019 Free Software Foundation, Inc.
 
 ;; Authors: Joel Boehland
 ;;	 Eric Schulte
 ;;	 David T. O'Toole <dto@gnu.org>
 ;; Keywords: literate programming, reproducible research
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -37,10 +37,10 @@
 
 ;;; Code:
 (require 'ob)
+(require 'org-macs)
 
 (declare-function sly-eval "ext:sly" (sexp &optional package))
 (declare-function slime-eval "ext:slime" (sexp &optional package))
-(declare-function org-trim "org" (s &optional keep-lead))
 
 (defvar org-babel-tangle-lang-exts)
 (add-to-list 'org-babel-tangle-lang-exts '("lisp" . "lisp"))
@@ -54,7 +54,7 @@ Valid values include `slime-eval' and `sly-eval'."
   :group 'org-babel
   :version "26.1"
   :package-version '(Org . "9.0")
-  :type 'function)
+  :type 'symbol)
 
 (defcustom org-babel-lisp-dir-fmt
   "(let ((*default-pathname-defaults* #P%S\n)) %%s\n)"

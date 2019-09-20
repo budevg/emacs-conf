@@ -1,6 +1,6 @@
 ;; ox-man.el --- Man Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2019 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;;      Luis R Anaya <papoanaya aroba hot mail punto com>
@@ -285,6 +285,10 @@ This function shouldn't be used for floats.  See
         output
       (concat (format "%s\n.br\n" label) output))))
 
+(defun org-man--protect-text (text)
+  "Protect minus and backslash characters in string TEXT."
+  (replace-regexp-in-string "-" "\\-" text nil t))
+
 
 
 ;;; Template
@@ -350,10 +354,9 @@ holding contextual information."
 ;;; Code
 
 (defun org-man-code (code _contents _info)
-  "Transcode a CODE object from Org to Man.
-CONTENTS is nil.  INFO is a plist used as a communication
-channel."
-  (format "\\fC%s\\fP" code))
+  "Transcode a CODE object from Org to Man."
+  (format "\\fC%s\\fP"
+	  (org-man--protect-text (org-element-property :value code))))
 
 
 ;;; Drawer
@@ -421,7 +424,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 CONTENTS is nil.  INFO is a plist holding contextual information."
   (org-man--wrap-label
    fixed-width
-   (format "\\fC\n%s\\fP"
+   (format "\\fC\n%s\n\\fP"
            (org-remove-indentation
             (org-element-property :value fixed-width)))))
 
@@ -1029,11 +1032,10 @@ holding contextual information."
 
 ;;; Verbatim
 
-(defun org-man-verbatim (_verbatim contents _info)
-  "Transcode a VERBATIM object from Org to Man.
-CONTENTS is nil.  INFO is a plist used as a communication
-channel."
-  (format ".nf\n%s\n.fi" contents))
+(defun org-man-verbatim (verbatim _contents _info)
+  "Transcode a VERBATIM object from Org to Man."
+  (format "\\fI%s\\fP"
+	  (org-man--protect-text (org-element-property :value verbatim))))
 
 
 ;;; Verse Block

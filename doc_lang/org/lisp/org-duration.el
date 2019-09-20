@@ -1,22 +1,24 @@
 ;;; org-duration.el --- Library handling durations   -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017  Free Software Foundation, Inc.
+;; Copyright (C) 2017-2019 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: outlines, hypermedia, calendar, wp
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -49,7 +51,6 @@
 
 (require 'cl-lib)
 (require 'org-macs)
-(declare-function org-trim "org-trim" (s &optional keep-lead))
 
 
 ;;; Public variables
@@ -97,8 +98,8 @@ sure to call the following command:
   :set (lambda (var val) (set-default var val) (org-duration-set-regexps))
   :initialize 'custom-initialize-changed
   :type '(choice
-	  (const :tag "H:MM" 'h:mm)
-	  (const :tag "H:MM:SS" 'h:mm:ss)
+	  (const :tag "H:MM" h:mm)
+	  (const :tag "H:MM:SS" h:mm:ss)
 	  (alist :key-type (string :tag "Unit")
 		 :value-type (number :tag "Modifier"))))
 
@@ -315,11 +316,10 @@ When optional argument CANONICAL is non-nil, ignore
 Raise an error if expected format is unknown."
   (pcase (or fmt org-duration-format)
     (`h:mm
-     (let ((minutes (floor minutes)))
-       (format "%d:%02d" (/ minutes 60) (mod minutes 60))))
+     (format "%d:%02d" (/ minutes 60) (mod minutes 60)))
     (`h:mm:ss
      (let* ((whole-minutes (floor minutes))
-	    (seconds (floor (* 60 (- minutes whole-minutes)))))
+	    (seconds (mod (* 60 minutes) 60)))
        (format "%s:%02d"
 	       (org-duration-from-minutes whole-minutes 'h:mm)
 	       seconds)))
@@ -400,9 +400,7 @@ Raise an error if expected format is unknown."
 	      (pcase-let* ((`(,unit . ,required?) units)
 			   (modifier (org-duration--modifier unit canonical)))
 		(cond ((<= modifier minutes)
-		       (let ((value (if (integerp modifier)
-					(/ (floor minutes) modifier)
-				      (floor (/ minutes modifier)))))
+		       (let ((value (floor minutes modifier)))
 			 (cl-decf minutes (* value modifier))
 			 (format " %d%s" value unit)))
 		      (required? (concat " 0" unit))

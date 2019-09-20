@@ -1,6 +1,6 @@
 ;;; ox-md.el --- Markdown Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2019 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
 ;; Keywords: org, wp, markdown
@@ -175,7 +175,7 @@ channel."
 	    value)))
 
 
-;;;; Example Block, Src Block and export Block
+;;;; Example Block, Src Block and Export Block
 
 (defun org-md-example-block (example-block _contents info)
   "Transcode EXAMPLE-BLOCK element into Markdown format.
@@ -211,8 +211,7 @@ a communication channel."
 	   (tags (and (plist-get info :with-tags)
 		      (let ((tag-list (org-export-get-tags headline info)))
 			(and tag-list
-			     (format "     :%s:"
-				     (mapconcat 'identity tag-list ":"))))))
+			     (concat "     " (org-make-tag-string tag-list))))))
 	   (priority
 	    (and (plist-get info :with-priority)
 		 (let ((char (org-element-property :priority headline)))
@@ -240,7 +239,7 @@ a communication channel."
 		    (format "<a id=\"%s\"></a>"
 			    (or (org-element-property :CUSTOM_ID headline)
 				(org-export-get-reference headline info))))))
-	  (concat (org-md--headline-title style level title anchor tags)
+	  (concat (org-md--headline-title style level heading anchor tags)
 		  contents)))))))
 
 
@@ -449,7 +448,7 @@ a communication channel."
      (t (let* ((raw-path (org-element-property :path link))
 	       (path
 		(cond
-		 ((member type '("http" "https" "ftp" "mailto" "irc"))
+		 ((member type '("http" "https" "ftp" "mailto"))
 		  (concat type ":" raw-path))
 		 ((string= type "file")
 		  (org-export-file-uri (funcall link-org-files-as-md raw-path)))
@@ -500,14 +499,15 @@ TEXT is the string to transcode.  INFO is a plist holding
 contextual information."
   (when (plist-get info :with-smart-quotes)
     (setq text (org-export-activate-smart-quotes text :html info)))
+  ;; The below series of replacements in `text' is order sensitive.
+  ;; Protect `, *, _, and \
+  (setq text (replace-regexp-in-string "[`*_\\]" "\\\\\\&" text))
   ;; Protect ambiguous #.  This will protect # at the beginning of
   ;; a line, but not at the beginning of a paragraph.  See
   ;; `org-md-paragraph'.
   (setq text (replace-regexp-in-string "\n#" "\n\\\\#" text))
   ;; Protect ambiguous !
   (setq text (replace-regexp-in-string "\\(!\\)\\[" "\\\\!" text nil nil 1))
-  ;; Protect `, *, _ and \
-  (setq text (replace-regexp-in-string "[`*_\\]" "\\\\\\&" text))
   ;; Handle special strings, if required.
   (when (plist-get info :with-special-strings)
     (setq text (org-html-convert-special-strings text)))
@@ -574,33 +574,25 @@ contents according to the current headline."
 	      (make-string
 	       (* 4 (1- (org-export-get-relative-level headline info)))
 	       ?\s))
-	     (number (format "%d."
-			     (org-last
-			      (org-export-get-headline-number headline info))))
-	     (bullet (concat number (make-string (- 4 (length number)) ?\s)))
+	     (bullet
+	      (if (not (org-export-numbered-headline-p headline info)) "-   "
+		(let ((prefix
+		       (format "%d." (org-last (org-export-get-headline-number
+						headline info)))))
+		  (concat prefix (make-string (max 1 (- 4 (length prefix)))
+					      ?\s)))))
 	     (title
 	      (format "[%s](#%s)"
 		      (org-export-data-with-backend
 		       (org-export-get-alt-title headline info)
-		       ;; Create an anonymous back-end that will
-		       ;; ignore any footnote-reference, link,
-		       ;; radio-target and target in table of
-		       ;; contents.
-		       (org-export-create-backend
-			:parent 'md
-			:transcoders '((footnote-reference . ignore)
-				       (link . (lambda (object c i) c))
-				       (radio-target . (lambda (object c i) c))
-				       (target . ignore)))
+		       (org-export-toc-entry-backend 'md)
 		       info)
 		      (or (org-element-property :CUSTOM_ID headline)
 			  (org-export-get-reference headline info))))
 	     (tags (and (plist-get info :with-tags)
 			(not (eq 'not-in-toc (plist-get info :with-tags)))
-			(let ((tags (org-export-get-tags headline info)))
-			  (and tags
-			       (format ":%s:"
-				       (mapconcat #'identity tags ":")))))))
+			(org-make-tag-string
+			 (org-export-get-tags headline info)))))
 	(concat indentation bullet title tags)))
     (org-export-collect-headlines info n (and local keyword)) "\n")
    "\n"))

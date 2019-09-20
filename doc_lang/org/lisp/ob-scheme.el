@@ -1,11 +1,11 @@
 ;;; ob-scheme.el --- Babel Functions for Scheme      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2019 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	    Michael Gauland
 ;; Keywords: literate programming, reproducible research, scheme
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -40,6 +40,7 @@
 ;;; Code:
 (require 'ob)
 (require 'geiser nil t)
+(require 'geiser-impl nil t)
 (defvar geiser-repl--repl)             ; Defined in geiser-repl.el
 (defvar geiser-impl--implementation)   ; Defined in geiser-impl.el
 (defvar geiser-default-implementation) ; Defined in geiser-impl.el
@@ -111,10 +112,9 @@
     (or buffer
 	(progn
 	  (run-geiser impl)
-	  (if name
-	      (progn
-		(rename-buffer name t)
-		(org-babel-scheme-set-session-buffer name (current-buffer))))
+	  (when name
+	    (rename-buffer name t)
+	    (org-babel-scheme-set-session-buffer name (current-buffer)))
 	  (current-buffer)))))
 
 (defun org-babel-scheme-make-session-name (buffer name impl)
@@ -212,6 +212,7 @@ This function is called by `org-babel-execute-src-block'"
 	     (session (org-babel-scheme-make-session-name
 		       source-buffer-name (cdr (assq :session params)) impl))
 	     (full-body (org-babel-expand-body:scheme body params))
+	     (result-params (cdr (assq :result-params params)))
 	     (result
 	      (org-babel-scheme-execute-with-geiser
 	       full-body		       ; code
@@ -225,7 +226,9 @@ This function is called by `org-babel-execute-src-block'"
 				     (cdr (assq :colnames params)))
 		(org-babel-pick-name (cdr (assq :rowname-names params))
 				     (cdr (assq :rownames params))))))
-	  (org-babel-scheme--table-or-string table))))))
+	  (org-babel-result-cond result-params
+	    result
+	    (org-babel-scheme--table-or-string table)))))))
 
 (provide 'ob-scheme)
 

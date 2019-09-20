@@ -1,6 +1,6 @@
 ;;; ox-groff.el --- Groff Back-End for Org Export Engine
 
-;; Copyright (C) 2011-2017  Free Software Foundation, Inc.
+;; Copyright (C) 2011-2018  Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Author: Luis R Anaya <papoanaya aroba hot mail punto com>
@@ -902,7 +902,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 CONTENTS is nil.  INFO is a plist holding contextual information."
   (org-groff--wrap-label
    fixed-width
-   (format "\\fC\n%s\\fP"
+   (format "\\fC\n%s\n\\fP"
            (org-remove-indentation
             (org-element-property :value fixed-width)))))
 
@@ -977,8 +977,7 @@ holding contextual information."
                        (when priority (format " [\\#%c] " priority))
                        text
                        (when tags
-                         (format " \\fC:%s:\\fP "
-                                 (mapconcat 'identity tags ":"))))))
+                         (format " \\fC%s\\fP " (org-make-tag-string tags))))))
          (full-text-no-tag
           (if (functionp org-groff-format-headline-function)
               ;; User-defined formatting function.
@@ -1120,8 +1119,7 @@ holding contextual information."
                (when todo (format "\\fB%s\\fP " todo))
                (when priority (format " [\\#%c] " priority))
                title
-               (when tags (format " \\fC:%s:\\fP "
-                                  (mapconcat 'identity tags ":"))))))
+               (when tags (format " \\fC%s\\fP " (org-make-tag-string tags))))))
          (format (concat "\n.DS I\n"
                          "%s\n"
                          ".sp"

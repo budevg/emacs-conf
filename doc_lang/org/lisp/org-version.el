@@ -5,13 +5,13 @@
 (defun org-release ()
   "The release version of Org.
 Inserted by installing Org mode or when a release is made."
-   (let ((org-release "9.1.1"))
+   (let ((org-release "9.2.6"))
      org-release))
 ;;;###autoload
 (defun org-git-version ()
-  "The Git version of org-mode.
+  "The Git version of Org mode.
 Inserted by installing Org or when a release is made."
-   (let ((org-git-version "9.1.1-dist"))
+   (let ((org-git-version "9.2.6-dist"))
      org-git-version))
 ;;;###autoload
 (defvar org-odt-data-dir "/usr/share/emacs/etc/org"

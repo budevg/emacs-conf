@@ -101,7 +101,7 @@ The list includes
        ((looking-at org-plain-link-re)
         (list (match-beginning 0)
               (match-end 0)
-              (org-link-unescape (match-string-no-properties 0))
+              (match-string-no-properties 0)
               nil))
        (t
         (error "What am I looking at?"))))))
@@ -136,12 +136,12 @@ movement, return nil.  Otherwise, return t."
 (defun org-link-edit-forward-slurp (&optional n)
   "Slurp N trailing blobs into link's description.
 
-  The \[\[http://orgmode.org/\]\[Org mode\]\] site
+  The \[\[https://orgmode.org/\]\[Org mode\]\] site
 
                         |
                         v
 
-  The \[\[http://orgmode.org/\]\[Org mode site\]\]
+  The \[\[https://orgmode.org/\]\[Org mode site\]\]
 
 A blob is a block of non-whitespace characters.  When slurping
 forward, trailing punctuation characters are not considered part
@@ -180,12 +180,12 @@ If N is negative, slurp leading blobs instead of trailing blobs."
 (defun org-link-edit-backward-slurp (&optional n)
   "Slurp N leading blobs into link's description.
 
-  The \[\[http://orgmode.org/\]\[Org mode\]\] site
+  The \[\[https://orgmode.org/\]\[Org mode\]\] site
 
                         |
                         v
 
-  \[\[http://orgmode.org/\]\[The Org mode\]\] site
+  \[\[https://orgmode.org/\]\[The Org mode\]\] site
 
 A blob is a block of non-whitespace characters.
 
@@ -256,12 +256,12 @@ N, 'other' is nil."
 (defun org-link-edit-forward-barf (&optional n)
   "Barf N trailing blobs from link's description.
 
-  The \[\[http://orgmode.org/\]\[Org mode\]\] site
+  The \[\[https://orgmode.org/\]\[Org mode\]\] site
 
                         |
                         v
 
-  The \[\[http://orgmode.org/\]\[Org\]\] mode site
+  The \[\[https://orgmode.org/\]\[Org\]\] mode site
 
 A blob is a block of non-whitespace characters.
 
@@ -295,12 +295,12 @@ If N is negative, barf leading blobs instead of trailing blobs."
 (defun org-link-edit-backward-barf (&optional n)
   "Barf N leading blobs from link's description.
 
-  The \[\[http://orgmode.org/\]\[Org mode\]\] site
+  The \[\[https://orgmode.org/\]\[Org mode\]\] site
 
                         |
                         v
 
-  The Org \[\[http://orgmode.org/\]\[mode\]\] site
+  The Org \[\[https://orgmode.org/\]\[mode\]\] site
 
 A blob is a block of non-whitespace characters.
 
