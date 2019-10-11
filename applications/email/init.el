@@ -81,6 +81,7 @@
            (setq
                  mu4e-maildir (expand-file-name "~/scratch/Mail")
                  mu4e-change-filenames-when-moving t
+                 mu4e-view-show-addresses t
                  ;;mu4e-sent-messages-behavior 'delete
 
                  mu4e~get-mail-password-regexp "^Password.*: $"
