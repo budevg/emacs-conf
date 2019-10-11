@@ -5,5 +5,6 @@
 (eval-after-load "nix-mode"
   '(progn
      (setq nix-indent-function 'nix-indent-line)
-     (define-key nix-mode-map [(control P)] 'nix-repl)
+     (define-key nix-mode-map (kbd "C-S-p") 'nix-repl)
+     (define-key nix-mode-map (kbd "C-c p") 'nix-format-buffer)
      ))
