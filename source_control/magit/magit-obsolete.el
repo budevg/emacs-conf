@@ -1,6 +1,6 @@
 ;;; magit-obsolete.el --- obsolete definitions  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018  The Magit Project Contributors
+;; Copyright (C) 2010-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -29,26 +29,77 @@
 
 (require 'magit)
 
-;;; Obsolete since v2.90.0
+;;; Obsolete since v2.91.0
 
-(define-obsolete-function-alias 'magit-reset-head 'magit-reset-mixed "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-gitignore 'magit-gitignore-globally "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-branch 'magit-branch-create "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-tag 'magit-tag-create "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-fetch 'magit-fetch-other "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-pull 'magit-pull-branch "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-rebase 'magit-rebase-branch "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-blame 'magit-blame-addition "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-revert 'magit-revert-and-commit "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-reset 'magit-reset-quickly "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-merge 'magit-merge-plain "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-stash 'magit-stash-both "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-snapshot 'magit-snapshot-both "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-push 'magit-push-other "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-commit 'magit-commit-create "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-log 'magit-log-other "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-reflog 'magit-reflog-other "Magit 2.90.0")
-(define-obsolete-function-alias 'magit-diff 'magit-diff-range "Magit 2.90.0")
+(define-obsolete-function-alias 'magit-diff-visit-file-worktree
+  'magit-diff-visit-worktree-file "Magit 2.91.0")
+
+(define-obsolete-function-alias 'magit-status-internal
+  'magit-status-setup-buffer "Magit 2.91.0")
+
+(define-obsolete-variable-alias 'magit-mode-setup-hook
+  'magit-setup-buffer-hook "Magit 2.91.0")
+
+(define-obsolete-variable-alias 'magit-branch-popup-show-variables
+  'magit-branch-direct-configure "Magit 2.91.0")
+
+(define-obsolete-function-alias 'magit-dispatch-popup
+  'magit-dispatch "Magit 2.91.0")
+
+(define-obsolete-function-alias 'magit-repolist-column-dirty
+  'magit-repolist-column-flag "Magit 2.91.0")
+
+(defun magit--magit-popup-warning ()
+  (display-warning 'magit "\
+Magit no longer uses Magit-Popup.
+It now uses Transient.
+See https://emacsair.me/2019/02/14/transient-0.1.
+
+However your configuration and/or some third-party package that
+you use still depends on the `magit-popup' package.  But because
+`magit' no longer depends on that, `package' has removed it from
+your system.
+
+If some package that you use still depends on `magit-popup' but
+does not declare it as a dependency, then please contact its
+maintainer about that and install `magit-popup' explicitly.
+
+If you yourself use functions that are defined in `magit-popup'
+in your configuration, then the next step depends on what you use
+that for.
+
+* If you use `magit-popup' to define your own popups but do not
+  modify any of Magit's old popups, then you have to install
+  `magit-popup' explicitly.  (You can also migrate to Transient,
+  but there is no need to rush that.)
+
+* If you add additional arguments and/or actions to Magit's popups,
+  then you have to port that to modify the new \"transients\" instead.
+  See https://github.com/magit/magit/wiki/\
+Converting-popup-modifications-to-transient-modifications
+
+To find installed packages that still use `magit-popup' you can
+use e.g. \"M-x rgrep RET magit-popup RET RET ~/.emacs.d/ RET\"."))
+(cl-eval-when (eval load)
+  (unless (require 'magit-popup nil t)
+    (defun magit-define-popup-switch (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-define-popup-option (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-define-popup-variable (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-define-popup-action (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-define-popup-sequence-action (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-define-popup-key (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-define-popup-keys-deferred (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-change-popup-key (&rest _)
+      (magit--magit-popup-warning))
+    (defun magit-remove-popup-key (&rest _)
+      (magit--magit-popup-warning))))
 
 ;;; _
 (provide 'magit-obsolete)

@@ -14,6 +14,7 @@
   '(progn
      (setq-default diff-auto-refine-mode nil)
      (setq magit-push-always-verify nil)
+     (setq magit-section-visibility-indicator nil)
      (setq magit-popup-show-common-commands nil)
      (setq magit-diff-highlight-hunk-body nil)
      (setq magit-save-repository-buffers nil)

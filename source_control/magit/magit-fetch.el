@@ -1,6 +1,6 @@
 ;;; magit-fetch.el --- download objects and refs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2018  The Magit Project Contributors
+;; Copyright (C) 2008-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -40,48 +40,80 @@ Ignored for Git versions before v2.8.0."
 
 ;;; Commands
 
-;;;###autoload (autoload 'magit-fetch-popup "magit-fetch" nil t)
-(magit-define-popup magit-fetch-popup
-  "Popup console for fetch commands."
+;;;###autoload (autoload 'magit-fetch "magit-fetch" nil t)
+(define-transient-command magit-fetch ()
+  "Fetch from another repository."
   :man-page "git-fetch"
-  :switches '((?p "Prune deleted branches" "--prune"))
-  :actions  '("Configure"
-              (?C "variables..."           magit-branch-config-popup)
-              "Fetch from"
-              (?p magit-get-push-remote    magit-fetch-from-pushremote)
-              (?u magit-get-remote         magit-fetch-from-upstream)
-              (?e "elsewhere"              magit-fetch-other)
-              (?a "all remotes"            magit-fetch-all)
-              "Fetch"
-              (?o "another branch"         magit-fetch-branch)
-              (?r "explicit refspec"       magit-fetch-refspec)
-              (?m "submodules"             magit-fetch-modules))
-  :default-action 'magit-fetch
-  :max-action-columns 1)
+  ["Arguments"
+   ("-p" "Prune deleted branches" ("-p" "--prune"))
+   ("-t" "Fetch all tags" ("-t" "--tags"))]
+  ["Fetch from"
+   ("p" magit-fetch-from-pushremote)
+   ("u" magit-fetch-from-upstream)
+   ("e" "elsewhere"        magit-fetch-other)
+   ("a" "all remotes"      magit-fetch-all)]
+  ["Fetch"
+   ("o" "another branch"   magit-fetch-branch)
+   ("r" "explicit refspec" magit-fetch-refspec)
+   ("m" "submodules"       magit-fetch-modules)]
+  ["Configure"
+   ("C" "variables..." magit-branch-configure)])
+
+(defun magit-fetch-arguments ()
+  (transient-args 'magit-fetch))
 
 (defun magit-git-fetch (remote args)
   (run-hooks 'magit-credential-hook)
   (magit-run-git-async "fetch" remote args))
 
-;;;###autoload
-(defun magit-fetch-from-pushremote (args)
-  "Fetch from the push-remote of the current branch."
-  (interactive (list (magit-fetch-arguments)))
-  (--if-let (magit-get-push-remote)
-      (magit-git-fetch it args)
-    (--if-let (magit-get-current-branch)
-        (user-error "No push-remote is configured for %s" it)
-      (user-error "No branch is checked out"))))
+;;;###autoload (autoload 'magit-fetch-from-pushremote "magit-fetch" nil t)
+(define-suffix-command magit-fetch-from-pushremote (args)
+  "Fetch from the current push-remote.
 
-;;;###autoload
-(defun magit-fetch-from-upstream (args)
-  "Fetch from the upstream repository of the current branch."
+When the push-remote is not configured, then read the push-remote
+from the user, set it, and then fetch from it.  With a prefix
+argument the push-remote can be changed before fetching from it."
+  :description 'magit-fetch--pushremote-description
   (interactive (list (magit-fetch-arguments)))
-  (--if-let (magit-get-remote)
-      (magit-git-fetch it args)
-    (--if-let (magit-get-current-branch)
-        (user-error "No upstream is configured for %s" it)
-      (user-error "No branch is checked out"))))
+  (let ((remote (magit-get-push-remote)))
+    (when (or current-prefix-arg
+              (not (member remote (magit-list-remotes))))
+      (let ((var (magit--push-remote-variable)))
+        (setq remote
+              (magit-read-remote (format "Set %s and fetch from there" var)))
+        (magit-set remote var)))
+    (magit-git-fetch remote args)))
+
+(defun magit-fetch--pushremote-description ()
+  (let* ((branch (magit-get-current-branch))
+         (remote (magit-get-push-remote branch))
+         (v (magit--push-remote-variable branch t)))
+    (cond
+     ((member remote (magit-list-remotes)) remote)
+     (remote
+      (format "%s, replacing invalid" v))
+     (t
+      (format "%s, setting that" v)))))
+
+;;;###autoload (autoload 'magit-fetch-from-upstream "magit-fetch" nil t)
+(define-suffix-command magit-fetch-from-upstream (remote args)
+  "Fetch from the \"current\" remote, usually the upstream.
+
+If the upstream is configured for the current branch and names
+an existing remote, then use that.  Otherwise try to use another
+remote: If only a single remote is configured, then use that.
+Otherwise if a remote named \"origin\" exists, then use that.
+
+If no remote can be determined, then this command is not available
+from the `magit-fetch' transient prefix and invoking it directly
+results in an error."
+  :if          (lambda () (magit-get-current-remote t))
+  :description (lambda () (magit-get-current-remote t))
+  (interactive (list (magit-get-current-remote t)
+                     (magit-fetch-arguments)))
+  (unless remote
+    (error "The \"current\" remote could not be determined"))
+  (magit-git-fetch remote args))
 
 ;;;###autoload
 (defun magit-fetch-other (remote args)
@@ -113,11 +145,8 @@ Ignored for Git versions before v2.8.0."
 ;;;###autoload
 (defun magit-fetch-all (args)
   "Fetch from all remotes."
-  (interactive (list (cl-intersection (magit-fetch-arguments)
-                                      (list "--verbose" "--prune")
-                                      :test #'equal)))
-  (run-hooks 'magit-credential-hook)
-  (magit-run-git-async "remote" "update" args))
+  (interactive (list (magit-fetch-arguments)))
+  (magit-git-fetch nil (cons "--all" args)))
 
 ;;;###autoload
 (defun magit-fetch-all-prune ()

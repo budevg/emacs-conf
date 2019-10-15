@@ -1,6 +1,6 @@
 ;;; magit-autorevert.el --- revert buffers when files in repository change  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018  The Magit Project Contributors
+;; Copyright (C) 2010-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -43,15 +43,15 @@
 (defcustom auto-revert-buffer-list-filter nil
   "Filter that determines which buffers `auto-revert-buffers' reverts.
 
-This option is provided by `magit', which also redefines
+This option is provided by Magit, which also advises
 `auto-revert-buffers' to respect it.  Magit users who do not turn
 on the local mode `auto-revert-mode' themselves, are best served
-by setting the value to `magit-auto-revert-repository-buffers-p'.
+by setting the value to `magit-auto-revert-repository-buffer-p'.
 
-However the default is nil, to not disturb users who do use the
-local mode directly.  If you experience delays when running Magit
-commands, then you should consider using one of the predicates
-provided by Magit - especially if you also use Tramp.
+However the default is nil, so as not to disturb users who do use
+the local mode directly.  If you experience delays when running
+Magit commands, then you should consider using one of the
+predicates provided by Magit - especially if you also use Tramp.
 
 Users who do turn on `auto-revert-mode' in buffers in which Magit
 doesn't do that for them, should likely not use any filter.
@@ -62,7 +62,7 @@ is enabled."
   :group 'auto-revert
   :group 'magit-auto-revert
   :group 'magit-related
-  :type '(radio (const :tag "no filter" nil)
+  :type '(radio (const :tag "No filter" nil)
                 (function-item magit-auto-revert-buffer-p)
                 (function-item magit-auto-revert-repository-buffer-p)
                 function))
@@ -85,7 +85,7 @@ is enabled."
 If this is non-nil and either `global-auto-revert-mode' or
 `magit-auto-revert-mode' is enabled, then Magit immediately
 reverts buffers by explicitly calling `auto-revert-buffers'
-after running git for side-effects.
+after running Git for side-effects.
 
 If `auto-revert-use-notify' is non-nil (and file notifications
 are actually supported), then `magit-auto-revert-immediately'
@@ -127,12 +127,8 @@ seconds of user inactivity.  That is not desirable."
   ;; - In all other cases enable the mode because if buffers are not
   ;;   automatically reverted that would make many very common tasks
   ;;   much more cumbersome.
-  ;; - When `magit-revert-buffers' is nil, then the user has opted out
-  ;;   of the automatic reverts while a very old implementation was
-  ;;   still in use.  We continued to respect that setting for another
-  ;;   two and a half years, but no longer do so now.
-  :init-value (and (not global-auto-revert-mode)
-                   (not noninteractive)))
+  :init-value (not (or global-auto-revert-mode
+                       noninteractive)))
 ;; - Unfortunately `:init-value t' only sets the value of the mode
 ;;   variable but does not cause the mode function to be called.
 ;; - I don't think it works like this on purpose, but since one usually
@@ -140,9 +136,6 @@ seconds of user inactivity.  That is not desirable."
 ;; - If the user has set the variable `magit-auto-revert-mode' to nil
 ;;   after loading magit (instead of doing so before loading magit or
 ;;   by using the function), then we should still respect that setting.
-;; - If the user has set the obsolete variable `magit-revert-buffers'
-;;   to nil before or after loading magit, then we should still respect
-;;   that setting.
 ;; - If the user sets one of these variables after loading magit and
 ;;   after `after-init-hook' has run, then that won't have an effect
 ;;   and there is nothing we can do about it.
@@ -157,7 +150,7 @@ and code surrounding the definition of this function."
         (magit-auto-revert-mode 1)
         (magit-message
          "Turning on magit-auto-revert-mode...done%s"
-         (let ((elapsed (float-time (time-subtract (current-time) start))))
+         (let ((elapsed (float-time (time-subtract nil start))))
            (if (> elapsed 0.2)
                (format " (%.3fs, %s buffers checked)" elapsed
                        (length (buffer-list)))
@@ -173,9 +166,10 @@ and code surrounding the definition of this function."
 
 (put 'magit-auto-revert-mode 'function-documentation
      "Toggle Magit Auto Revert mode.
-With a prefix argument ARG, enable Magit Auto Revert mode if ARG
-is positive, and disable it otherwise.  If called from Lisp,
-enable the mode if ARG is omitted or nil.
+If called interactively, enable Magit Auto Revert mode if ARG is
+positive, and disable it if ARG is zero or negative.  If called
+from Lisp, also enable the mode if ARG is omitted or nil, and
+toggle it if ARG is `toggle'; disable the mode otherwise.
 
 Magit Auto Revert mode is a global minor mode that reverts
 buffers associated with a file that is located inside a Git
@@ -208,52 +202,55 @@ This function calls the hook `magit-auto-revert-mode-hook'.")
                  (and magit-auto-revert-mode auto-revert-buffer-list)))
     (let ((auto-revert-buffer-list-filter
            (or auto-revert-buffer-list-filter
-               'magit-auto-revert-repository-buffer-p)))
+               #'magit-auto-revert-repository-buffer-p)))
       (auto-revert-buffers))))
 
 (defvar magit-auto-revert-toplevel nil)
 
-(when (< emacs-major-version 25)
-  (defvar auto-revert-buffers-counter 1
-    "Incremented each time `auto-revert-buffers' is called"))
+(defvar magit-auto-revert-counter 1
+  "Incremented each time `auto-revert-buffers' is called.")
 
 (defun magit-auto-revert-buffer-p (buffer)
-  "Return t if BUFFER visits a file inside the current repository.
-The current repository is the one in which `default-directory' is
-located.  If there is no current repository, then return t for
-any BUFFER."
+  "Return non-nil if BUFFER visits a file inside the current repository.
+The current repository is the one containing `default-directory'.
+If there is no current repository, then return t for any BUFFER."
   (magit-auto-revert-repository-buffer-p buffer t))
 
 (defun magit-auto-revert-repository-buffer-p (buffer &optional fallback)
-  "Return t if BUFFER visits a file inside the current repository.
-The current repository is the one in which `default-directory' is
-located.  If there is no current repository, then return FALLBACK
-\(which defaults to nil) for any BUFFER."
+  "Return non-nil if BUFFER visits a file inside the current repository.
+The current repository is the one containing `default-directory'.
+If there is no current repository, then return FALLBACK (which
+defaults to nil) for any BUFFER."
   ;; Call `magit-toplevel' just once per cycle.
   (unless (and magit-auto-revert-toplevel
                (= (cdr magit-auto-revert-toplevel)
-                  auto-revert-buffers-counter))
+                  magit-auto-revert-counter))
     (setq magit-auto-revert-toplevel
           (cons (or (magit-toplevel) 'no-repo)
-                auto-revert-buffers-counter)))
+                magit-auto-revert-counter)))
   (let ((top (car magit-auto-revert-toplevel)))
     (if (eq top 'no-repo)
         fallback
-      (let ((dir (with-current-buffer buffer default-directory)))
+      (let ((dir (buffer-local-value 'default-directory buffer)))
         (and (equal (file-remote-p dir)
                     (file-remote-p top))
              ;; ^ `tramp-handle-file-in-directory-p' lacks this optimization.
              (file-in-directory-p dir top))))))
 
-(defun auto-revert-buffers--buffer-list-filter ()
-  (when (< emacs-major-version 25)
-    (cl-incf auto-revert-buffers-counter))
-  (when auto-revert-buffer-list-filter
-    (setq auto-revert-buffer-list
-          (--filter auto-revert-buffer-list-filter
-                    auto-revert-buffer-list))))
+(defun auto-revert-buffers--buffer-list-filter (fn)
+  (cl-incf magit-auto-revert-counter)
+  (if (or global-auto-revert-mode
+          (not auto-revert-buffer-list)
+          (not auto-revert-buffer-list-filter))
+      (funcall fn)
+    (let ((auto-revert-buffer-list
+           (-filter auto-revert-buffer-list-filter
+                    auto-revert-buffer-list)))
+      (funcall fn))
+    (unless auto-revert-timer
+      (auto-revert-set-timer))))
 
-(advice-add 'auto-revert-buffers :before
+(advice-add 'auto-revert-buffers :around
             'auto-revert-buffers--buffer-list-filter)
 
 ;;; _

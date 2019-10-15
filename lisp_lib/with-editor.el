@@ -86,7 +86,10 @@
 (require 'shell)
 
 (and (require 'async-bytecomp nil t)
-     (memq 'magit (bound-and-true-p async-bytecomp-allowed-packages))
+     (let ((pkgs (bound-and-true-p async-bytecomp-allowed-packages)))
+       (if (consp pkgs)
+           (cl-intersection '(all magit) pkgs)
+         (memq pkgs '(all t))))
      (fboundp 'async-bytecomp-package-mode)
      (async-bytecomp-package-mode 1))
 
@@ -440,15 +443,19 @@ And some tools that do not handle $EDITOR properly also break."
     (user-error (substitute-command-keys "\
 Don't kill this buffer.  Instead cancel using \\[with-editor-cancel]"))))
 
+(defvar-local with-editor-usage-message "\
+Type \\[with-editor-finish] to finish, \
+or \\[with-editor-cancel] to cancel")
+
 (defun with-editor-usage-message ()
   ;; Run after `server-execute', which is run using
   ;; a timer which starts immediately.
-  (run-with-timer
-   0.01 nil `(lambda ()
-               (with-current-buffer ,(current-buffer)
-                 (message (substitute-command-keys "\
-Type \\[with-editor-finish] to finish, \
-or \\[with-editor-cancel] to cancel"))))))
+  (let ((buffer (current-buffer)))
+    (run-with-timer
+     0.05 nil
+     (lambda ()
+       (with-current-buffer buffer
+         (message (substitute-command-keys with-editor-usage-message)))))))
 
 ;;; Wrappers
 

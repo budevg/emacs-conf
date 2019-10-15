@@ -1,6 +1,6 @@
 ;;; magit-margin.el --- margins in Magit buffers  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018  The Magit Project Contributors
+;; Copyright (C) 2010-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -36,6 +36,7 @@
   (require 'subr-x))
 
 (require 'magit-section)
+(require 'magit-transient)
 (require 'magit-mode)
 
 (defgroup magit-margin nil
@@ -61,18 +62,15 @@ does not carry to other options."
 
 ;;; Commands
 
-(magit-define-popup magit-margin-popup
-  "Popup console for changing appearance of the margin."
-  :actions '("Margin"
-             (?L "Toggle visibility" magit-toggle-margin)
-             (?l "Cycle style"       magit-cycle-margin-style)
-             (?d "Toggle details"    magit-toggle-margin-details)
-             (lambda ()
-               (and (with-current-buffer magit-pre-popup-buffer
-                      (derived-mode-p 'magit-refs-mode))
-                    (propertize "Left edge" 'face 'magit-popup-heading)))
-             (?v "Change verbosity" magit-refs-set-show-commit-count))
-  :max-action-columns 1)
+(define-transient-command magit-margin-settings ()
+  "Change what information is displayed in the margin."
+  :info-manual "(magit) Log Margin"
+  ["Margin"
+   ("L" "Toggle visibility" magit-toggle-margin)
+   ("l" "Cycle style"       magit-cycle-margin-style)
+   ("d" "Toggle details"    magit-toggle-margin-details)
+   ("v" "Change verbosity"  magit-refs-set-show-commit-count
+    :if-derived magit-refs-mode)])
 
 (defun magit-toggle-margin ()
   "Show or hide the Magit margin."
@@ -119,7 +117,8 @@ does not carry to other options."
     (`magit-reflog-mode     'magit-reflog-margin)
     (`magit-refs-mode       'magit-refs-margin)
     (`magit-stashes-mode    'magit-stashes-margin)
-    (`magit-status-mode     'magit-status-margin)))
+    (`magit-status-mode     'magit-status-margin)
+    (`forge-notifications-mode 'magit-status-margin)))
 
 (defun magit-set-buffer-margin (&optional reset refresh)
   (when-let ((option (magit-margin-option)))

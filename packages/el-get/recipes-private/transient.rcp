@@ -1,0 +1,8 @@
+(:name transient
+       :website "https://github.com/magit/transient#readme"
+       :description "Transient commands used by magit."
+       :type github
+       :pkgname "magit/transient"
+       :depends (dash)
+       :build `(,(concat "cp lisp/*.el "
+                         (in-emacs-d "source_control/magit"))))

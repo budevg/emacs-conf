@@ -1,6 +1,6 @@
 ;;; magit-apply.el --- apply Git diffs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018  The Magit Project Contributors
+;; Copyright (C) 2010-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -37,15 +37,17 @@
 (require 'magit-diff)
 (require 'magit-wip)
 
+(require 'transient) ; See #3732.
+
 ;; For `magit-apply'
-(declare-function magit-am-popup "magit-sequence" (&optional arg))
-(declare-function magit-patch-apply-popup "magit-files" (&optional arg))
+(declare-function magit-am "magit-sequence" ())
+(declare-function magit-patch-apply "magit-files" ())
 ;; For `magit-discard-files'
 (declare-function magit-checkout-stage "magit-merge" (file arg))
 (declare-function magit-checkout-read-stage "magit-merge" (file))
 (defvar auto-revert-verbose)
 ;; For `magit-stage-untracked'
-(declare-function magit-submodule-add "magit-submodule"
+(declare-function magit-submodule-add-1 "magit-submodule"
                   (url &optional path name args))
 (declare-function magit-submodule-read-name-for-path "magit-submodule"
                   (path &optional prefer-short))
@@ -129,11 +131,12 @@ so causes the change to be applied to the index as well."
       (`(,(or `unstaged `staged) ,_)
        (user-error "Change is already in the working tree"))
       (`(untracked ,(or `file `files))
-       (magit-am-popup))
+       (call-interactively 'magit-am))
       (`(,_ region) (magit-apply-region it args))
       (`(,_   hunk) (magit-apply-hunk   it args))
       (`(,_  hunks) (magit-apply-hunks  it args))
-      (`(rebase-sequence file) (magit-patch-apply-popup))
+      (`(rebase-sequence file)
+       (call-interactively 'magit-patch-apply))
       (`(,_   file) (magit-apply-diff   it args))
       (`(,_  files) (magit-apply-diffs  it args)))))
 
@@ -158,30 +161,64 @@ so causes the change to be applied to the index as well."
                      (concat (magit-diff-file-header section)
                              (magit-apply--section-content section))))
 
+(defun magit-apply--adjust-hunk-new-starts (hunks)
+  "Adjust new line numbers in headers of HUNKS for partial application.
+HUNKS should be a list of ordered, contiguous hunks to be applied
+from a file.  For example, if there is a sequence of hunks with
+the headers
+
+  @@ -2,6 +2,7 @@
+  @@ -10,6 +11,7 @@
+  @@ -18,6 +20,7 @@
+
+and only the second and third are to be applied, they would be
+adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
+  (let* ((first-hunk (car hunks))
+         (offset (if (string-match diff-hunk-header-re-unified first-hunk)
+                     (- (string-to-number (match-string 3 first-hunk))
+                        (string-to-number (match-string 1 first-hunk)))
+                   (error "Hunk does not have expected header"))))
+    (if (= offset 0)
+        hunks
+      (mapcar (lambda (hunk)
+                (if (string-match diff-hunk-header-re-unified hunk)
+                    (replace-match (number-to-string
+                                    (- (string-to-number (match-string 3 hunk))
+                                       offset))
+                                   t t hunk 3)
+                  (error "Hunk does not have expected header")))
+              hunks))))
+
+(defun magit-apply--adjust-hunk-new-start (hunk)
+  (car (magit-apply--adjust-hunk-new-starts (list hunk))))
+
 (defun magit-apply-hunks (sections &rest args)
   (let ((section (oref (car sections) parent)))
     (when (string-match "^diff --cc" (oref section value))
       (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
-    (magit-apply-patch section args
-                       (concat (oref section header)
-                               (mapconcat 'magit-apply--section-content
-                                          sections "")))))
+    (magit-apply-patch
+     section args
+     (concat (oref section header)
+             (mapconcat #'identity
+                        (magit-apply--adjust-hunk-new-starts
+                         (mapcar #'magit-apply--section-content sections))
+                        "")))))
 
 (defun magit-apply-hunk (section &rest args)
   (when (string-match "^diff --cc" (magit-section-parent-value section))
     (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
   (magit-apply-patch (oref section parent) args
                      (concat (magit-diff-file-header section)
-                             (magit-apply--section-content section))))
+                             (magit-apply--adjust-hunk-new-start
+                              (magit-apply--section-content section)))))
 
 (defun magit-apply-region (section &rest args)
-  (unless (magit-diff-context-p)
-    (user-error "Not enough context to apply region.  Increase the context"))
   (when (string-match "^diff --cc" (magit-section-parent-value section))
     (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
   (magit-apply-patch (oref section parent) args
                      (concat (magit-diff-file-header section)
-                             (magit-diff-hunk-region-patch section args))))
+                             (magit-apply--adjust-hunk-new-start
+                              (magit-diff-hunk-region-patch section args)))))
 
 (defun magit-apply-patch (section:s args patch)
   (let* ((files (if (atom section:s)
@@ -191,15 +228,15 @@ so causes the change to be applied to the index as well."
          (command (if (and command (string-match "^magit-\\([^-]+\\)" command))
                       (match-string 1 command)
                     "apply"))
-         (no-context (not (magit-diff-context-p)))
          (ignore-context (magit-diff-ignore-any-space-p)))
+    (unless (magit-diff-context-p)
+      (user-error "Not enough context to apply patch.  Increase the context"))
     (when (and magit-wip-before-change-mode (not inhibit-magit-refresh))
       (magit-wip-commit-before-change files (concat " before " command)))
     (with-temp-buffer
       (insert patch)
       (magit-run-git-with-input
        "apply" args "-p0"
-       (and no-context "--unidiff-zero")
        (and ignore-context "-C0")
        "--ignore-space-change" "-"))
     (unless inhibit-magit-refresh
@@ -228,9 +265,7 @@ so causes the change to be applied to the index as well."
     (t sections)))
 
 (defun magit-apply--diff-ignores-whitespace-p ()
-  (and (cl-intersection (if (derived-mode-p 'magit-diff-mode)
-                            (nth 2 magit-refresh-args)
-                          magit-diff-section-arguments)
+  (and (cl-intersection magit-buffer-diff-args
                         '("--ignore-space-at-eol"
                           "--ignore-space-change"
                           "--ignore-all-space"
@@ -294,7 +329,7 @@ ignored) files."
   (when (magit-anything-staged-p)
     (magit-confirm 'stage-all-changes))
   (magit-with-toplevel
-    (magit-stage-1 (if all "--all" "-u"))))
+    (magit-stage-1 (if all "--all" "-u") magit-buffer-diff-files)))
 
 (defun magit-stage-1 (arg &optional files)
   (magit-wip-commit-before-change files " before stage")
@@ -331,7 +366,7 @@ ignored) files."
                 (and (equal (bound-and-true-p borg-user-emacs-directory)
                             topdir)
                      (file-name-nondirectory (directory-file-name repo)))))
-          (magit-submodule-add
+          (magit-submodule-add-1
            (let ((default-directory
                    (file-name-as-directory (expand-file-name repo))))
              (or (magit-get "remote" (magit-get-some-remote) "url")
@@ -361,6 +396,8 @@ ignored) files."
                  (magit-diff-scope)
                  (magit-apply--diff-ignores-whitespace-p))
       (`(untracked     ,_  ,_) (user-error "Cannot unstage untracked changes"))
+      (`(unstaged    file  ,_) (magit-unstage-intent (list (oref it value))))
+      (`(unstaged   files  ,_) (magit-unstage-intent (magit-region-values nil t)))
       (`(unstaged      ,_  ,_) (user-error "Already unstaged"))
       (`(staged    region  ,_) (magit-apply-region it "--reverse" "--cached"))
       (`(staged      hunk  ,_) (magit-apply-hunk   it "--reverse" "--cached"))
@@ -401,6 +438,12 @@ without requiring confirmation."
     (magit-run-git "reset" "HEAD" "--" files))
   (magit-wip-commit-after-apply files " after unstage"))
 
+(defun magit-unstage-intent (files)
+  (if-let ((staged (magit-staged-files))
+           (intent (--filter (member it staged) files)))
+      (magit-unstage-1 intent)
+    (user-error "Already unstaged")))
+
 ;;;###autoload
 (defun magit-unstage-all ()
   "Remove all changes from the staging area."
@@ -409,7 +452,7 @@ without requiring confirmation."
             (magit-untracked-files))
     (magit-confirm 'unstage-all-changes))
   (magit-wip-commit-before-change nil " before unstage")
-  (magit-run-git "reset" "HEAD" "--")
+  (magit-run-git "reset" "HEAD" "--" magit-buffer-diff-files)
   (magit-wip-commit-after-apply nil " after unstage"))
 
 ;;;; Discard
@@ -546,23 +589,25 @@ without requiring confirmation."
                        files)
   (let ((delete-by-moving-to-trash magit-delete-by-moving-to-trash))
     (dolist (file files)
-      (if (memq (magit-diff-type) '(unstaged untracked))
-          (progn (dired-delete-file file dired-recursive-deletes
-                                    magit-delete-by-moving-to-trash)
-                 (dired-clean-up-after-deletion file))
-        (pcase (nth 3 (assoc file status))
-          (?  (delete-file file t)
-              (magit-call-git "rm" "--cached" "--" file))
-          (?M (let ((temp (magit-git-string "checkout-index" "--temp" file)))
-                (string-match
-                 (format "\\(.+?\\)\t%s" (regexp-quote file)) temp)
-                (rename-file (match-string 1 temp)
-                             (setq temp (concat file ".~{index}~")))
-                (delete-file temp t))
-              (magit-call-git "rm" "--cached" "--force" "--" file))
-          (?D (magit-call-git "checkout" "--" file)
-              (delete-file file t)
-              (magit-call-git "rm" "--cached" "--force" "--" file)))))))
+      (when (string-match-p "\\`\\\\?~" file)
+        (error "Refusing to delete %S, too dangerous" file))
+      (pcase (nth 3 (assoc file status))
+        ((guard (memq (magit-diff-type) '(unstaged untracked)))
+         (dired-delete-file file dired-recursive-deletes
+                            magit-delete-by-moving-to-trash)
+         (dired-clean-up-after-deletion file))
+        (?\s (delete-file file t)
+             (magit-call-git "rm" "--cached" "--" file))
+        (?M  (let ((temp (magit-git-string "checkout-index" "--temp" file)))
+               (string-match
+                (format "\\(.+?\\)\t%s" (regexp-quote file)) temp)
+               (rename-file (match-string 1 temp)
+                            (setq temp (concat file ".~{index}~")))
+               (delete-file temp t))
+             (magit-call-git "rm" "--cached" "--force" "--" file))
+        (?D  (magit-call-git "checkout" "--" file)
+             (delete-file file t)
+             (magit-call-git "rm" "--cached" "--force" "--" file))))))
 
 (defun magit-discard-files--rename (files status)
   (magit-confirm 'rename "Undo rename %s" "Undo %i renames" nil
@@ -649,10 +694,9 @@ so causes the change to be applied to the index as well."
   (pcase-let ((`(,binaries ,sections)
                (let ((bs (magit-binary-files
                           (cond ((derived-mode-p 'magit-revision-mode)
-                                 (let ((rev (car magit-refresh-args)))
-                                   (format "%s^..%s" rev rev)))
+                                 magit-buffer-range)
                                 ((derived-mode-p 'magit-diff-mode)
-                                 (car magit-refresh-args))
+                                 magit-buffer-range)
                                 (t
                                  "--cached")))))
                  (--separate (member (oref it value) bs)

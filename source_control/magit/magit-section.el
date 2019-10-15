@@ -1,6 +1,6 @@
 ;;; magit-section.el --- section functionality  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018  The Magit Project Contributors
+;; Copyright (C) 2010-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -34,6 +34,7 @@
 (require 'eieio)
 
 (eval-when-compile
+  (require 'benchmark)
   (require 'subr-x))
 
 (require 'magit-utils)
@@ -44,6 +45,7 @@
 (declare-function magit-repository-local-set "magit-mode"
                   (key value &optional repository))
 (defvar magit-keep-region-overlay)
+(defvar magit-refresh-verbose)
 
 ;;; Options
 
@@ -70,10 +72,12 @@ That function in turn is used by all section movement commands."
   :type 'hook
   :options '(magit-hunk-set-window-start
              magit-status-maybe-update-revision-buffer
+             magit-status-maybe-update-stash-buffer
              magit-status-maybe-update-blob-buffer
              magit-log-maybe-update-revision-buffer
              magit-log-maybe-update-blob-buffer
-             magit-log-maybe-show-more-commits))
+             magit-log-maybe-show-more-commits
+             magit-stashes-maybe-update-stash-buffer))
 
 (defcustom magit-section-highlight-hook
   '(magit-diff-highlight
@@ -160,6 +164,53 @@ entries of this alist."
                                     (const show)
                                     function)))
 
+(defcustom magit-section-visibility-indicator
+  (if (window-system)
+      '(magit-fringe-bitmap> . magit-fringe-bitmapv)
+    '("…" . t))
+  "Whether and how to indicate that a section can be expanded/collapsed.
+
+If nil, then don't show any indicators.
+Otherwise the value has to have one of these two forms:
+
+(EXPANDABLE-BITMAP . COLLAPSIBLE-BITMAP)
+
+  Both values have to be variables whose values are fringe
+  bitmaps.  In this case every section that can be expanded or
+  collapsed gets an indicator in the left fringe.
+
+  To provide extra padding around the indicator, set
+  `left-fringe-width' in `magit-mode-hook'.
+
+(STRING . BOOLEAN)
+
+  In this case STRING (usually an ellipsis) is shown at the end
+  of the heading of every collapsed section.  Expanded sections
+  get no indicator.  The cdr controls whether the appearance of
+  these ellipsis take section highlighting into account.  Doing
+  so might potentially have an impact on performance, while not
+  doing so is kinda ugly."
+  :package-version '(magit . "2.91.0")
+  :group 'magit-section
+  :type '(choice (const :tag "No indicators" nil)
+                 (cons  :tag "Use +- fringe indicators"
+                        (const magit-fringe-bitmap+)
+                        (const magit-fringe-bitmap-))
+                 (cons  :tag "Use >v fringe indicators"
+                        (const magit-fringe-bitmap>)
+                        (const magit-fringe-bitmapv))
+                 (cons  :tag "Use bold >v fringe indicators)"
+                        (const magit-fringe-bitmap-bold>)
+                        (const magit-fringe-bitmap-boldv))
+                 (cons  :tag "Use custom fringe indicators"
+                        (variable :tag "Expandable bitmap variable")
+                        (variable :tag "Collapsable bitmap variable"))
+                 (cons  :tag "Use ellipses at end of headings"
+                        (string :tag "Ellipsis" "…")
+                        (choice :tag "Use face kludge"
+                                (const :tag "Yes (potentially slow)" t)
+                                (const :tag "No (kinda ugly)" nil)))))
+
 (defface magit-section-highlight
   '((((class color) (background light)) :background "grey95")
     (((class color) (background  dark)) :background "grey20"))
@@ -195,7 +246,8 @@ entries of this alist."
     ))
 
 (defclass magit-section ()
-  ((type     :initform nil :initarg :type)
+  ((keymap   :initform nil :allocation :class)
+   (type     :initform nil :initarg :type)
    (value    :initform nil :initarg :value)
    (start    :initform nil :initarg :start)
    (content  :initform nil)
@@ -213,7 +265,12 @@ entries of this alist."
    (header   :initform nil)))
 
 (defclass magit-hunk-section (magit-section)
-  ((refined  :initform nil)))
+  ((refined     :initform nil)
+   (combined    :initform nil)
+   (from-range  :initform nil)
+   (from-ranges :initform nil)
+   (to-range    :initform nil)
+   (about       :initform nil)))
 
 (defclass magit-module-section (magit-file-section)
   ())
@@ -236,7 +293,9 @@ never modify it.")
 The return value has the form ((TYPE . VALUE)...)."
   (with-slots (type value parent) section
     (cons (cons type
-                (cond ((not (memq type '(unpulled unpushed))) value)
+                (cond ((eieio-object-p value)
+                       (magit-section-ident-value value))
+                      ((not (memq type '(unpulled unpushed))) value)
                       ((string-match-p "@{upstream}" value) value)
                       ;; Unfortunately Git chokes on "@{push}" when
                       ;; the value of `push.default' does not allow a
@@ -250,6 +309,18 @@ The return value has the form ((TYPE . VALUE)...)."
           (and parent
                (magit-section-ident parent)))))
 
+(cl-defgeneric magit-section-ident-value (VALUE)
+  "Return a constant representation of VALUE.
+VALUE is the value of a `magit-section' object.  If that is an
+object itself, then that is not suitable to be used to identify
+the section because two objects may represent the same thing but
+not be equal.  If possible a method should be added for such
+objects, which returns a value that is equal.  Otherwise the
+catch-all method is used, which just returns the argument
+itself.")
+
+(cl-defmethod magit-section-ident-value (arg) arg)
+
 (defun magit-get-section (ident &optional root)
   "Return the section identified by IDENT.
 IDENT has to be a list as returned by `magit-section-ident'."
@@ -258,11 +329,15 @@ IDENT has to be a list as returned by `magit-section-ident'."
     (when (eq (car (pop ident))
               (oref section type))
       (while (and ident
-                  (setq section
-                        (--first
-                         (and (eq    (caar ident) (oref it type))
-                              (equal (cdar ident) (oref it value)))
-                         (oref section children))))
+                  (pcase-let* ((`(,type . ,value) (car ident))
+                               (value (magit-section-ident-value value)))
+                    (setq section
+                          (cl-find-if (lambda (section)
+                                        (and (eq (oref section type) type)
+                                             (equal (magit-section-ident-value
+                                                     (oref section value))
+                                                    value)))
+                                      (oref section children)))))
         (pop ident))
       section)))
 
@@ -408,6 +483,17 @@ With a prefix argument also expand it." heading)
   "Show the body of the current section."
   (interactive (list (magit-current-section)))
   (oset section hidden nil)
+  (magit-section--maybe-wash section)
+  (when-let ((beg (oref section content)))
+    (remove-overlays beg (oref section end) 'invisible t))
+  (magit-section-maybe-update-visibility-indicator section)
+  (magit-section-maybe-cache-visibility section)
+  (dolist (child (oref section children))
+    (if (oref child hidden)
+        (magit-section-hide child)
+      (magit-section-show child))))
+
+(defun magit-section--maybe-wash (section)
   (when-let ((washer (oref section washer)))
     (oset section washer nil)
     (let ((inhibit-read-only t)
@@ -420,14 +506,7 @@ With a prefix argument also expand it." heading)
           (oset section content (point-marker))
           (funcall washer)
           (oset section end (point-marker)))))
-    (magit-section-update-highlight))
-  (when-let ((beg (oref section content)))
-    (remove-overlays beg (oref section end) 'invisible t))
-  (magit-section-maybe-cache-visibility section)
-  (dolist (child (oref section children))
-    (if (oref child hidden)
-        (magit-section-hide child)
-      (magit-section-show child))))
+    (magit-section-update-highlight)))
 
 (defun magit-section-hide (section)
   "Hide the body of the current section."
@@ -441,6 +520,7 @@ With a prefix argument also expand it." heading)
         (let ((o (make-overlay beg end)))
           (overlay-put o 'evaporate t)
           (overlay-put o 'invisible t))))
+    (magit-section-maybe-update-visibility-indicator section)
     (magit-section-maybe-cache-visibility section)))
 
 (defun magit-section-toggle (section)
@@ -631,11 +711,11 @@ Sections at higher levels are hidden."
 
 ;;;; Auxiliary
 
-(defun magit-describe-section-briefly (section &optional message ident)
+(defun magit-describe-section-briefly (section &optional ident)
   "Show information about the section at point.
 With a prefix argument show the section identity instead of the
 section lineage.  This command is intended for debugging purposes."
-  (interactive (list (magit-current-section) t))
+  (interactive (list (magit-current-section) current-prefix-arg))
   (let ((str (format "#<%s %S %S %s-%s>"
                      (eieio-object-class section)
                      (let ((val (oref section value)))
@@ -653,7 +733,9 @@ section lineage.  This command is intended for debugging purposes."
                        (marker-position m))
                      (when-let ((m (oref section end)))
                        (marker-position m)))))
-    (if message (message "%s" str) str)))
+    (if (called-interactively-p 'any)
+        (message "%s" str)
+      str)))
 
 (cl-defmethod cl-print-object ((section magit-section) stream)
   "Print `magit-describe-section' result of SECTION."
@@ -935,11 +1017,13 @@ anything this time around.
            (magit-insert-child-count ,s)
            (set-marker-insertion-type (oref ,s start) t)
            (let* ((end (oset ,s end (point-marker)))
+                  (class-map (oref-default ,s keymap))
                   (magit-map (intern (format "magit-%s-section-map"
                                              (oref ,s type))))
                   (forge-map (intern (format "forge-%s-section-map"
                                              (oref ,s type))))
-                  (map (or (and (boundp magit-map) (symbol-value magit-map))
+                  (map (or (and         class-map  (symbol-value class-map))
+                           (and (boundp magit-map) (symbol-value magit-map))
                            (and (boundp forge-map) (symbol-value forge-map)))))
              (save-excursion
                (goto-char (oref ,s start))
@@ -999,13 +1083,33 @@ insert a newline character if necessary."
   (declare (indent defun))
   (when args
     (let ((heading (apply #'concat args)))
-      (insert (if (text-property-not-all 0 (length heading) 'face nil heading)
+      (insert (if (or (text-property-not-all 0 (length heading)
+                                             'font-lock-face nil heading)
+                      (text-property-not-all 0 (length heading)
+                                             'face nil heading))
                   heading
-                (propertize heading 'face 'magit-section-heading)))))
+                (propertize heading 'font-lock-face 'magit-section-heading)))))
   (unless (bolp)
     (insert ?\n))
   (magit-maybe-make-margin-overlay)
   (oset magit-insert-section--current content (point-marker)))
+
+(defmacro magit-insert-section-body (&rest body)
+  "Use BODY to insert the section body, once the section is expanded.
+If the section is expanded when it is created, then this is
+like `progn'.  Otherwise BODY isn't evaluated until the section
+is explicitly expanded."
+  (declare (indent 0))
+  (let ((f (cl-gensym))
+        (s (cl-gensym)))
+    `(let ((,f (lambda () ,@body))
+           (,s magit-insert-section--current))
+       (if (oref ,s hidden)
+           (oset ,s washer
+                 (lambda ()
+                   (funcall ,f)
+                   (magit-section-maybe-remove-visibility-indicator ,s)))
+         (funcall ,f)))))
 
 (defun magit-insert-headers (hook)
   (let* ((header-sections nil)
@@ -1088,9 +1192,8 @@ evaluated its BODY.  Admittedly that's a bit of a hack."
         (unless (eq magit-section-highlighted-section section)
           (setq magit-section-highlighted-section
                 (and (not (oref section hidden))
-                     section))))
-      (when (version< emacs-version "25.1")
-        (setq deactivate-mark nil)))))
+                     section)))))
+    (magit-section-maybe-paint-visibility-ellipses)))
 
 (defun magit-section-highlight (section selection)
   "Highlight SECTION and if non-nil all sections in SELECTION.
@@ -1146,7 +1249,7 @@ invisible."
                           magit-diff-hunk-heading-selection)))
     (setq face (list :foreground (face-foreground face))))
   (let ((ov (make-overlay start end nil t)))
-    (overlay-put ov 'face face)
+    (overlay-put ov 'font-lock-face face)
     (overlay-put ov 'evaporate t)
     (push ov magit-section-highlight-overlays)
     ov))
@@ -1241,6 +1344,93 @@ invisible."
   (setq magit-section-visibility-cache
         (magit-repository-local-get
          (cons mode 'magit-section-visibility-cache))))
+
+(defun magit-section-maybe-update-visibility-indicator (section)
+  (when magit-section-visibility-indicator
+    (let ((beg (oref section start))
+          (cnt (oref section content))
+          (end (oref section end)))
+      (when (and cnt (or (not (= cnt end)) (oref section washer)))
+        (let ((eoh (save-excursion
+                     (goto-char beg)
+                     (line-end-position))))
+          (cond
+           ((symbolp (car-safe magit-section-visibility-indicator))
+            ;; It would make more sense to put the overlay only on the
+            ;; location we actually don't put it on, but then inserting
+            ;; before that location (while taking care not to mess with
+            ;; the overlay) would cause the fringe bitmap to disappear
+            ;; (but not other effects of the overlay).
+            (let ((ov (magit--overlay-at (1+ beg) 'magit-vis-indicator 'fringe)))
+              (unless ov
+                (setq ov (make-overlay (1+ beg) eoh))
+                (overlay-put ov 'evaporate t)
+                (overlay-put ov 'magit-vis-indicator 'fringe))
+              (overlay-put
+               ov 'before-string
+               (propertize "fringe" 'display
+                           (list 'left-fringe
+                                 (if (oref section hidden)
+                                     (car magit-section-visibility-indicator)
+                                   (cdr magit-section-visibility-indicator))
+                                 (face-foreground 'fringe))))))
+           ((stringp (car-safe magit-section-visibility-indicator))
+            (let ((ov (magit--overlay-at (1- eoh) 'magit-vis-indicator 'eoh)))
+              (cond ((oref section hidden)
+                     (unless ov
+                       (setq ov (make-overlay (1- eoh) eoh))
+                       (overlay-put ov 'evaporate t)
+                       (overlay-put ov 'magit-vis-indicator 'eoh))
+                     (overlay-put ov 'after-string
+                                  (car magit-section-visibility-indicator)))
+                    (ov
+                     (delete-overlay ov)))))))))))
+
+(defvar-local magit--ellipses-sections nil)
+
+(defun magit-section-maybe-paint-visibility-ellipses ()
+  ;; This is needed because we hide the body instead of "the body
+  ;; except the final newline and additionally the newline before
+  ;; the body"; otherwise we could use `buffer-invisibility-spec'.
+  (when (stringp (car-safe magit-section-visibility-indicator))
+    (let* ((sections (append magit--ellipses-sections
+                             (setq magit--ellipses-sections
+                                   (or (magit-region-sections)
+                                       (list (magit-current-section))))))
+           (beg (--map (oref it start) sections))
+           (end (--map (oref it end)   sections)))
+      (when (region-active-p)
+        ;; This ensures that the region face is removed from ellipses
+        ;; when the region becomes inactive, but fails to ensure that
+        ;; all ellipses within the active region use the region face,
+        ;; because the respective overlay has not yet been updated at
+        ;; this time.  The magit-selection face is always applied.
+        (push (region-beginning) beg)
+        (push (region-end)       end))
+      (setq beg (apply #'min beg))
+      (setq end (apply #'max end))
+      (dolist (ov (overlays-in beg end))
+        (when (eq (overlay-get ov 'magit-vis-indicator) 'eoh)
+          (overlay-put
+           ov 'after-string
+           (propertize
+            (car magit-section-visibility-indicator) 'font-lock-face
+            (let ((pos (overlay-start ov)))
+              (delq nil (nconc (--map (overlay-get it 'font-lock-face)
+                                      (overlays-at pos))
+                               (list (get-char-property
+                                      pos 'font-lock-face))))))))))))
+
+(defun magit-section-maybe-remove-visibility-indicator (section)
+  (when (and magit-section-visibility-indicator
+             (= (oref section content)
+                (oref section end)))
+    (dolist (o (overlays-in (oref section start)
+                            (save-excursion
+                              (goto-char (oref section start))
+                              (1+ (line-end-position)))))
+      (when (overlay-get o 'magit-vis-indicator)
+        (delete-overlay o)))))
 
 ;;; Utilities
 
@@ -1450,7 +1640,10 @@ again use `remove-hook'."
     (dolist (entry entries)
       (let ((magit--current-section-hook (cons (list hook entry)
                                                magit--current-section-hook)))
-        (apply entry args)))))
+        (if magit-refresh-verbose
+            (message "  %-50s %s" entry
+                     (benchmark-elapse (apply entry args)))
+          (apply entry args))))))
 
 ;;; _
 (provide 'magit-section)

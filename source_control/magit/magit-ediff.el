@@ -1,6 +1,6 @@
 ;;; magit-ediff.el --- Ediff extension for Magit  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018  The Magit Project Contributors
+;; Copyright (C) 2010-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -103,19 +103,20 @@ tree at the time of stashing."
 
 (defvar magit-ediff-previous-winconf nil)
 
-;;;###autoload (autoload 'magit-ediff-popup "magit-ediff" nil t)
-(magit-define-popup magit-ediff-popup
-  "Popup console for ediff commands."
-  :actions '((?E "Dwim"          magit-ediff-dwim)
-             (?u "Show unstaged" magit-ediff-show-unstaged)
-             (?s "Stage"         magit-ediff-stage)
-             (?i "Show staged"   magit-ediff-show-staged)
-             (?m "Resolve"       magit-ediff-resolve)
-             (?w "Show worktree" magit-ediff-show-working-tree)
-             (?r "Diff range"    magit-ediff-compare)
-             (?c "Show commit"   magit-ediff-show-commit) nil
-             (?z "Show stash"    magit-ediff-show-stash))
-  :max-action-columns 2)
+;;;###autoload (autoload 'magit-ediff "magit-ediff" nil)
+(define-transient-command magit-ediff ()
+  "Show differences using the Ediff package."
+  :info-manual "(ediff)"
+  ["Ediff"
+   [("E" "Dwim"          magit-ediff-dwim)
+    ("s" "Stage"         magit-ediff-stage)
+    ("m" "Resolve"       magit-ediff-resolve)]
+   [("u" "Show unstaged" magit-ediff-show-unstaged)
+    ("i" "Show staged"   magit-ediff-show-staged)
+    ("w" "Show worktree" magit-ediff-show-working-tree)]
+   [("c" "Show commit"   magit-ediff-show-commit)
+    ("r" "Show range"    magit-ediff-compare)
+    ("z" "Show stash"    magit-ediff-show-stash)]])
 
 ;;;###autoload
 (defun magit-ediff-resolve (file)
@@ -159,13 +160,13 @@ conflicts, including those already resolved by Git, use
   "Stage and unstage changes to FILE using Ediff.
 FILE has to be relative to the top directory of the repository."
   (interactive
-   (list (magit-completing-read "Selectively stage file"
-                                (magit-tracked-files) nil nil nil nil
-                                (magit-current-file))))
+   (let ((files (magit-tracked-files)))
+     (list (magit-completing-read "Selectively stage file" files nil t nil nil
+                                  (car (member (magit-current-file) files))))))
   (magit-with-toplevel
     (let* ((conf (current-window-configuration))
            (bufA (magit-get-revision-buffer "HEAD" file))
-           (bufB (get-buffer (concat file ".~{index}~")))
+           (bufB (magit-get-revision-buffer "{index}" file))
            (bufBrw (and bufB (with-current-buffer bufB (not buffer-read-only))))
            (bufC (get-file-buffer file))
            (fileBufC (or bufC (find-file-noselect file)))
@@ -316,7 +317,7 @@ mind at all, then it asks the user for a command to run."
             (pcase (magit-diff-type)
               (`committed (pcase-let ((`(,a ,b)
                                        (magit-ediff-compare--read-revisions
-                                        (car magit-refresh-args))))
+                                        magit-buffer-range)))
                             (setq revA a)
                             (setq revB b)))
               ((guard (not magit-ediff-dwim-show-on-hunks))

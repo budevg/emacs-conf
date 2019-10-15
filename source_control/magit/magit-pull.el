@@ -1,6 +1,6 @@
 ;;; magit-pull.el --- update local objects and refs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2018  The Magit Project Contributors
+;; Copyright (C) 2008-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -29,122 +29,134 @@
 
 (require 'magit)
 
+;;; Options
+
+(defcustom magit-pull-or-fetch nil
+  "Whether `magit-pull' also offers some fetch suffixes."
+  :package-version '(magit . "2.91.0")
+  :group 'magit-commands
+  :type 'boolean)
+
 ;;; Commands
 
-;;;###autoload (autoload 'magit-pull-popup "magit-pull" nil t)
-(magit-define-popup magit-pull-popup
-  "Popup console for pull commands."
+;;;###autoload (autoload 'magit-pull "magit-pull" nil t)
+(define-transient-command magit-pull ()
+  "Pull from another repository."
   :man-page "git-pull"
-  :variables '("Configure"
-               (?r "branch.%s.rebase"
-                   magit-cycle-branch*rebase
-                   magit-pull-format-branch*rebase)
-               (?C "variables..." magit-branch-config-popup))
-  :actions '((lambda ()
-               (--if-let (magit-get-current-branch)
-                   (concat
-                    (propertize "Pull into " 'face 'magit-popup-heading)
-                    (propertize it           'face 'magit-branch-local)
-                    (propertize " from"      'face 'magit-popup-heading))
-                 (propertize "Pull from" 'face 'magit-popup-heading)))
-             (?p magit-get-push-branch     magit-pull-from-pushremote)
-             (?u magit-get-upstream-branch magit-pull-from-upstream)
-             (?e "elsewhere"               magit-pull-branch))
-  :default-action 'magit-pull
-  :max-action-columns 1)
+  [:description
+   (lambda () (if magit-pull-or-fetch "Pull arguments" "Arguments"))
+   ("-r" "Rebase local commits" ("-r" "--rebase"))]
+  [:description
+   (lambda ()
+     (if-let ((branch (magit-get-current-branch)))
+         (concat
+          (propertize "Pull into " 'face 'transient-heading)
+          (propertize branch       'face 'magit-branch-local)
+          (propertize " from"      'face 'transient-heading))
+       (propertize "Pull from" 'face 'transient-heading)))
+   ("p" magit-pull-from-pushremote)
+   ("u" magit-pull-from-upstream)
+   ("e" "elsewhere"         magit-pull-branch)]
+  ["Fetch from"
+   :if-non-nil magit-pull-or-fetch
+   ("f" "remotes"           magit-fetch-all-no-prune)
+   ("F" "remotes and prune" magit-fetch-all-prune)]
+  ["Fetch"
+   :if-non-nil magit-pull-or-fetch
+   ("o" "another branch"    magit-fetch-branch)
+   ("s" "explicit refspec"  magit-fetch-refspec)
+   ("m" "submodules"        magit-fetch-modules)]
+  ["Configure"
+   ("r" magit-branch.<branch>.rebase :if magit-get-current-branch)
+   ("C" "variables..." magit-branch-configure)]
+  (interactive)
+  (transient-setup 'magit-pull nil nil :scope (magit-get-current-branch)))
 
-;;;###autoload (autoload 'magit-pull-and-fetch-popup "magit-pull" nil t)
-(magit-define-popup magit-pull-and-fetch-popup
-  "Popup console for pull and fetch commands.
+(defun magit-pull-arguments ()
+  (transient-args 'magit-pull))
 
-This popup is intended as a replacement for the separate popups
-`magit-pull-popup' and `magit-fetch-popup'.  To use it, add this
-to your init file:
+;;;###autoload (autoload 'magit-pull-from-pushremote "magit-pull" nil t)
+(define-suffix-command magit-pull-from-pushremote (args)
+  "Pull from the push-remote of the current branch.
 
-  (with-eval-after-load \\='magit-remote
-    (define-key magit-mode-map \"f\" \\='magit-pull-and-fetch-popup)
-    (define-key magit-mode-map \"F\" nil))
-
-The combined popup does not offer all commands and arguments
-available from the individual popups.  Instead of the argument
-`--prune' and the command `magit-fetch-all' it uses two commands
-`magit-fetch-prune' and `magit-fetch-no-prune'.  And the commands
-`magit-fetch-from-pushremote' and `magit-fetch-from-upstream' are
-missing.  To add them use something like:
-
-  (with-eval-after-load \\='magit-remote
-    (magit-define-popup-action \\='magit-pull-and-fetch-popup ?U
-      \\='magit-get-upstream-branch
-      \\='magit-fetch-from-upstream-remote ?F)
-    (magit-define-popup-action \\='magit-pull-and-fetch-popup ?P
-      \\='magit-get-push-branch
-      \\='magit-fetch-from-push-remote ?F))"
-  :man-page "git-pull"
-  :variables '("Configure"
-               (?r "branch.%s.rebase"
-                   magit-cycle-branch*rebase
-                   magit-pull-format-branch*rebase)
-               (?C "variables..." magit-branch-config-popup))
-  :actions '((lambda ()
-               (--if-let (magit-get-current-branch)
-                   (concat
-                    (propertize "Pull into " 'face 'magit-popup-heading)
-                    (propertize it           'face 'magit-branch-local)
-                    (propertize " from"      'face 'magit-popup-heading))
-                 (propertize "Pull from" 'face 'magit-popup-heading)))
-             (?p magit-get-push-branch     magit-pull-from-pushremote)
-             (?u magit-get-upstream-branch magit-pull-from-upstream)
-             (?e "elsewhere"               magit-pull-branch)
-             "Fetch from"
-             (?f "remotes"           magit-fetch-all-no-prune)
-             (?F "remotes and prune" magit-fetch-all-prune)
-             "Fetch"
-             (?o "another branch"    magit-fetch-branch)
-             (?s "explicit refspec"  magit-fetch-refspec)
-             (?m "submodules"        magit-fetch-modules))
-  :default-action 'magit-fetch
-  :max-action-columns 1)
-
-(defun magit-pull-format-branch*rebase ()
-  (magit--format-popup-variable:choices
-   (format "branch.%s.rebase" (or (magit-get-current-branch) "<name>"))
-   '("true" "false")
-   "false" "pull.rebase"))
-
-(defun magit-git-pull (source args)
-  (run-hooks 'magit-credential-hook)
-  (pcase-let ((`(,remote . ,branch)
-               (magit-split-branch-name source)))
-    (magit-run-git-with-editor "pull" args remote branch)))
-
-;;;###autoload
-(defun magit-pull-from-pushremote (args)
-  "Pull from the push-remote of the current branch."
+When the push-remote is not configured, then read the push-remote
+from the user, set it, and then pull from it.  With a prefix
+argument the push-remote can be changed before pulling from it."
+  :if 'magit-get-current-branch
+  :description 'magit-pull--pushbranch-description
   (interactive (list (magit-pull-arguments)))
-  (--if-let (magit-get-push-branch)
-      (magit-git-pull it args)
-    (--if-let (magit-get-current-branch)
-        (user-error "No push-remote is configured for %s" it)
-      (user-error "No branch is checked out"))))
+  (pcase-let ((`(,branch ,remote)
+               (magit--select-push-remote "pull from there")))
+    (run-hooks 'magit-credential-hook)
+    (magit-run-git-async "pull" args remote branch)))
 
-;;;###autoload
-(defun magit-pull-from-upstream (args)
-  "Pull from the upstream of the current branch."
+(defun magit-pull--pushbranch-description ()
+  ;; Also used by `magit-rebase-onto-pushremote'.
+  (let* ((branch (magit-get-current-branch))
+         (target (magit-get-push-branch branch t))
+         (remote (magit-get-push-remote branch))
+         (v (magit--push-remote-variable branch t)))
+    (cond
+     (target)
+     ((member remote (magit-list-remotes))
+      (format "%s, replacing non-existent" v))
+     (remote
+      (format "%s, replacing invalid" v))
+     (t
+      (format "%s, setting that" v)))))
+
+;;;###autoload (autoload 'magit-pull-from-upstream "magit-pull" nil t)
+(define-suffix-command magit-pull-from-upstream (args)
+  "Pull from the upstream of the current branch.
+
+With a prefix argument or when the upstream is either not
+configured or unusable, then let the user first configure
+the upstream."
+  :if 'magit-get-current-branch
+  :description 'magit-pull--upstream-description
   (interactive (list (magit-pull-arguments)))
-  (--if-let (magit-get-upstream-branch)
-      (progn (run-hooks 'magit-credential-hook)
-             (magit-run-git-with-editor
-              "pull" args (car (magit-split-branch-name it))))
-    (--if-let (magit-get-current-branch)
-        (user-error "No upstream is configured for %s" it)
-      (user-error "No branch is checked out"))))
+  (let* ((branch (or (magit-get-current-branch)
+                     (user-error "No branch is checked out")))
+         (remote (magit-get "branch" branch "remote"))
+         (merge  (magit-get "branch" branch "merge")))
+    (when (or current-prefix-arg
+              (not (or (magit-get-upstream-branch branch)
+                       (magit--unnamed-upstream-p remote merge))))
+      (magit-set-upstream-branch
+       branch (magit-read-upstream-branch
+               branch (format "Set upstream of %s and pull from there" branch)))
+      (setq remote (magit-get "branch" branch "remote"))
+      (setq merge  (magit-get "branch" branch "merge")))
+    (run-hooks 'magit-credential-hook)
+    (magit-run-git-with-editor "pull" args remote merge)))
+
+(defun magit-pull--upstream-description ()
+  (when-let ((branch (magit-get-current-branch)))
+    (or (magit-get-upstream-branch branch)
+        (let ((remote (magit-get "branch" branch "remote"))
+              (merge  (magit-get "branch" branch "merge"))
+              (u (magit--propertize-face "@{upstream}" 'bold)))
+          (cond
+           ((magit--unnamed-upstream-p remote merge)
+            (format "%s of %s"
+                    (magit--propertize-face merge 'magit-branch-remote)
+                    (magit--propertize-face remote 'bold)))
+           ((magit--valid-upstream-p remote merge)
+            (concat u ", replacing non-existent"))
+           ((or remote merge)
+            (concat u ", replacing invalid"))
+           (t
+            (concat u ", setting that")))))))
 
 ;;;###autoload
 (defun magit-pull-branch (source args)
   "Pull from a branch read in the minibuffer."
   (interactive (list (magit-read-remote-branch "Pull" nil nil nil t)
                      (magit-pull-arguments)))
-  (magit-git-pull source args))
+  (run-hooks 'magit-credential-hook)
+  (pcase-let ((`(,remote . ,branch)
+               (magit-get-tracked source)))
+    (magit-run-git-with-editor "pull" args remote branch)))
 
 ;;; _
 (provide 'magit-pull)

@@ -150,6 +150,8 @@ behave as for `ghub-request' (which see)."
                                           nameWithOwner))
                      (assignees [(:edges t)]
                                 id)
+                     (reviewRequests [(:edges t)]
+                                     (requestedReviewer "... on User { id }\n"))
                      (comments  [(:edges t)]
                                 databaseId
                                 (author login)
@@ -235,7 +237,11 @@ See Info node `(ghub)GraphQL Support'."
     (setq username (ghub--username host forge)))
   (ghub--graphql-retrieve
    (ghub--make-graphql-req
-    :url       (url-generic-parse-url (concat "https://" host "/graphql"))
+    :url       (url-generic-parse-url
+                (format "https://%s/graphql"
+                        (if (string-suffix-p "/v3" host)
+                            (substring host 0 -3)
+                          host)))
     :method    "POST"
     :headers   (ghub--headers nil host auth username forge)
     :handler   'ghub--graphql-handle-response

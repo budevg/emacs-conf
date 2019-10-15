@@ -1,6 +1,6 @@
 ;;; magit-patch.el --- creating and applying patches  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2018  The Magit Project Contributors
+;; Copyright (C) 2008-2019  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -35,7 +35,13 @@
 ;;; Options
 
 (defcustom magit-patch-save-arguments '(exclude "--stat")
-  "Arguments used by `magit-patch-save-arguments' (which see)"
+  "Control arguments used by the command `magit-patch-save'.
+
+`magit-patch-save' (which see) saves a diff for the changes
+shown in the current buffer in a patch file.  It may use the
+same arguments as used in the buffer or a subset thereof, or
+a constant list of arguments, depending on this option and
+the prefix argument."
   :package-version '(magit . "2.12.0")
   :group 'magit-diff
   :type '(choice (const :tag "use buffer arguments" buffer)
@@ -48,98 +54,150 @@
 
 ;;; Commands
 
-;;;###autoload (autoload 'magit-patch-popup "magit-patch" nil t)
-(magit-define-popup magit-patch-popup
-  "Popup console for patch commands."
-  :man-page "git-format-patch"
-  :switches '("Switches for formatting patches"
-              (?l "Add cover letter" "--cover-letter"))
-  :options  '("Options for formatting patches"
-              (?f "From"             "--from=")
-              (?t "To"               "--to=")
-              (?c "CC"               "--cc=")
-              (?r "In reply to"      "--in-reply-to=")
-              (?P "Subject Prefix"   "--subject-prefix=")
-              (?v "Reroll count"     "--reroll-count=")
-              (?s "Thread style"     "--thread=")
-              (?U "Context lines"    "-U")
-              (?M "Detect renames"   "-M")
-              (?C "Detect copies"    "-C")
-              (?A "Diff algorithm"   "--diff-algorithm="
-                  magit-diff-select-algorithm)
-              (?o "Output directory" "--output-directory=")
-              (?F "Limit to files"   "-- " magit-read-files))
-  :actions  '((?p "Format patches"   magit-format-patch)
-              (?r "Request pull"     magit-request-pull))
-  :default-action 'magit-format-patch)
+;;;###autoload (autoload 'magit-patch "magit-patch" nil t)
+(define-transient-command magit-patch ()
+  "Create or apply patches."
+  ["Actions"
+   ("c"  "Create patches"     magit-patch-create)
+   ("a"  "Apply patch"        magit-patch-apply)
+   ("s"  "Save diff as patch" magit-patch-save)
+   ("r"  "Request pull"       magit-request-pull)])
 
-;;;###autoload
-(defun magit-format-patch (range args files)
+;;;###autoload (autoload 'magit-patch-create "magit-patch" nil t)
+(define-transient-command magit-patch-create (range args files)
   "Create patches for the commits in RANGE.
 When a single commit is given for RANGE, create a patch for the
 changes introduced by that commit (unlike 'git format-patch'
 which creates patches for all commits that are reachable from
 `HEAD' but not from the specified commit)."
+  :man-page "git-format-patch"
+  ["Mail arguments"
+   (magit-format-patch:--in-reply-to)
+   (magit-format-patch:--thread)
+   (magit-format-patch:--reroll-count)
+   (magit-format-patch:--subject-prefix)
+   ("C-m l  " "Add cover letter" "--cover-letter")
+   (magit-format-patch:--from)
+   (magit-format-patch:--to)
+   (magit-format-patch:--cc)
+   (magit-format-patch:--output-directory)]
+  ["Diff arguments"
+   (magit-diff:-U)
+   (magit-diff:-M)
+   (magit-diff:-C)
+   (magit-diff:--diff-algorithm)
+   (magit:--)
+   (7 "-b" "Ignore whitespace changes" ("-b" "--ignore-space-change"))
+   (7 "-w" "Ignore all whitespace"     ("-w" "--ignore-all-space"))]
+  ["Actions"
+   ("c" "Create patches" magit-patch-create)]
   (interactive
-   (cons (if-let ((revs (magit-region-values 'commit t)))
-             (concat (car (last revs)) "^.." (car revs))
-           (let ((range (magit-read-range-or-commit
-                         "Format range or commit")))
-             (if (string-match-p "\\.\\." range)
-                 range
-               (format "%s~..%s" range range))))
-         (magit-popup-export-file-args (magit-patch-arguments))))
-  (magit-run-git "format-patch" range args "--" files)
-  (when (member "--cover-letter" args)
-    (find-file
-     (expand-file-name
-      "0000-cover-letter.patch"
-      (let ((topdir (magit-toplevel)))
-        (or (--some (and (string-match "--output-directory=\\(.+\\)" it)
-                         (expand-file-name (match-string 1 it) topdir))
-                    args)
-            topdir))))))
+   (if (not (eq current-transient-command 'magit-patch-create))
+       (list nil nil nil)
+     (cons (if-let ((revs (magit-region-values 'commit t)))
+               (concat (car (last revs)) "^.." (car revs))
+             (let ((range (magit-read-range-or-commit
+                           "Format range or commit")))
+               (if (string-match-p "\\.\\." range)
+                   range
+                 (format "%s~..%s" range range))))
+           (let ((args (transient-args 'magit-patch-create)))
+             (list (-filter #'stringp args)
+                   (cdr (assoc "--" args)))))))
+  (if (not range)
+      (transient-setup 'magit-patch-create)
+    (magit-run-git "format-patch" range args "--" files)
+    (when (member "--cover-letter" args)
+      (save-match-data
+        (find-file
+         (expand-file-name
+          (concat (--some (and (string-match "\\`--reroll-count=\\(.+\\)" it)
+                               (format "v%s-" (match-string 1 it)))
+                          args)
+                  "0000-cover-letter.patch")
+          (let ((topdir (magit-toplevel)))
+            (or (--some (and (string-match "\\`--output-directory=\\(.+\\)" it)
+                             (expand-file-name (match-string 1 it) topdir))
+                        args)
+                topdir))))))))
 
-;;;###autoload
-(defun magit-request-pull (url start end)
-  "Request upstream to pull from you public repository.
+(define-infix-argument magit-format-patch:--in-reply-to ()
+  :description "In reply to"
+  :class 'transient-option
+  :key "C-m r  "
+  :argument "--in-reply-to=")
 
-URL is the url of your publically accessible repository.
-START is a commit that already is in the upstream repository.
-END is the last commit, usually a branch name, which upstream
-is asked to pull.  START has to be reachable from that commit."
-  (interactive
-   (list (magit-get "remote" (magit-read-remote "Remote") "url")
-         (magit-read-branch-or-commit "Start" (magit-get-upstream-branch))
-         (magit-read-branch-or-commit "End")))
-  (let ((dir default-directory))
-    ;; mu4e changes default-directory
-    (compose-mail)
-    (setq default-directory dir))
-  (message-goto-body)
-  (magit-git-insert "request-pull" start url end)
-  (set-buffer-modified-p nil))
+(define-infix-argument magit-format-patch:--thread ()
+  :description "Thread style"
+  :class 'transient-option
+  :key "C-m s  "
+  :argument "--thread=")
 
-;;;###autoload (autoload 'magit-patch-apply-popup "magit-patch" nil t)
-(magit-define-popup magit-patch-apply-popup
-  "Popup console for applying a patch file."
-  :man-page "git-apply"
-  :switches '((?i "Also apply to index"     "--index")
-              (?c "Only apply to index"     "--cached")
-              (?3 "Fall back on 3way merge" "--3way"))
-  :actions  '((?a "Apply patch" magit-patch-apply))
-  :default-action 'magit-patch-apply)
+(define-infix-argument magit-format-patch:--reroll-count ()
+  :description "Reroll count"
+  :class 'transient-option
+  :key "C-m v  "
+  :shortarg "-v"
+  :argument "--reroll-count="
+  :reader 'transient-read-number-N+)
 
-;;;###autoload
-(defun magit-patch-apply (file &rest args)
+(define-infix-argument magit-format-patch:--subject-prefix ()
+  :description "Subject Prefix"
+  :class 'transient-option
+  :key "C-m p  "
+  :argument "--subject-prefix=")
+
+(define-infix-argument magit-format-patch:--from ()
+  :description "From"
+  :class 'transient-option
+  :key "C-m C-f"
+  :argument "--from="
+  :reader 'magit-transient-read-person)
+
+(define-infix-argument magit-format-patch:--to ()
+  :description "To"
+  :class 'transient-option
+  :key "C-m C-t"
+  :argument "--to="
+  :reader 'magit-transient-read-person)
+
+(define-infix-argument magit-format-patch:--cc ()
+  :description "CC"
+  :class 'transient-option
+  :key "C-m C-c"
+  :argument "--cc="
+  :reader 'magit-transient-read-person)
+
+(define-infix-argument magit-format-patch:--output-directory ()
+  :description "Output directory"
+  :class 'transient-option
+  :key "C-m o  "
+  :shortarg "-o"
+  :argument "--output-directory="
+  :reader 'transient-read-existing-directory)
+
+;;;###autoload (autoload 'magit-patch-apply "magit-patch" nil t)
+(define-transient-command magit-patch-apply (file &rest args)
   "Apply the patch file FILE."
-  (interactive (list (expand-file-name
-                      (read-file-name "Apply patch: "
-                                      default-directory nil nil
-                                      (--when-let (magit-file-at-point)
-                                        (file-relative-name it))))
-                     (magit-patch-apply-arguments)))
-  (magit-run-git "apply" args "--" (magit-convert-filename-for-git file)))
+  :man-page "git-apply"
+  ["Arguments"
+   ("-i" "Also apply to index" "--index")
+   ("-c" "Only apply to index" "--cached")
+   ("-3" "Fall back on 3way merge" ("-3" "--3way"))]
+  ["Actions"
+   ("a"  "Apply patch" magit-patch-apply)]
+  (interactive
+   (if (not (eq current-transient-command 'magit-patch-apply))
+       (list nil)
+     (list (expand-file-name
+            (read-file-name "Apply patch: "
+                            default-directory nil nil
+                            (when-let ((file (magit-file-at-point)))
+                              (file-relative-name file))))
+           (transient-args 'magit-patch-apply))))
+  (if (not file)
+      (transient-setup 'magit-patch-apply)
+    (magit-run-git "apply" args "--" (magit-convert-filename-for-git file))))
 
 ;;;###autoload
 (defun magit-patch-save (file &optional arg)
@@ -168,9 +226,10 @@ same differences as those shown in the buffer are always used."
                      current-prefix-arg))
   (unless (derived-mode-p 'magit-diff-mode)
     (user-error "Only diff buffers can be saved as patches"))
-  (pcase-let ((`(,rev ,const ,args ,files) magit-refresh-args))
-    (when (derived-mode-p 'magit-revision-mode)
-      (setq rev (format "%s~..%s" rev rev)))
+  (let ((rev     magit-buffer-range)
+        (typearg magit-buffer-typearg)
+        (args    magit-buffer-diff-args)
+        (files   magit-buffer-diff-files))
     (cond ((eq magit-patch-save-arguments 'buffer)
            (when arg
              (setq args nil)))
@@ -180,8 +239,28 @@ same differences as those shown in the buffer are always used."
           ((not arg)
            (setq args magit-patch-save-arguments)))
     (with-temp-file file
-      (magit-git-insert "diff" rev "-p" const args "--" files)))
+      (magit-git-insert "diff" rev "-p" typearg args "--" files)))
   (magit-refresh))
+
+;;;###autoload
+(defun magit-request-pull (url start end)
+  "Request upstream to pull from you public repository.
+
+URL is the url of your publically accessible repository.
+START is a commit that already is in the upstream repository.
+END is the last commit, usually a branch name, which upstream
+is asked to pull.  START has to be reachable from that commit."
+  (interactive
+   (list (magit-get "remote" (magit-read-remote "Remote") "url")
+         (magit-read-branch-or-commit "Start" (magit-get-upstream-branch))
+         (magit-read-branch-or-commit "End")))
+  (let ((dir default-directory))
+    ;; mu4e changes default-directory
+    (compose-mail)
+    (setq default-directory dir))
+  (message-goto-body)
+  (magit-git-insert "request-pull" start url end)
+  (set-buffer-modified-p nil))
 
 ;;; _
 (provide 'magit-patch)
