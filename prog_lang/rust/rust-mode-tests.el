@@ -6,6 +6,7 @@
 (require 'imenu)
 
 (setq rust-test-fill-column 32)
+(setq-default indent-tabs-mode nil)
 
 (defun rust-compare-code-after-manip (original point-pos manip-func expected got)
   (equal expected got))
@@ -244,6 +245,10 @@ fn bar() { }"
 /// even more.
 fn bar() { }" 14 85))
 
+(defun test-dbg-wrap (initial expected position &optional end)
+  (with-temp-buffer
+    (insert initial)))
+
 (defun test-auto-fill (initial position inserted expected)
   (rust-test-manip-code
    initial
@@ -316,11 +321,11 @@ very very very long string
 (ert-deftest indent-struct-fields-aligned ()
   (test-indent
    "
-struct Foo { bar: int,
-             baz: int }
+struct Foo { bar: i32,
+             baz: i32 }
 
-struct Blah {x:int,
-             y:int,
+struct Blah {x:i32,
+             y:i32,
              z:String"))
 
 (ert-deftest indent-doc-comments ()
@@ -345,12 +350,12 @@ fn foo() {
    "
 // struct fields out one level:
 struct foo {
-    a:int,
+    a:i32,
     // comments too
     b:char
 }
 
-fn bar(x:Box<int>) {   // comment here should not affect the next indent
+fn bar(x:Box<i32>) {   // comment here should not affect the next indent
     bla();
     bla();
 }"))
@@ -397,11 +402,11 @@ not_a_string();
    "
 // Indent out one level because no params appear on the first line
 fn xyzzy(
-    a:int,
+    a:i32,
     b:char) { }
 
 fn abcdef(
-    a:int,
+    a:i32,
     b:char)
     -> char
 { }"))
@@ -410,17 +415,17 @@ fn abcdef(
   (test-indent
    "
 // Align the second line of params to the first
-fn foo(a:int,
+fn foo(a:i32,
        b:char) { }
 
-fn bar(   a:int,
+fn bar(   a:i32,
           b:char)
-          -> int
+          -> i32
 { }
 
-fn baz(   a:int,  // should work with a comment here
+fn baz(   a:i32,  // should work with a comment here
           b:char)
-          -> int
+          -> i32
 { }
 "))
 
@@ -428,30 +433,42 @@ fn baz(   a:int,  // should work with a comment here
   (test-indent
    "
 // Indent function body only one level after `-> {`
-fn foo1(a:int, b:char) -> int {
+fn foo1(a:i32, b:char) -> i32 {
     let body;
 }
 
-fn foo2(a:int,
-        b:char) -> int {
+fn foo2(a:i32,
+        b:char) -> i32 {
     let body;
 }
 
-fn foo3(a:int,
+fn foo3(a:i32,
         b:char)
-        -> int {
+        -> i32 {
     let body;
 }
 
-fn foo4(a:int,
+fn foo4(a:i32,
         b:char)
-        -> int where int:A {
+        -> i32 where i32:A {
     let body;
 }
 "))
 
+(ert-deftest indent-return-type-non-visual ()
+  (let ((rust-indent-return-type-to-arguments nil))
+(test-indent
+   "
+fn imagine_long_enough_to_wrap_at_arrow(a:i32, b:char)
+    -> i32
+{
+    let body;
+}
+")))
+
 (ert-deftest indent-body-after-where ()
-  (test-indent
+  (let ((rust-indent-where-clause t))
+    (test-indent
    "
 fn foo1(a: A, b: B) -> A
     where A: Clone + Default, B: Eq {
@@ -469,10 +486,11 @@ fn foo2(a: A, b: B) -> A
         bar: 3
     }
 }
-"))
+")))
 
 (ert-deftest indent-align-where-clauses-style1a ()
-  (test-indent
+  (let ((rust-indent-where-clause t))
+    (test-indent
    "
 fn foo1a(a: A, b: B, c: C) -> D
     where A: Clone + Default,
@@ -484,10 +502,11 @@ fn foo1a(a: A, b: B, c: C) -> D
         bar: 3
     }
 }
-"))
+")))
 
 (ert-deftest indent-align-where-clauses-style1b ()
-  (test-indent
+  (let ((rust-indent-where-clause t))
+    (test-indent
    "
 fn foo1b(a: A, b: B, c: C) -> D
     where A: Clone + Default,
@@ -500,7 +519,7 @@ fn foo1b(a: A, b: B, c: C) -> D
         bar: 3
     }
 }
-"))
+")))
 
 (ert-deftest indent-align-where-clauses-style2a ()
   (test-indent
@@ -596,7 +615,8 @@ where A: Clone + Default,
 ")))
 
 (ert-deftest indent-align-where-clauses-impl-example ()
-  (test-indent
+  (let ((rust-indent-where-clause t))
+    (test-indent
    "
 impl<'a, K, Q: ?Sized, V, S> Index<&'a Q> for HashMap<K, V, S>
     where K: Eq + Hash + Borrow<Q>,
@@ -608,10 +628,11 @@ impl<'a, K, Q: ?Sized, V, S> Index<&'a Q> for HashMap<K, V, S>
         bar: 3
     }
 }
-"))
+")))
 
 (ert-deftest indent-align-where-clauses-first-line ()
-  (test-indent
+  (let ((rust-indent-where-clause t))
+    (test-indent
    "fn foo1(a: A, b: B) -> A
     where A: Clone + Default, B: Eq {
     let body;
@@ -619,7 +640,7 @@ impl<'a, K, Q: ?Sized, V, S> Index<&'a Q> for HashMap<K, V, S>
         bar: 3
     }
 }
-"))
+")))
 
 (ert-deftest indent-align-where-in-comment1 ()
   (test-indent
@@ -632,7 +653,8 @@ pub struct Region { // <-- this should be flush with left margin!
 "))
 
 (ert-deftest indent-align-where-in-comment2 ()
-  (test-indent
+  (let ((rust-indent-where-clause t))
+    (test-indent
    "fn foo<F,G>(f:F, g:G)
     where F:Send,
 // where
@@ -640,9 +662,10 @@ pub struct Region { // <-- this should be flush with left margin!
 {
     let body;
 }
-"))
+")))
 
 (ert-deftest indent-align-where-in-comment3 ()
+  (let ((rust-indent-where-clause t))
   (test-indent
    "fn foo<F,G>(f:F, g:G)
     where F:Send,
@@ -651,13 +674,13 @@ pub struct Region { // <-- this should be flush with left margin!
 {
     let body;
 }
-"))
+")))
 
 (ert-deftest indent-square-bracket-alignment ()
   (test-indent
    "
 fn args_on_the_next_line( // with a comment
-    a:int,
+    a:i32,
     b:String) {
     let aaaaaa = [
         1,
@@ -692,11 +715,11 @@ fn args_on_the_next_line( // with a comment
 (ert-deftest indent-nested-fns ()
   (test-indent
    "
-fn nexted_fns(a: fn(b:int,
+fn nexted_fns(a: fn(b:i32,
                     c:char)
-                    -> int,
-              d: int)
-              -> uint
+                    -> i32,
+              d: i32)
+              -> u128
 {
     0
 }
@@ -849,32 +872,32 @@ struct A {
 
 (setq rust-test-motion-string
       "
-fn fn1(arg: int) -> bool {
+fn fn1(arg: i32) -> bool {
     let x = 5;
     let y = b();
     true
 }
 
-fn fn2(arg: int) -> bool {
+fn fn2(arg: i32) -> bool {
     let x = 5;
     let y = b();
     true
 }
 
-pub fn fn3(arg: int) -> bool {
+pub fn fn3(arg: i32) -> bool {
     let x = 5;
     let y = b();
     true
 }
 
 struct Foo {
-    x: int
+    x: i32
 }
 "
       rust-test-region-string rust-test-motion-string
       rust-test-indent-motion-string
       "
-fn blank_line(arg:int) -> bool {
+fn blank_line(arg:i32) -> bool {
 
 }
 
@@ -1290,6 +1313,11 @@ list of substrings of `STR' each followed by its face."
    '("let" font-lock-keyword-face
      "foo" font-lock-variable-name-face))
   (rust-test-font-lock
+   "let ref foo;"
+   '("let" font-lock-keyword-face
+     "ref" font-lock-keyword-face
+     "foo" font-lock-variable-name-face))
+  (rust-test-font-lock
    "let mut foo;"
    '("let" font-lock-keyword-face
      "mut" font-lock-keyword-face
@@ -1316,6 +1344,15 @@ list of substrings of `STR' each followed by its face."
      "let" font-lock-keyword-face
      "mut" font-lock-keyword-face
      "bar" font-lock-variable-name-face)))
+
+(ert-deftest font-lock-if-let-binding ()
+  (rust-test-font-lock
+   "if let Some(var) = some_var { /* no-op */ }"
+   '("if" font-lock-keyword-face
+     "let" font-lock-keyword-face
+     "Some" font-lock-type-face
+     "/* " font-lock-comment-delimiter-face
+     "no-op */" font-lock-comment-face)))
 
 (ert-deftest font-lock-single-quote-character-literal ()
   (rust-test-font-lock
@@ -1419,6 +1456,19 @@ fn g() {
      "fn" font-lock-keyword-face
      "g" font-lock-function-name-face
      "\"xs\"" font-lock-string-face)))
+
+(ert-deftest font-lock-string-ending-with-r-word-boundary ()
+  (with-temp-buffer
+    (rust-mode)
+    (insert "const foo = \"foo bar\"")
+    (font-lock-fontify-buffer)
+    ;; right-word should move the point to the end of the words.
+    (goto-char 14)
+    (right-word)
+    (should (equal 17 (point)))
+    (right-word)
+    (should (equal 21 (point)))
+    ))
 
 (ert-deftest font-lock-raw-string-trick-ending-followed-by-string-with-quote ()
   (rust-test-font-lock
@@ -1652,12 +1702,36 @@ fn main() {
 "
    )))
 
+(ert-deftest indent-method-chains-no-align-with-question-mark-operator ()
+  (let ((rust-indent-method-chain nil)) (test-indent
+   "
+fn main() {
+    let x = thing.do_it()
+        .aligned()
+        .more_alignment()?
+        .more_alignment();
+}
+"
+   )))
+
 (ert-deftest indent-method-chains-with-align ()
   (let ((rust-indent-method-chain t)) (test-indent
    "
 fn main() {
     let x = thing.do_it()
                  .aligned()
+                 .more_alignment();
+}
+"
+   )))
+
+(ert-deftest indent-method-chains-with-align-with-question-mark-operator ()
+  (let ((rust-indent-method-chain t)) (test-indent
+   "
+fn main() {
+    let x = thing.do_it()
+                 .aligned()
+                 .more_alignment()?
                  .more_alignment();
 }
 "
@@ -1811,7 +1885,7 @@ pattern to what did and did not trip it."
   ;; would make the failure go away.
   (with-temp-buffer
     (rust-mode)
-    (insert "fn blank_line(arg:int) -> bool {
+    (insert "fn blank_line(arg:i32) -> bool {
 
 }
 
@@ -2177,6 +2251,19 @@ fn main() {
      "\"\"" font-lock-string-face
      "/* " font-lock-comment-delimiter-face
      "print!(\"\"); */" font-lock-comment-face))
+  ;; with newline directly following delimiter
+  (rust-test-font-lock
+   "print!(\n\"\"\n); { /* print!(\"\"); */ }"
+   '("print!" rust-builtin-formatting-macro-face
+     "\"\"" font-lock-string-face
+     "/* " font-lock-comment-delimiter-face
+     "print!(\"\"); */" font-lock-comment-face))
+  ;; with empty println!()
+  (rust-test-font-lock
+   "println!(); { /* println!(); */ }"
+   '("println!" rust-builtin-formatting-macro-face
+     "/* " font-lock-comment-delimiter-face
+     "println!(); */" font-lock-comment-face))
   ;; other delimiters
   (rust-test-font-lock
    "print!{\"\"}; { /* no-op */ }"
@@ -2343,7 +2430,23 @@ fn main() {
      "{1}" rust-string-interpolation-face
      "\"" font-lock-string-face
      "/* " font-lock-comment-delimiter-face
-     "no-op */" font-lock-comment-face)))
+     "no-op */" font-lock-comment-face))
+  (rust-test-font-lock
+   "println!(\"123\"); eprintln!(\"123\"); cprintln!(\"123\");"
+   '("println!" rust-builtin-formatting-macro-face
+     "\"123\"" font-lock-string-face
+     "eprintln!" rust-builtin-formatting-macro-face
+     "\"123\"" font-lock-string-face
+     "cprintln!" font-lock-preprocessor-face
+     "\"123\"" font-lock-string-face)))
+
+(ert-deftest font-lock-fontify-angle-brackets ()
+    "Test that angle bracket fontify"
+    (should (equal (rust-test-fontify-string "<>") "<>"))
+    (should (equal (rust-test-fontify-string "<foo>") "<foo>"))
+    (should (equal (rust-test-fontify-string "<<>>") "<<>>"))
+    (should (equal (rust-test-fontify-string "<>>") "<>>"))
+    (should (equal (rust-test-fontify-string "<<>") "<<>")))
 
 (ert-deftest rust-test-basic-paren-matching ()
   (rust-test-matching-parens
@@ -2765,7 +2868,7 @@ fn foo() -> Box<i32> {
 
 (ert-deftest rust-test-paren-matching-lt-operator-after-special-type ()
   (rust-test-matching-parens
-   "fn foo() { low as uint <= c }"
+   "fn foo() { low as u128 <= c }"
    '((10 29))
    '(24)))
 
@@ -2878,16 +2981,16 @@ fn f() {
   (rust-test-matching-parens
    "
 fn rfc803() {
-    let z = a < b:FunnkyThing<int>;
+    let z = a < b:FunnkyThing<i32>;
     let s = Foo {
         a: b < 3,
-        b: d:CrazyStuff<int> < 3,
-        c: 2 < x:CrazyStuff<uint>
+        b: d:CrazyStuff<i32> < 3,
+        c: 2 < x:CrazyStuff<u128>
     }
 }"
-   '((45 49) ;; FunkyThing<int>
-     (111 115) ;; CrazyStuff<int>
-     (149 154) ;; CrazyStuff<uint>
+   '((45 49) ;; FunkyThing<i32>
+     (111 115) ;; CrazyStuff<i32>
+     (149 154) ;; CrazyStuff<u128>
      )
    '(30 ;; a < b
      83 ;; b < 3
@@ -3003,12 +3106,126 @@ extern \"rust-intrinsic\" fn five() {
       "four"
       "five"))))
 
+(ert-deftest rust-test-imenu-impl-with-lifetime ()
+  (test-imenu
+   "
+impl<'a> One<'a> {
+    fn one() {}
+}
+
+impl Two<'a> {
+    fn two() {}
+}
+"
+   '(("Impl" "One" "Two")
+     ("Fn" "one" "two"))))
+
+(ert-deftest font-lock-function-parameters ()
+  (rust-test-font-lock
+   "fn foo(a: u32, b : u32) {}"
+   '("fn" font-lock-keyword-face
+     "foo" font-lock-function-name-face
+     "a" font-lock-variable-name-face
+     "u32" font-lock-type-face
+     "b" font-lock-variable-name-face
+     "u32" font-lock-type-face)))
+
+(ert-deftest variable-in-for-loop ()
+  (rust-test-font-lock
+   "for var in iter"
+   '("for" font-lock-keyword-face
+     "var" font-lock-variable-name-face
+     "in" font-lock-keyword-face))
+  (rust-test-font-lock
+   "for Foo{var} in iter"
+   '("for" font-lock-keyword-face
+     "Foo" font-lock-type-face
+     "in" font-lock-keyword-face)))
+
+(ert-deftest rust-test-dbg-wrap-symbol ()
+  (rust-test-manip-code
+   "let x = add(first, second);"
+   15
+   #'rust-dbg-wrap-or-unwrap
+   "let x = add(dbg!(first), second);"))
+
+(ert-deftest rust-test-dbg-wrap-symbol-unbalanced ()
+  (rust-test-manip-code
+   "let x = add((first, second);"
+   14
+   #'rust-dbg-wrap-or-unwrap
+   "let x = add((dbg!(first), second);"))
+
+(ert-deftest rust-test-dbg-wrap-region ()
+  (rust-test-manip-code
+   "let x = add(first, second);"
+   9
+   (lambda ()
+     (transient-mark-mode 1)
+     (push-mark nil t t)
+     (goto-char 26)
+     (rust-dbg-wrap-or-unwrap))
+   "let x = dbg!(add(first, second));"))
+
+(defun rust-test-dbg-unwrap (position)
+  (rust-test-manip-code
+   "let x = add(dbg!(first), second);"
+   position
+   #'rust-dbg-wrap-or-unwrap
+   "let x = add(first, second);"))
+
+(ert-deftest rust-test-dbg-uwnrap-within ()
+  (rust-test-dbg-unwrap 19))
+
+(ert-deftest rust-test-dbg-uwnrap-on-paren ()
+  (rust-test-dbg-unwrap 17))
+
+(ert-deftest rust-test-dbg-uwnrap-on-dbg-middle ()
+  (rust-test-dbg-unwrap 15))
+
+(ert-deftest rust-test-dbg-uwnrap-on-dbg-start ()
+  (rust-test-dbg-unwrap 13))
+
 (when (executable-find rust-cargo-bin)
   (ert-deftest rust-test-project-located ()
-    (lexical-let* ((test-dir (expand-file-name "test-project" default-directory))
+    (lexical-let* ((test-dir (expand-file-name "test-project/" default-directory))
                    (manifest-file (expand-file-name "Cargo.toml" test-dir)))
       (let ((default-directory test-dir))
         (should (equal (expand-file-name (rust-buffer-project)) manifest-file))))))
+
+(ert-deftest compilation-regexp-dashes ()
+  (with-temp-buffer
+    ;; should match
+    (insert "error found a -> b\n  --> file1.rs:12:34\n\n")
+    (insert "error[E1234]: found a -> b\n  --> file2.rs:12:34\n\n")
+    (insert "warning found a -> b\n  --> file3.rs:12:34\n\n")
+    ;; should not match
+    (insert "werror found a -> b\n  --> file4.rs:12:34\n\n")
+
+    (goto-char (point-min))
+    (let ((matches nil))
+      (while (re-search-forward (car rustc-compilation-regexps) nil t)
+        (push
+         (mapcar (lambda (r)
+                   (let ((match-pos
+                          (nth (cdr r) rustc-compilation-regexps)))
+                     (if (eq :is-warning (car r))
+                         (compilation-face match-pos)
+                       (match-string match-pos))))
+                 ;; see compilation-error-regexp-alist
+                 '((:file . 1)
+                   (:line . 2)
+                   (:column . 3)
+                   (:is-warning . 4)
+                   (:mouse-highlight . 5)))
+         matches))
+      (setq matches (reverse matches))
+
+      (should (equal
+               '(("file1.rs" "12" "34" compilation-error "file1.rs:12:34")
+                 ("file2.rs" "12" "34" compilation-error "file2.rs:12:34")
+                 ("file3.rs" "12" "34" compilation-warning "file3.rs:12:34"))
+               matches)))))
 
 ;; If electric-pair-mode is available, load it and run the tests that use it.  If not,
 ;; no error--the tests will be skipped.
@@ -3051,4 +3268,39 @@ extern \"rust-intrinsic\" fn five() {
 
   (ert-deftest rust-test-electric-pair-lt-expression-capitalized-keyword ()
     (test-electric-pair-insert "fn foo() -> Box" 16 ?< ?>))
-  )
+
+  (ert-deftest rust-test-electric-pair-<-> ()
+    (let ((old-electric-pair-mode electric-pair-mode))
+      (electric-pair-mode 1)
+      (unwind-protect
+          (with-temp-buffer
+            (electric-pair-mode 1)
+            (rust-mode)
+            (mapc (lambda (c)
+                    (let ((last-command-event c)) (self-insert-command 1)))
+                  "tmp<T>")
+            (should
+             (equal "tmp<T>" (buffer-substring-no-properties (point-min)
+                                                             (point-max)))))
+        (electric-pair-mode (or old-electric-pair-mode 1))))))
+
+(ert-deftest rust-mode-map ()
+  (with-temp-buffer
+    (let (from to match (match-count 0))
+      (rust-mode)
+      (describe-buffer-bindings (current-buffer))
+      (goto-char (point-min))
+      (re-search-forward "Major Mode Bindings")
+      (setq from (point))
+      (re-search-forward "")
+      (setq to (point))
+      (goto-char from)
+      (while (re-search-forward "^C-c.*$" to t)
+        (setq match-count (1+ match-count))
+        (setq match (match-string 0))
+        (eval
+         `(should
+           (or
+            (string-match "Prefix Command" ,match)
+            (string-match "^C-c C" ,match)))))
+      (should (< 0 match-count)))))
