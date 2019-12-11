@@ -32,7 +32,7 @@
               (eval . (c-set-offset 'innamespace 0))
               ))
 
- (python-mode . ((py-indent-offset . 4)
+ (python-mode . ((python-indent-offset . 4)
                  ))
 
  (js-mode . ((js-indent-level . 4)
