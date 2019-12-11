@@ -45,6 +45,7 @@ items follow a style that is consistent with other prog-modes."
 
      (setenv-from-bashrc "GOPATH")
      (setenv-from-bashrc "GOCACHE")
+     (setenv-from-bashrc "GOFLAGS")
 
      (setq gofmt-command "goimports")
      (define-key go-mode-map (kbd "C-c p") 'gofmt)
