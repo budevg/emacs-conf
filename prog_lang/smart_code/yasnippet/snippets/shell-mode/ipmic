@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ipmic
+# key: ipmic
+# --
+ipmitool -e % -I lanplus -U ${1:user} -P ${2:password} -H  ${3:ip} sol activate$0
