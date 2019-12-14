@@ -32,6 +32,12 @@
       :kill-process-buffer-on-stop t
       )
 
+     (prodigy-define-service
+      :name "lorri"
+      :command "lorri"
+      :args '("daemon")
+      )
+
      ;;(prodigy-define-service
      ;;  :name ""
      ;;  :command ""

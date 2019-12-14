@@ -1,0 +1,6 @@
+(:name emacs-direnv
+       :type github
+       :pkgname "wbolster/emacs-direnv"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "shell")))
+       )

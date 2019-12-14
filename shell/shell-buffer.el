@@ -75,3 +75,7 @@ If N is negative, search forwards for the -Nth following match."
   (comint-send-file
    (in-emacs-d "shell/.dircolors")
    "~/.dircolors"))
+
+(autoload 'direnv-envrc-mode "direnv" nil t)
+(add-to-list 'auto-mode-alist '("\\.envrc\\'" . direnv-envrc-mode))
+(autoload 'direnv-mode "direnv" nil t)
