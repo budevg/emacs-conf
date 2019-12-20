@@ -1,0 +1,6 @@
+(:name engine-mode
+       :type github
+       :pkgname "hrs/engine-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+       )

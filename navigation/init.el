@@ -221,3 +221,11 @@ Fall back to `completing-read' otherwise."
      ))
 (global-set-key (kbd "C-]") 'dumb-jump-go)
 (global-set-key (kbd "C-}") 'dumb-jump-back)
+
+(autoload 'engine/search-google "engine-mode.el" nil t)
+(eval-after-load "engine-mode"
+  '(progn
+     (defengine google
+       "http://www.google.com/search?ie=utf-8&oe=utf-8&q=%s")
+     ))
+(global-set-key (kbd "C-x s") 'engine/search-google)
