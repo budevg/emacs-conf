@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# key: nx
+# name: nx
+# --
+nix-shell -I nixpkgs=~/.nix-defexpr/${1:$$(yas-choose-value '("channels_root/nixos" "channels/unstable"))} -p $0
