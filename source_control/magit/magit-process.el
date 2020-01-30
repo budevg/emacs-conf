@@ -1,6 +1,6 @@
 ;;; magit-process.el --- process functionality  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -165,7 +165,7 @@ itself from the hook, to avoid further futile attempts."
 (defcustom magit-process-password-prompt-regexps
   '("^\\(Enter \\)?[Pp]assphrase\\( for \\(RSA \\)?key '.*'\\)?: ?$"
     ;; Match-group 99 is used to identify the "user@host" part.
-    "^\\(Enter \\)?[Pp]assword\\( for '\\(https?://\\)?\\(?99:.*\\)'\\)?: ?$"
+    "^\\(Enter \\)?[Pp]assword\\( for '?\\(https?://\\)?\\(?99:[^']*\\)'?\\)?: ?$"
     "^.*'s password: ?$"
     "^Yubikey for .*: ?$"
     "^Enter PIN for .*: ?$")
@@ -226,7 +226,7 @@ While functions such as `magit-process-yes-or-no-prompt' may not
 be sufficient to handle some prompt, it may still be of benefit
 to look at the implementations to gain some insights on how to
 implement such functions."
-  :package-version '(magit . "2.91.0")
+  :package-version '(magit . "3.0.0")
   :group 'magit-process
   :type 'hook)
 

@@ -1,6 +1,6 @@
 ;;; magit-repos.el --- listing repositories  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -51,7 +51,7 @@ repositories.  If it is 0, then only add DIRECTORY itself.
 This option controls which repositories are being listed by
 `magit-list-repositories'.  It also affects `magit-status'
 \(which see) in potentially surprising ways."
-  :package-version '(magit . "2.91.0")
+  :package-version '(magit . "3.0.0")
   :group 'magit-essentials
   :type '(repeat (cons directory (integer :tag "Depth"))))
 
@@ -114,7 +114,7 @@ called with no arguments, with `default-directory' bound to the
 top level of a repository working tree, until one of them returns
 a non-nil value.  FLAG corresponding to that function is returned
 as the value of `magit-repolist-column-flag'."
-  :package-version '(magit . "2.91.0")
+  :package-version '(magit . "3.0.0")
   :group 'magit-repolist
   :type '(alist :key-type (function :tag "Predicate Function")
                 :value-type (string :tag "Flag")))
@@ -142,8 +142,7 @@ repositories are displayed."
 (defvar magit-repolist-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    (define-key map (if (featurep 'jkl) [return] (kbd "C-m"))
-      'magit-repolist-status)
+    (define-key map (kbd "C-m") 'magit-repolist-status)
     map)
   "Local keymap for Magit-Repolist mode buffers.")
 

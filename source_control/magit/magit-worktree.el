@@ -1,6 +1,6 @@
 ;;; magit-worktree.el --- worktree support  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -36,7 +36,7 @@
 This is called with one argument, the prompt, and can be used
 to e.g. use a base directory other than `default-directory'.
 Used by `magit-worktree-checkout' and `magit-worktree-branch'."
-  :package-version '(magit . "2.91.0")
+  :package-version '(magit . "3.0.0")
   :group 'magit-commands
   :type 'function)
 

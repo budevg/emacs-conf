@@ -1,6 +1,6 @@
 ;;; magit-ediff.el --- Ediff extension for Magit  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -497,8 +497,6 @@ stash that were staged."
            (delete-frame ctl-frm))
           ((window-live-p ctl-win)
            (delete-window ctl-win)))
-    (unless (ediff-multiframe-setup-p)
-      (ediff-kill-bottom-toolbar))
     (ediff-kill-buffer-carefully ctl-buf)
     (when (frame-live-p main-frame)
       (select-frame main-frame))))

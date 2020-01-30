@@ -1,6 +1,6 @@
 ;;; magit-patch.el --- creating and applying patches  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2019  The Magit Project Contributors
+;; Copyright (C) 2008-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -246,7 +246,7 @@ same differences as those shown in the buffer are always used."
 (defun magit-request-pull (url start end)
   "Request upstream to pull from you public repository.
 
-URL is the url of your publically accessible repository.
+URL is the url of your publicly accessible repository.
 START is a commit that already is in the upstream repository.
 END is the last commit, usually a branch name, which upstream
 is asked to pull.  START has to be reachable from that commit."

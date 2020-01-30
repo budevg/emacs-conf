@@ -1,6 +1,6 @@
 ;;; magit-refs.el --- listing references  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -99,7 +99,7 @@ shown), so this isn't enabled yet.")
   "Whether to show the remote prefix in lists of remote branches.
 
 This is redundant because the name of the remote is already shown
-in the heading preceeding the list of its branches."
+in the heading preceding the list of its branches."
   :package-version '(magit . "2.12.0")
   :group 'magit-refs
   :type 'boolean)

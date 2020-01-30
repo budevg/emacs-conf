@@ -1,6 +1,6 @@
 ;;; git-rebase.el --- Edit Git rebase files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -152,23 +152,14 @@
 (defvar git-rebase-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
-    (cond ((featurep 'jkl)
-           (define-key map [return]    'git-rebase-show-commit)
-           (define-key map (kbd   "i") 'git-rebase-backward-line)
-           (define-key map (kbd   "k") 'forward-line)
-           (define-key map (kbd "M-i") 'git-rebase-move-line-up)
-           (define-key map (kbd "M-k") 'git-rebase-move-line-down)
-           (define-key map (kbd   "p") 'git-rebase-pick)
-           (define-key map (kbd   ",") 'git-rebase-kill-line))
-          (t
-           (define-key map (kbd "C-m") 'git-rebase-show-commit)
-           (define-key map (kbd   "p") 'git-rebase-backward-line)
-           (define-key map (kbd   "n") 'forward-line)
-           (define-key map (kbd "M-p") 'git-rebase-move-line-up)
-           (define-key map (kbd "M-n") 'git-rebase-move-line-down)
-           (define-key map (kbd   "c") 'git-rebase-pick)
-           (define-key map (kbd   "k") 'git-rebase-kill-line)
-           (define-key map (kbd "C-k") 'git-rebase-kill-line)))
+    (define-key map (kbd "C-m") 'git-rebase-show-commit)
+    (define-key map (kbd   "p") 'git-rebase-backward-line)
+    (define-key map (kbd   "n") 'forward-line)
+    (define-key map (kbd "M-p") 'git-rebase-move-line-up)
+    (define-key map (kbd "M-n") 'git-rebase-move-line-down)
+    (define-key map (kbd   "c") 'git-rebase-pick)
+    (define-key map (kbd   "k") 'git-rebase-kill-line)
+    (define-key map (kbd "C-k") 'git-rebase-kill-line)
     (define-key map (kbd "b") 'git-rebase-break)
     (define-key map (kbd "e") 'git-rebase-edit)
     (define-key map (kbd "l") 'git-rebase-label)
@@ -193,14 +184,9 @@
     map)
   "Keymap for Git-Rebase mode.")
 
-(cond ((featurep 'jkl)
-       (put 'git-rebase-reword       :advertised-binding "r")
-       (put 'git-rebase-move-line-up :advertised-binding (kbd "M-i"))
-       (put 'git-rebase-kill-line    :advertised-binding ","))
-      (t
-       (put 'git-rebase-reword       :advertised-binding "r")
-       (put 'git-rebase-move-line-up :advertised-binding (kbd "M-p"))
-       (put 'git-rebase-kill-line    :advertised-binding "k")))
+(put 'git-rebase-reword       :advertised-binding (kbd "r"))
+(put 'git-rebase-move-line-up :advertised-binding (kbd "M-p"))
+(put 'git-rebase-kill-line    :advertised-binding (kbd "k"))
 
 (easy-menu-define git-rebase-mode-menu git-rebase-mode-map
   "Git-Rebase mode menu"
@@ -747,6 +733,8 @@ running 'man git-rebase' at the command line) for details."
     (git-rebase-match-comment-line 0 'font-lock-comment-face)
     ("\\[[^[]*\\]"
      0 'magit-keyword t)
+    ("\\(?:fixup!\\|squash!\\)"
+     0 'magit-keyword-squash t)
     (,(format "^%s Rebase \\([^ ]*\\) onto \\([^ ]*\\)" comment-start)
      (1 'git-rebase-comment-hash t)
      (2 'git-rebase-comment-hash t))

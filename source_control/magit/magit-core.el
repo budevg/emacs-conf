@@ -1,6 +1,6 @@
 ;;; magit-core.el --- core functionality  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2019  The Magit Project Contributors
+;; Copyright (C) 2010-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -74,19 +74,6 @@ Each of these options falls into one or more of these categories:
   "Options controlling behavior of certain commands."
   :group 'magit)
 
-(defgroup magit-git-arguments nil
-  "Options controlling what arguments are passed to Git.
-
-Most of these options can be set using the respective popup,
-and it is recommended that you do that because then you can
-be certain that Magit supports the arguments that you select.
-
-An option `magit-NAME-argument' specifies the arguments that
-are enabled by default by the popup `magit-NAME-popup'."
-  :link '(info-link "(magit-popup)Customizing Existing Popups")
-  :link '(info-link "(magit-popup)Usage")
-  :group 'magit-commands)
-
 (defgroup magit-modes nil
   "Modes used or provided by Magit."
   :group 'magit)
@@ -115,6 +102,8 @@ are enabled by default by the popup `magit-NAME-popup'."
 (custom-add-to-group 'magit-faces   'git-commit-faces  'custom-group)
 (custom-add-to-group 'magit-modes   'git-rebase        'custom-group)
 (custom-add-to-group 'magit-faces   'git-rebase-faces  'custom-group)
+(custom-add-to-group 'magit         'magit-section     'custom-group)
+(custom-add-to-group 'magit-faces   'magit-section-faces 'custom-group)
 (custom-add-to-group 'magit-process 'with-editor       'custom-group)
 
 (defgroup magit-related nil

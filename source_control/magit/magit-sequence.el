@@ -1,6 +1,6 @@
 ;;; magit-sequence.el --- history manipulation in Magit  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2011-2019  The Magit Project Contributors
+;; Copyright (C) 2011-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -548,10 +548,9 @@ This discards all changes made since the sequence started."
 (define-suffix-command magit-rebase-onto-pushremote (args)
   "Rebase the current branch onto its push-remote branch.
 
-When the push-remote is not configured, then read the push-remote
-from the user, set it, and then rebase onto it.  With a prefix
-argument the push-remote can be changed before rebasing onto to
-it."
+With a prefix argument or when the push-remote is either not
+configured or unusable, then let the user first configure the
+push-remote."
   :if 'magit-get-current-branch
   :description 'magit-pull--pushbranch-description
   (interactive (list (magit-rebase-arguments)))
@@ -626,6 +625,8 @@ START has to be selected from a list of recent commits."
       (concat "Type %p on a commit to rebase it "
               "and commits above it onto " newbase ","))))
 
+(defvar magit-rebase-interactive-include-selected t)
+
 (defun magit-rebase-interactive-1
     (commit args message &optional editor delay-edit-confirm noassert confirm)
   (declare (indent 2))
@@ -637,7 +638,9 @@ START has to be selected from a list of recent commits."
       (unless (magit-rev-ancestor-p commit "HEAD")
         (user-error "%s isn't an ancestor of HEAD" commit))
       (if (magit-commit-parents commit)
-          (setq commit (concat commit "^"))
+          (when (or (not (eq this-command 'magit-rebase-interactive))
+                    magit-rebase-interactive-include-selected)
+            (setq commit (concat commit "^")))
         (setq args (cons "--root" args)))))
   (when (and commit (not noassert))
     (setq commit (magit-rebase-interactive-assert

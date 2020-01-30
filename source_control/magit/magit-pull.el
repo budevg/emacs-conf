@@ -1,6 +1,6 @@
 ;;; magit-pull.el --- update local objects and refs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2019  The Magit Project Contributors
+;; Copyright (C) 2008-2020  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -33,7 +33,7 @@
 
 (defcustom magit-pull-or-fetch nil
   "Whether `magit-pull' also offers some fetch suffixes."
-  :package-version '(magit . "2.91.0")
+  :package-version '(magit . "3.0.0")
   :group 'magit-commands
   :type 'boolean)
 
@@ -45,7 +45,8 @@
   :man-page "git-pull"
   [:description
    (lambda () (if magit-pull-or-fetch "Pull arguments" "Arguments"))
-   ("-r" "Rebase local commits" ("-r" "--rebase"))]
+   ("-r" "Rebase local commits" ("-r" "--rebase"))
+   ("-A" "Autostash" "--autostash" :level 7)]
   [:description
    (lambda ()
      (if-let ((branch (magit-get-current-branch)))
@@ -79,9 +80,9 @@
 (define-suffix-command magit-pull-from-pushremote (args)
   "Pull from the push-remote of the current branch.
 
-When the push-remote is not configured, then read the push-remote
-from the user, set it, and then pull from it.  With a prefix
-argument the push-remote can be changed before pulling from it."
+With a prefix argument or when the push-remote is either not
+configured or unusable, then let the user first configure the
+push-remote."
   :if 'magit-get-current-branch
   :description 'magit-pull--pushbranch-description
   (interactive (list (magit-pull-arguments)))
