@@ -20,6 +20,11 @@
            python-indent-guess-indent-offset nil)
 
      (add-hook
+      'python-mode-hook
+      (lambda ()
+        (setq forward-sexp-function nil)))
+
+     (add-hook
       'inferior-python-mode-hook
       '(lambda ()
          (set (make-local-variable 'comint-prompt-read-only) nil)
