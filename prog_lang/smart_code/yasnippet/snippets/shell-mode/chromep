@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: chromep
+# key: chromep
+# --
+pkill chrome; google-chrome-stable --proxy-server="socks://localhost:8888"$0
