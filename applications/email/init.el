@@ -79,22 +79,24 @@
               )
              )
            (setq
-                 mu4e-maildir (expand-file-name "~/scratch/Mail")
-                 mu4e-change-filenames-when-moving t
-                 mu4e-view-show-addresses t
-                 ;;mu4e-sent-messages-behavior 'delete
+            ;; mu4e-maildir (expand-file-name "~/scratch/Mail")
+            ;; since mu 1.4 use
+            ;; mu init --maildir ~/scratch/Mail --my-address user@gmail.com
+            mu4e-change-filenames-when-moving t
+            mu4e-view-show-addresses t
+            ;;mu4e-sent-messages-behavior 'delete
 
-                 mu4e~get-mail-password-regexp "^Password.*: $"
-                 mu4e-contexts
-                 `( ,(mu4e-account-context "AAA")
-                    ,(mu4e-account-context "BBB")
-                    )
+            mu4e~get-mail-password-regexp "^Password.*: $"
+            mu4e-contexts
+            `( ,(mu4e-account-context "AAA")
+               ,(mu4e-account-context "BBB")
+               )
 
-                 mu4e-context-policy 'pick-first
-                 mu4e-view-actions
-                 '(("view in browser" . mu4e-action-view-in-browser)
-                   ("show this thread" . mu4e-action-show-thread))
-                 )
+            mu4e-context-policy 'pick-first
+            mu4e-view-actions
+            '(("view in browser" . mu4e-action-view-in-browser)
+              ("show this thread" . mu4e-action-show-thread))
+            )
            (define-key mu4e-view-mode-map (kbd "C-w")
              (lambda ()
                (interactive)

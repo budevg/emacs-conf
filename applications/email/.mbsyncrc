@@ -22,3 +22,28 @@ Patterns *
 Create Both
 Expunge Both
 SyncState *
+
+IMAPAccount BBB
+Host outlook.office365.com
+Port 993
+User BBB@outlook.com
+PassCmd "gpg -q --for-your-eyes-only --no-tty -d ~/scratch/aaa.gpg"
+SSLType IMAPS
+SSLVersions TLSv1.2
+CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+IMAPStore BBB-remote
+Account BBB
+
+MaildirStore BBB-local
+Subfolders Verbatim
+Path ~/scratch/Mail/BBB/
+Inbox ~/scratch/Mail/BBB/Inbox/
+
+Channel BBB
+Master :BBB-remote:
+Slave :BBB-local:
+Patterns *
+Create Both
+Expunge Both
+SyncState *
