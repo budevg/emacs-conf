@@ -2,10 +2,10 @@
 # name: hsmain
 # key: hsmain
 # --
-{ pkgs ? import <nixpkgs> {}
-}:
+{ pkgs ? import <nixpkgs> { } }:
 with pkgs;
-haskell.lib.buildStackProject {
-  name = "haskell-project";
-  buildInputs = [];
+let ghc = haskellPackages.ghcWithPackages (ps: [ ps.brittany ]);
+in mkShell {
+  buildInputs = [ ghcid ghc cabal-install ];
+  ENV_VAR = "env_var";
 }
