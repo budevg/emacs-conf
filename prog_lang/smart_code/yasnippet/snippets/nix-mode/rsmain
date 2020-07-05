@@ -1,0 +1,12 @@
+# key: rsmain
+# name: rsmain
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ rustup ];
+  ENV_VAR = "env_var";
+  shellHook = ''
+    export PATH=~/.cargo/bin:$PATH
+  '';
+}
