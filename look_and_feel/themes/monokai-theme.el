@@ -69,7 +69,14 @@
    ;; Whitespace
    `(whitespace-space ((t (:foreground ,monokai-gray))))
    ;; Yasnippet
-   `(yas/field-highlight-face ((t (:background ,monokai-gray-darker))))))
+   `(yas/field-highlight-face ((t (:background ,monokai-gray-darker))))
+   ;; diff
+   '(diff-header ((((class color) (background dark)) (:background "grey25" :foreground "grey70"))))
+   '(diff-file-header ((t (:weight bold))))
+   `(diff-refine-added ((t (:inherit diff-added :weight bold))))
+   `(diff-refine-change ((t (:inherit diff-changed :weight bold))))
+   `(diff-refine-removed ((t (:inherit diff-removed :weight bold))))
+   ))
 
 ;;;###autoload
 (when load-file-name
