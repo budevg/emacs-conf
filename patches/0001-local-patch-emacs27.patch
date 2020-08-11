@@ -1,6 +1,6 @@
-From 9453032d6883b48a46ec4ef3f0fe21140d9bd2b5 Mon Sep 17 00:00:00 2001
+From bdb46e28c5b8f459279783418587f8b9af99c8cb Mon Sep 17 00:00:00 2001
 From: Evgeny Budilovsky <budevg@gmail.com>
-Date: Thu, 30 Jan 2020 19:43:34 +0200
+Date: Tue, 11 Aug 2020 20:36:14 +0300
 Subject: [PATCH] local patch
 
 ---
@@ -9,10 +9,10 @@ Subject: [PATCH] local patch
  2 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/src/frame.c b/src/frame.c
-index 88d6f22fc0..1e2b50253d 100644
+index 4dd8bb1804..29bbd1ab33 100644
 --- a/src/frame.c
 +++ b/src/frame.c
-@@ -4738,7 +4738,7 @@ gui_set_vertical_scroll_bars (struct frame *f, Lisp_Object arg, Lisp_Object oldv
+@@ -4740,7 +4740,7 @@ gui_set_vertical_scroll_bars (struct frame *f, Lisp_Object arg, Lisp_Object oldv
  	 However, if the window hasn't been created yet, we shouldn't
  	 call set_window_size_hook.  */
        if (FRAME_NATIVE_WINDOW (f))
@@ -21,7 +21,7 @@ index 88d6f22fc0..1e2b50253d 100644
  
        SET_FRAME_GARBAGED (f);
      }
-@@ -6160,7 +6160,7 @@ See the command `menu-bar-mode' for a description of this minor mode.
+@@ -6163,7 +6163,7 @@ syms_of_frame (void)
  Setting this variable directly does not take effect;
  either customize it (see the info node `Easy Customization')
  or call the function `menu-bar-mode'.  */);
@@ -30,7 +30,7 @@ index 88d6f22fc0..1e2b50253d 100644
  
    DEFVAR_LISP ("tab-bar-mode", Vtab_bar_mode,
                 doc: /* Non-nil if Tab-Bar mode is enabled.
-@@ -6177,7 +6177,7 @@ Setting this variable directly does not take effect;
+@@ -6180,7 +6180,7 @@ syms_of_frame (void)
  either customize it (see the info node `Easy Customization')
  or call the function `tool-bar-mode'.  */);
  #ifdef HAVE_WINDOW_SYSTEM
@@ -40,10 +40,10 @@ index 88d6f22fc0..1e2b50253d 100644
    Vtool_bar_mode = Qnil;
  #endif
 diff --git a/src/xfns.c b/src/xfns.c
-index 276ea1c393..d0392ce8df 100644
+index f9a00a6daf..8b266b2e7f 100644
 --- a/src/xfns.c
 +++ b/src/xfns.c
-@@ -3936,9 +3936,9 @@ This function is an internal primitive--use `make-frame' instead.  */)
+@@ -3942,9 +3942,9 @@ DEFUN ("x-create-frame", Fx_create_frame, Sx_create_frame,
                           NULL, NULL, RES_TYPE_NUMBER);
    gui_default_parameter (f, parms, Qvertical_scroll_bars,
  #if defined (USE_GTK) && defined (USE_TOOLKIT_SCROLL_BARS)
@@ -56,5 +56,5 @@ index 276ea1c393..d0392ce8df 100644
                           "verticalScrollBars", "ScrollBars",
                           RES_TYPE_SYMBOL);
 -- 
-2.23.0
+2.25.4
 
