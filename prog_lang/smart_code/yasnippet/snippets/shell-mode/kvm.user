@@ -1,5 +1,5 @@
 # -*- mode: snippet -*-
-# name: kvm -snapshot -net user
+# name: kvm-user
 # key: kvm
 # --
-kvm -snapshot -net user,hostfwd=tcp::5555-:22,hostfwd=tcp::6666-:3389 -net nic,model=virtio -drive if=virtio,file=`(expand-file-name "~/")`$0
+kvm -snapshot -nic user,hostfwd=tcp::5555-:22,hostfwd=tcp::6666-:3389,model=virtio -drive if=virtio,file=`(expand-file-name "~/")`$0
