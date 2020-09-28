@@ -60,7 +60,9 @@ If N is negative, search forwards for the -Nth following match."
      (ansi-color-for-comint-mode-on)
      (define-key comint-mode-map [(meta p)] nil)
      (define-key comint-mode-map [C-up] 'comint-previous-matching-input-from-input)
-     (define-key comint-mode-map [C-down] 'comint-next-matching-input-from-input)))
+     (define-key comint-mode-map [C-down] 'comint-next-matching-input-from-input)
+     (define-key comint-mode-map (kbd "C-c k") 'comint-clear-buffer))
+  )
 
 
 (autoload 'multi-term "multi-term" nil t)
