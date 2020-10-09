@@ -37,7 +37,7 @@
 
 (global-set-key [(meta pause)] 'delete-window)
 (global-set-key [f5]  'delete-other-windows)
-(global-set-key [(control f5)]  'new-frame)
+(global-set-key [(control f5)]  'make-frame-command)
 
 (fset 'yes-or-no-p 'y-or-n-p)
 

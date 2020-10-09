@@ -154,6 +154,8 @@ class ConfigBuilder(object):
         self._data.append('''
 (add-hook 'window-setup-hook (lambda ()
   (set-frame-font "%(font)s")
+  (add-to-list 'default-frame-alist
+               '(font . "%(font)s"))
 ; (maximize-frame)
   ))''' % self._frame())
 
