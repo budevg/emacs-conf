@@ -2,10 +2,11 @@
 # name: cmain
 # key: cmain
 # --
-{ pkgs ? import <nixpkgs> {}
-}:
+{ pkgs ? import <nixpkgs> {} }:
 with pkgs;
-stdenv.mkDerivation {
-  name = "c-project";
-  buildInputs = [autoreconfHook];
+mkShell {
+  buildInputs = [
+  ];
+  hardeningDisable = [ "all" ];
+  ENV_VAR = "env_var";
 }
