@@ -3,18 +3,6 @@
 ;; since that introduces overhead in opening file
 (setq vc-handled-backends '())
 
-(autoload 'svn-status "psvn" "svn-status autoload" t)
-(autoload 'git-status "git" "git-status autoload" t)
-(defun git-status-on-current-dir ()
-  (interactive)
-  (git-status default-directory))
-(global-set-key [(meta M)] 'git-status-on-current-dir)
-(autoload 'ahg-status "ahg" "ahg-status autoload" t)
-
-(eval-after-load "psvn"
-  '(progn
-     (define-key svn-status-mode-map (kbd "TAB") 'svn-status-show-svn-diff)))
-
 (defun dot-gitconfig ()
   (interactive)
   (comint-send-file
@@ -23,3 +11,18 @@
 
 (autoload 'browse-at-remote "browse-at-remote" nil t)
 (global-set-key (kbd "C-f a") 'browse-at-remote)
+
+;; diff
+
+(defun diff-current-buffer-with-file ()
+  (interactive)
+  (let ((diff-switches "-u"))
+    (diff-buffer-with-file (current-buffer))))
+
+(global-set-key [(control meta =)] 'diff-current-buffer-with-file)
+
+(eval-after-load "diff-mode"
+  '(progn
+     (add-hook 'diff-mode-hook
+               (lambda ()
+                 (setq diff-auto-refine-mode nil)))))

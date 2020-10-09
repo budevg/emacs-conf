@@ -176,8 +176,6 @@ source_control = [Node(path = "source_control/magit/init.el",
                        msg = "load ghub"),
                   Node(path = "source_control/init.el",
                        msg = "load git/svn support"),
-                  Node(path = "source_control/local.el",
-                       msg = "local files diff"),
                   ]
 
 applications = [Node(path = "applications/init.el",
