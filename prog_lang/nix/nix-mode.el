@@ -2,9 +2,9 @@
 
 ;; Maintainer: Matthew Bauer <mjbauer95@gmail.com>
 ;; Homepage: https://github.com/NixOS/nix-mode
-;; Version: 1.4.1
+;; Version: 1.4.4
 ;; Keywords: nix, languages, tools, unix
-;; Package-Requires: ((emacs "25"))
+;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -100,7 +100,9 @@ very large Nix files (all-packages.nix)."
     "true" "false" "null"
     "isNull" "toString"
     "fetchTarball" "import"
-    "map" "removeAttrs"))
+    "map" "removeAttrs"
+    "toString" "derivationStrict" "placeholder" "scopedImport" "fromTOML"
+    "fetchTarball" "fetchGit" "fetchTree" "fetchMercurial"))
 
 (defconst nix-warning-keywords
   '("assert" "abort" "throw"))
@@ -418,11 +420,12 @@ STRING-TYPE type of string based off of Emacs syntax table types"
        (right " -bseqskip- ")
        (left " -fseqskip- "))))))
 
-(defconst nix-smie--symbol-chars ":->|&=!</-+*?,;!")
+(defconst nix-smie--2char-symbols
+  '("->" "||" "&&" "==" "!=" "<=" ">=" "++" "//"))
 
 (defconst nix-smie--infix-symbols-re
-  (regexp-opt '(":" "->" "||" "&&" "==" "!=" "<" "<=" ">" ">="
-                "//" "-" "+" "*" "/" "++" "?")))
+  (regexp-opt (append '(":" "<" ">" "-" "+" "*" "/" "?")
+                      nix-smie--2char-symbols)))
 
 (defconst nix-smie-indent-tokens-re
   (regexp-opt '("{" "(" "[" "=" "let" "if" "then" "else")))
@@ -540,7 +543,7 @@ STRING-TYPE type of string based off of Emacs syntax table types"
         (ignore (goto-char start))))))
 
 (defun nix-smie--skip-angle-path-backward ()
-    "Skip backward a path enclosed in angle brackets, e.g <nixpkgs>"
+  "Skip backward a path enclosed in angle brackets, e.g <nixpkgs>"
   (let ((start (point)))
     (when (eq (char-before) ?>)
       (backward-char)
@@ -564,6 +567,22 @@ STRING-TYPE type of string based off of Emacs syntax table types"
           sub
         (ignore (goto-char start))))))
 
+;; Returns non-nil if it successfully skipped a symbol.
+(defun nix-smie--skip-symbol (how)
+  (let* ((start (point))
+         (nskip (pcase-exhaustive how
+                  ('backward (skip-syntax-backward "._"))
+                  ('forward  (skip-syntax-forward "._"))))
+         (abs-skip (abs nskip)))
+    (or (= 1 abs-skip)
+        (and (= 2 abs-skip)
+             (member (buffer-substring-no-properties (point) start)
+                     nix-smie--2char-symbols))
+        (if (< 0 abs-skip)
+            (goto-char (+ start (if (< 0 nskip) 1 -1)))
+          (goto-char start)
+          nil))))
+
 (defun nix-smie--forward-token-1 ()
   "Move forward one token."
   (forward-comment (point-max))
@@ -573,8 +592,7 @@ STRING-TYPE type of string based off of Emacs syntax table types"
        (point)
        (progn
          (or (/= 0 (skip-syntax-forward "'w_"))
-             (/= 0 (skip-chars-forward nix-smie--symbol-chars))
-             (skip-syntax-forward ".'"))
+             (nix-smie--skip-symbol 'forward))
          (point)))))
 
 (defun nix-smie--forward-token ()
@@ -595,8 +613,7 @@ STRING-TYPE type of string based off of Emacs syntax table types"
        (point)
        (progn
          (or (/= 0 (skip-syntax-backward "'w_"))
-             (/= 0 (skip-chars-backward nix-smie--symbol-chars))
-             (skip-syntax-backward ".'"))
+             (nix-smie--skip-symbol 'backward))
          (point)))))
 
 (defun nix-smie--backward-token ()
@@ -643,7 +660,7 @@ STRING-TYPE type of string based off of Emacs syntax table types"
             (if (and (memq (char-after) '(?\[ ?{))
                      (not (save-excursion (forward-char) (nix-smie--eol-p))))
                 (current-column)
-             (nix-smie--anchor)))
+              (nix-smie--anchor)))
         (scan-error nil)))))
 
 (defun nix-smie--indent-exps ()
@@ -967,20 +984,26 @@ The hook `nix-mode-hook' is run when Nix mode is started.
   ;; Setup SMIE integration
   (when nix-mode-use-smie
     (smie-setup nix-smie-grammar 'nix-smie-rules
-		:forward-token 'nix-smie--forward-token
-		:backward-token 'nix-smie--backward-token)
+                :forward-token 'nix-smie--forward-token
+                :backward-token 'nix-smie--backward-token)
     (setq-local smie-indent-basic 2)
-    (fset (make-local-variable 'smie-indent-exps)
-	  (symbol-function 'nix-smie--indent-exps))
-    (fset (make-local-variable 'smie-indent-close)
-	  (symbol-function 'nix-smie--indent-close)))
+
+    (let ((nix-smie-indent-functions
+           ;; Replace the smie-indent-* equivalents with nix-mode's.
+           (mapcar (lambda (fun) (pcase fun
+                                   ('smie-indent-exps  'nix-smie--indent-exps)
+                                   ('smie-indent-close 'nix-smie--indent-close)
+                                   (_ fun)))
+                   smie-indent-functions)))
+      (setq-local smie-indent-functions nix-smie-indent-functions)))
 
   ;; Automatic indentation [C-j]
-  (setq-local indent-line-function (lambda ()
-				     (if (and (not nix-mode-use-smie)
-					      (eq nix-indent-function 'smie-indent-line))
-					 (indent-relative)
-				       (funcall nix-indent-function))))
+  (setq-local indent-line-function
+              (lambda ()
+                (if (and (not nix-mode-use-smie)
+                         (eq nix-indent-function 'smie-indent-line))
+                    (indent-relative)
+                  (funcall nix-indent-function))))
 
   ;; Indenting of comments
   (setq-local comment-start "# ")
