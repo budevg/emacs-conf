@@ -1,10 +1,10 @@
-;;; browse-at-remote.el --- Open github/gitlab/bitbucket page from Emacs -*- lexical-binding:t -*-
+;;; browse-at-remote.el --- Open github/gitlab/bitbucket/stash/gist/phab/sourcehut page from Emacs -*- lexical-binding:t -*-
 
-;; Copyright © 2015-2016 Rustem Muslimov
+;; Copyright © 2015-2020
 ;;
 ;; Author:     Rustem Muslimov <r.muslimov@gmail.com>
-;; Version:    0.8.0
-;; Keywords:   github, gitlab, bitbucket, convenience
+;; Version:    0.14.0
+;; Keywords:   github, gitlab, bitbucket, gist, stash, phabricator, sourcehut, pagure
 ;; Package-Requires: ((f "0.17.2") (s "1.9.0") (cl-lib "0.5"))
 
 ;; This program is free software: you can redistribute it and/or modify
@@ -34,23 +34,35 @@
 (require 's)
 (require 'cl-lib)
 (require 'vc-git)
+(require 'url-parse)
 
 (defgroup browse-at-remote nil
-  "Open target on github/gitlab/bitbucket"
+  "Open target on github/gitlab/bitbucket/stash/etc."
   :prefix "browse-at-remote-"
   :group 'applications)
 
 (defcustom browse-at-remote-remote-type-domains
   '(("bitbucket.org" ."bitbucket")
     ("github.com" . "github")
-    ("gitlab.com" . "gitlab"))
+    ("gitlab.com" . "gitlab")
+    ("git.savannah.gnu.org" . "gnu")
+    ("gist.github.com" . "gist")
+    ("git.sr.ht" . "sourcehut")
+    ("pagure.io" . "pagure")
+    ("src.fedoraproject.org" . "pagure"))
   "Alist of domain patterns to remote types."
 
   :type '(alist :key-type (string :tag "Domain")
                 :value-type (choice
                              (const :tag "GitHub" "github")
                              (const :tag "GitLab" "gitlab")
-                             (const :tag "BitBucket" "bitbucket")))
+                             (const :tag "Bitbucket" "bitbucket")
+                             (const :tag "Stash/Bitbucket Server" "stash")
+                             (const :tag "git.savannah.gnu.org" "gnu")
+                             (const :tag "Phabricator" "phabricator")
+                             (const :tag "gist.github.com" "gist")
+                             (const :tag "sourcehut" "sourcehut")
+                             (const :tag "pagure" "pagure")))
   :group 'browse-at-remote)
 
 (defcustom browse-at-remote-prefer-symbolic t
@@ -58,41 +70,61 @@
 
 When t, uses the branch name, if available. This generates easier to
 read URLs, but for long-lived links, the content of the linked file
-may change, producing link rot.
+may change, producing link root.
 
 When nil, uses the commit hash. The contents will never change."
   :type 'boolean
   :group 'browse-at-remote)
 
-(defun browse-at-remote--parse-git-prefixed (remote-url)
-  "Extract domain and slug from REMOTE-URL like git@... or git://..."
-  (cdr (s-match "git\\(?:@\\|://\\)\\([a-z.]+\\)\\(?::\\|/\\)\\([a-z0-9_.-]+/[a-z0-9_.-]+?\\)\\(?:\.git\\)?$" remote-url)))
+(defcustom browse-at-remote-add-line-number-if-no-region-selected t
+  "Always add line number even if region is not selected in buffer.
+When is option is t, bar-browse adds line number to URL even if region was not selected.
 
-(defun browse-at-remote--parse-https-prefixed (remote-url)
-  "Extract domain and slug from REMOTE-URL like https://.... or http://...."
-  (let ((matches (s-match "https?://\\(?:[a-z]+@\\)?\\([a-z0-9.-]+\\)/\\([a-z0-9_-]+/[a-z0-9_.-]+\\)" remote-url)))
-    (list (nth 1 matches)
-          (file-name-sans-extension (nth 2 matches)))))
+By default is true."
+  :type 'boolean
+  :group 'browse-at-remote)
+
+(defcustom browse-at-remote-use-http nil
+  "List of domains where the web URL should be http."
+  :type '(repeat string))
 
 (defun browse-at-remote--get-url-from-remote (remote-url)
   "Return (DOMAIN . URL) from REMOTE-URL."
-  (let* ((parsed
-          (cond
-           ((s-starts-with? "git" remote-url) (browse-at-remote--parse-git-prefixed remote-url))
-           ((s-starts-with? "http" remote-url) (browse-at-remote--parse-https-prefixed remote-url))))
-         (proto
-          (if (s-starts-with? "http:" remote-url) "http" "https"))
-         (domain (car parsed))
-         (slug (nth 1 parsed)))
-    (cons domain (format "%s://%s/%s" proto domain slug))))
+  ;; If the protocol isn't specified, git treats it as an SSH URL.
+  (unless (s-contains-p "://" remote-url)
+    (setq remote-url (concat "ssh://" remote-url)))
+  (let* ((parsed (url-generic-parse-url remote-url))
+         (host (url-host parsed))
+         (port (url-port-if-non-default parsed))
+         (web-proto
+          (if (equal (url-type parsed) "http") "http" "https"))
+         (filename (url-filename parsed)))
+    ;; SSH URLs can contain colons in the host part, e.g. ssh://example.com:foo.
+    (when (s-contains-p ":" host)
+      (let ((parts (s-split ":" host)))
+        (setq host (cl-first parts))
+        (when (member host browse-at-remote-use-http)
+          (setq web-proto "http"))
+        (setq filename (concat "/" (cl-second parts) filename))))
+    ;; when protocol is not http(s) port must always be stripped
+    (unless (member (url-type parsed) '("http" "https"))
+      (setq port nil))
+    ;; Drop .git at the end of `remote-url'.
+    (setq filename (s-chop-suffix ".git" filename))
+    ;; Preserve the port.
+    (when port
+      (setq host (format "%s:%d" host port)))
+    (cons host
+          (format "%s://%s%s" web-proto host filename))))
 
 (defun browse-at-remote--remote-ref (&optional filename)
   "Return (REMOTE-URL . REF) which contains FILENAME.
 Returns nil if no appropriate remote or ref can be found."
   (let ((local-branch (browse-at-remote--get-local-branch))
-        (revision (if (fboundp 'vc-git--symbolic-ref)
-                           (vc-git--symbolic-ref (or filename "."))
-                         (vc-git-working-revision (or filename "."))))
+        (revision (if (and (fboundp 'vc-git--symbolic-ref)
+                           browse-at-remote-prefer-symbolic)
+                      (vc-git--symbolic-ref (or filename "."))
+                    (vc-git-working-revision (or filename "."))))
         remote-branch
         remote-name)
     ;; If we're on a branch, try to find a corresponding remote
@@ -128,20 +160,26 @@ If HEAD is detached, return nil."
   "If LOCAL-BRANCH is tracking a remote branch, return
 \(REMOTE-NAME . REMOTE-BRANCH-NAME). Returns nil otherwise."
   (let ((remote-and-branch
-         (vc-git--run-command-string
-          nil "rev-parse"
-          "--symbolic-full-name"
-          "--abbrev-ref"
-          (format "%s@{upstream}" local-branch))))
+         ;; Try pushRemote first
+         (let ((push-remote (vc-git--run-command-string
+                             nil "config"
+                             (format "branch.%s.pushRemote" local-branch))))
+           (if push-remote
+               (format "%s/%s" (s-trim push-remote) local-branch)
+
+             ;; If there's no pushRemote, fall back to upstream
+             (vc-git--run-command-string
+              nil "rev-parse"
+              "--symbolic-full-name"
+              "--abbrev-ref"
+              (format "%s@{upstream}" local-branch))
+             ))))
     ;; `remote-and-branch' is of the form "origin/master"
     (if remote-and-branch
       ;; Split into two-item list, then convert to a pair.
       (apply #'cons
              (s-split-up-to "/" (s-trim remote-and-branch) 1))
-
-      ;; Ask user if worst case (TODO: replace with competing-read here)
-      (let ((remote-branch (read-string "Select remote branch: ")))
-        (cons (car (browse-at-remote--get-remotes)) remote-branch)))))
+      (cons (car (browse-at-remote--get-remotes)) local-branch))))
 
 (defun browse-at-remote--get-remote-url (remote)
   "Get URL of REMOTE from current repo."
@@ -167,22 +205,41 @@ If HEAD is detached, return nil."
     (s-trim (buffer-string))))
 
 (defun browse-at-remote--get-remote-type (target-repo)
-  (or
-   (let* ((domain (car target-repo))
+  (let* ((domain (car target-repo))
          (remote-type-from-config (browse-at-remote--get-remote-type-from-config)))
-    (if (member remote-type-from-config '("github" "bitbucket" "gitlab"))
-        remote-type-from-config
-      (cl-loop for pt in browse-at-remote-remote-type-domains
-               when (string= (car pt) domain)
-               return (cdr pt))))
+    (or
+     (if (s-present? remote-type-from-config)
+         remote-type-from-config
+       (cl-loop for pt in browse-at-remote-remote-type-domains
+                when (string= (car pt) domain)
+                return (cdr pt)))
 
-   (error (format "Sorry, not sure what to do with repo `%s'" target-repo))))
+     (error (format "Sorry, not sure what to do with domain `%s' (consider adding it to `browse-at-remote-remote-type-domains')"
+                    domain)))))
 
 (defun browse-at-remote--get-formatter (formatter-type remote-type)
   "Get formatter function for given FORMATTER-TYPE (region-url or commit-url) and REMOTE-TYPE (github or bitbucket)"
   (let ((formatter (intern (format "browse-at-remote--format-%s-as-%s" formatter-type remote-type))))
     (if (fboundp formatter)
         formatter nil)))
+
+(defun browse-at-remote-gnu-format-url (repo-url)
+  "Get a gnu formatted URL."
+  (replace-regexp-in-string
+   (concat "https://" (car (rassoc "gnu" browse-at-remote-remote-type-domains))
+           "/\\(git\\).*\\'")
+   "cgit" repo-url nil nil 1))
+
+(defun browse-at-remote--format-region-url-as-gnu (repo-url location filename &optional linestart lineend)
+  "URL formatter for gnu."
+  (let ((repo-url (browse-at-remote-gnu-format-url repo-url)))
+    (cond
+     (linestart (format "%s.git/tree/%s?h=%s#n%d" repo-url filename location linestart))
+     (t (format "%s.git/tree/%s?h=%s" repo-url filename location)))))
+
+(defun browse-at-remote--format-commit-url-as-gnu (repo-url commithash)
+  "Commit URL formatted for gnu"
+  (format "%s.git/commit/?id=%s" (browse-at-remote-gnu-format-url repo-url) commithash))
 
 (defun browse-at-remote--format-region-url-as-github (repo-url location filename &optional linestart lineend)
   "URL formatted for github."
@@ -196,15 +253,70 @@ If HEAD is detached, return nil."
   "Commit URL formatted for github"
   (format "%s/commit/%s" repo-url commithash))
 
-(defun browse-at-remote--format-region-url-as-bitbucket (repo-url location filename &optional linestart _lineend)
+(defun browse-at-remote--format-region-url-as-bitbucket (repo-url location filename &optional linestart lineend)
   "URL formatted for bitbucket"
   (cond
+   ((and linestart lineend)
+    (format "%s/src/%s/%s#cl-%d:%d" repo-url location filename linestart lineend))
    (linestart (format "%s/src/%s/%s#cl-%d" repo-url location filename linestart))
    (t (format "%s/src/%s/%s" repo-url location filename))))
 
 (defun browse-at-remote--format-commit-url-as-bitbucket (repo-url commithash)
   "Commit URL formatted for bitbucket"
   (format "%s/commits/%s" repo-url commithash))
+
+(defun browse-at-remote--format-region-url-as-gist (repo-url location filename &optional linestart lineend)
+  "URL formatted for gist."
+  (concat
+   (format "%s#file-%s" repo-url
+           (replace-regexp-in-string "[^a-z0-9_]+" "-" filename))
+   (cond
+    ((and linestart lineend) (format "-L%d-L%d" linestart lineend))
+    (linestart (format "-L%d" linestart))
+    (t ""))))
+
+(defun browse-at-remote--format-commit-url-as-gist (repo-url commithash)
+  "Commit URL formatted for gist"
+  (cond
+   ((equal commithash "master")
+    repo-url)
+   (t
+    (format "%s/%s" repo-url commithash))))
+
+(defun browse-at-remote--fix-repo-url-stash (repo-url)
+  "Inserts 'projects' and 'repos' in #repo-url"
+	(let* ((reversed-url (reverse (split-string repo-url "/")))
+         (project (car reversed-url))
+         (repo (nth 1 reversed-url)))
+    (string-join (reverse (append (list project "repos" repo "projects") (nthcdr 2 reversed-url))) "/")))
+
+(defun browse-at-remote--format-region-url-as-stash (repo-url location filename &optional linestart lineend)
+  "URL formatted for stash"
+	(let* ((branch (cond
+                  ((string= location "master") "")
+                  (t (string-join (list "?at=refs%2Fheads%2F" location)))))
+         (lines (cond
+                 (lineend (format "#%d-%d" linestart lineend))
+                 (linestart (format "#%d" linestart))
+                 (t ""))))
+    (format "%s/browse/%s%s%s" (browse-at-remote--fix-repo-url-stash repo-url) filename branch lines)))
+
+(defun browse-at-remote--format-commit-url-as-stash (repo-url commithash)
+  "Commit URL formatted for stash"
+  (format "%s/commits/%s" (browse-at-remote--fix-repo-url-stash repo-url) commithash))
+
+(defun browse-at-remote--format-region-url-as-phabricator (repo-url location filename &optional linestart lineend)
+  "URL formatted for Phabricator"
+  	(let* ((lines (cond
+                 (lineend (format "\$%d-%d" linestart lineend))
+                 (linestart (format "\$%d" linestart))
+                 (t ""))))
+  (format "%s/browse/%s/%s%s" repo-url location filename lines)))
+
+(defun browse-at-remote--format-commit-url-as-phabricator (repo-url commithash)
+  "Commit URL formatted for Phabricator"
+  (message repo-url)
+  (format "%s/%s%s" (replace-regexp-in-string "\/source/.*" "" repo-url)  (read-string "Please input the callsign for this repository:") commithash))
 
 (defun browse-at-remote--format-region-url-as-gitlab (repo-url location filename &optional linestart lineend)
   "URL formatted for gitlab.
@@ -215,10 +327,39 @@ The only difference from github is format of region: L1-2 instead of L1-L2"
    (linestart (format "%s/blob/%s/%s#L%d" repo-url location filename linestart))
    (t (format "%s/tree/%s/%s" repo-url location filename))))
 
+(defun browse-at-remote--format-region-url-as-sourcehut (repo-url location filename &optional linestart lineend)
+  "URL formatted for sourcehut."
+  (cond
+   ((and linestart lineend)
+    (format "%s/tree/%s/%s#L%d-%d" repo-url location filename linestart lineend))
+   (linestart (format "%s/tree/%s/%s#L%d" repo-url location filename linestart))
+   (t (format "%s/tree/%s/%s" repo-url location filename))))
+
 (defun browse-at-remote--format-commit-url-as-gitlab (repo-url commithash)
   "Commit URL formatted for gitlab.
 Currently the same as for github."
   (format "%s/commit/%s" repo-url commithash))
+
+(defun browse-at-remote--format-commit-url-as-sourcehut (repo-url commithash)
+  "Commit URL formatted for sourcehut."
+  (format "%s/commit/%s" repo-url commithash))
+
+(defun browse-at-remote--format-region-url-as-pagure (repo-url location filename &optional linestart lineend)
+  (let* ((repo-url (s-replace "/forks/" "/fork/" repo-url))
+         (markup_ext (list ".rst" ".mk" ".md" ".markdown"))
+         (markup? (seq-contains (mapcar (lambda (x) (string-suffix-p x filename)) markup_ext) t))
+         (filename (cond (markup? (concat filename "?text=True"))
+                         (t filename))))
+    (cond
+     ((and linestart lineend)
+      (format "%s/blob/%s/f/%s#_%d-%d" repo-url location filename linestart lineend))
+     (linestart (format "%s/blob/%s/f/%s#_%d" repo-url location filename linestart))
+     (t (format "%s/blob/%s/f/%s" repo-url location filename)))))
+
+(defun browse-at-remote--format-commit-url-as-pagure (repo-url commithash)
+  "Commit URL formatted for github"
+  (format "%s/commit/%s" repo-url commithash))
+
 
 (defun browse-at-remote--commit-url (commithash)
   "Return the URL to browse COMMITHASH."
@@ -269,18 +410,25 @@ Currently the same as for github."
      (save-excursion
        (save-restriction
          (widen)
-         (goto-char ( line-beginning-position))
+         (goto-char (line-beginning-position))
          (search-forward " ")
          (buffer-substring-no-properties (line-beginning-position) (- (point) 1))))))
 
-   ;; magit-commit-mode
-   ((eq major-mode 'magit-commit-mode)
+   ;; magit-commit-mode and magit-revision-mode
+   ((or (eq major-mode 'magit-commit-mode) (eq major-mode 'magit-revision-mode))
     (save-excursion
+      ;; Search for the SHA1 on the first line.
       (goto-char (point-min))
       (let* ((first-line
               (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
-             (commithash (car (s-split " " first-line))))
+             (commithash (cl-loop for word in (s-split " " first-line)
+                                  when (eq 40 (length word))
+                                  return word)))
         (browse-at-remote--commit-url commithash))))
+
+   ;; log-view-mode
+   ((derived-mode-p 'log-view-mode)
+    (browse-at-remote--commit-url (cadr (log-view-current-entry))))
 
    ;; We're inside of file-attached buffer with active region
    ((and buffer-file-name (use-region-p))
@@ -292,7 +440,8 @@ Currently the same as for github."
 
    ;; We're inside of file-attached buffer without region
    (buffer-file-name
-    (browse-at-remote--file-url (buffer-file-name) (point)))
+    (let ((line (when browse-at-remote-add-line-number-if-no-region-selected (point))))
+      (browse-at-remote--file-url (buffer-file-name) line)))
 
    (t (error "Sorry, I'm not sure what to do with this."))))
 
