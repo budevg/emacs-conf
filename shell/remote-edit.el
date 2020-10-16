@@ -1,5 +1,3 @@
-(require 'comint-redirect)
-
 (defun remote-edit-commit ()
   (interactive)
   (let ((remote-file-name remote-file-name-loc)
@@ -7,11 +5,11 @@
     (with-current-buffer remote-comint-buffer-loc
       (end-of-buffer)
       (delete-region (line-beginning-position) (line-end-position))
-      ;;(comint-send-input)
-      (insert (format "cat > %s" remote-file-name))
-      (comint-send-input)
+      (insert (format "cat << \"EOF\" > %s\n" remote-file-name))
       (insert modified-buffer-string)
-      (comint-send-eof))
+      (insert "\nEOF\n")
+      (comint-send-input)
+      )
     (remote-edit-quit)))
 
 (defun remote-edit-quit ()
@@ -21,7 +19,7 @@
     (kill-this-buffer)
     (switch-to-buffer remote-buffer)))
 
-  
+
 (defun remote-edit-file ()
   (interactive)
   (if (comint-check-proc (current-buffer))
@@ -30,7 +28,7 @@
              (output-buffer (get-buffer-create (concat "___" (file-name-nondirectory remote-file-name))))
              )
         (comint-redirect-send-command (format "cat %s" remote-file-name) output-buffer nil)
-        
+
         (with-current-buffer output-buffer
           (setq buffer-file-name (file-name-nondirectory remote-file-name))
           (set-auto-mode)
@@ -40,4 +38,3 @@
           (local-set-key [(control c) (control a)] 'remote-edit-quit)
           (local-set-key [(control c) (control c)] 'remote-edit-commit)
           ))))
-
