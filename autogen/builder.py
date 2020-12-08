@@ -116,6 +116,11 @@ class ConfigBuilder(object):
 (add-to-list \'load-path (in-emacs-d "%(dir)s"))
 '''.strip() % pkg_dir())
 
+        for d in [os.path.expanduser("~/.nix-profile/share/emacs/site-lisp")]:
+            self._data.append('''
+(add-to-list \'load-path "%s")
+'''.strip() % d)
+
         for pkg_file in self._enum_files():
             self._data.append('''
 (load-file (in-emacs-d "%(file)s"))
