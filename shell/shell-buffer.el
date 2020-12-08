@@ -65,12 +65,8 @@ If N is negative, search forwards for the -Nth following match."
   )
 
 
-(autoload 'multi-term "multi-term" nil t)
-(global-set-key [f3] 'multi-term)
-(eval-after-load "multi-term"
-  '(progn
-     (add-hook 'term-mode-hook (lambda () (yas-minor-mode -1)))
-     ))
+(autoload 'vterm "vterm" nil t)
+(global-set-key [f3] 'vterm)
 
 (defun dot-dircolors ()
   (interactive)
