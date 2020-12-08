@@ -7,6 +7,6 @@
 with pkgs;
 let py-packages = pypkgs: with pypkgs; [ ];
 in mkShell {
-  buildInputs = [ (python3.withPackages py-packages) python37Packages.black ];
+  buildInputs = [ (python3.withPackages py-packages) python3Packages.black ];
   ENV_VAR = "env_var";
 }
