@@ -67,6 +67,19 @@ If N is negative, search forwards for the -Nth following match."
 
 (autoload 'vterm "vterm" nil t)
 (global-set-key [f3] 'vterm)
+(eval-after-load "vterm"
+  '(progn
+     (defun vterm-cua-paste (&optional arg)
+       (interactive "P")
+       (vterm-goto-char (point))
+       (let ((inhibit-read-only t)
+             (buffer-read-only nil))
+         (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
+           (cua-paste arg))))
+     (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-cua-paste)
+     )
+  )
+
 
 (defun dot-dircolors ()
   (interactive)
