@@ -76,6 +76,9 @@
    `(diff-refine-added ((t (:inherit diff-added :weight bold))))
    `(diff-refine-change ((t (:inherit diff-changed :weight bold))))
    `(diff-refine-removed ((t (:inherit diff-removed :weight bold))))
+   `(smerge-refined-added ((t (:inherit diff-added :weight bold))))
+   `(smerge-refined-change ((t (:inherit diff-changed :weight bold))))
+   `(smerge-refined-removed ((t (:inherit diff-removed :weight bold))))
    ))
 
 ;;;###autoload
