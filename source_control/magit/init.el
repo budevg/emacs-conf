@@ -68,6 +68,8 @@
        (lambda ()
          (interactive)
          (magit-mode-bury-buffer t)))
+     (global-set-key (kbd "C-f m") 'magit-file-dispatch)
+
      (defadvice magit-status (around magit-fullscreen activate)
        ad-do-it
        (delete-other-windows))
