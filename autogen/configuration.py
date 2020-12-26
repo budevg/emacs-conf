@@ -163,6 +163,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "groovy mode"),
              Node(path = "prog_lang/rust/init.el",
                   msg = "rust mode"),
+             Node(path = "prog_lang/hcl/init.el",
+                  msg = "Hashicorp Configuration Language mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",

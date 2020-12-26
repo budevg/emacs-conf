@@ -1,0 +1,6 @@
+(:name hcl-mode
+       :type github
+       :pkgname "syohex/emacs-hcl-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/hcl")))
+       :description "Major mode of Hashicorp Configuration Language")
