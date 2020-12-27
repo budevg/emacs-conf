@@ -20,6 +20,7 @@
      (setq magit-save-repository-buffers nil)
      (setq magit-revert-buffers 'silent)
      (setq magit-revision-show-gravatars nil)
+     (setq magit-delete-by-moving-to-trash nil)
      (custom-set-faces
       '(magit-section-highlight ((t (:inherit nil)))))
      (setq magit-status-sections-hook
