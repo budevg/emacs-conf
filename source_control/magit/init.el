@@ -75,4 +75,10 @@
        ad-do-it
        (delete-other-windows))
      (autoload 'magit-gitignore-popup "magit-gitignore" nil t)
+
+     (defun magit-project-find-function (dir)
+       (let ((root (magit-toplevel dir)))
+         (and root (cons 'transient root))))
+     (with-eval-after-load 'project
+       (add-to-list 'project-find-functions 'magit-project-find-function))
      ))
