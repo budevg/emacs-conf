@@ -1,0 +1,7 @@
+(:name eglot
+       :description "Emacs Polyglot: an Emacs LSP client that stays out of your way."
+       :type github
+       :pkgname "joaotavora/eglot"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/smart_code/eglot")))
+       )
