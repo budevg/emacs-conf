@@ -33,6 +33,8 @@
                                                                     symbol-names))
                                  symbol-names)))
              (position (cdr (assoc selected-symbol name-and-pos))))
+        (if (fboundp 'xref-push-marker-stack)
+            (xref-push-marker-stack))
         (goto-char position)))))
 
 (global-set-key [(control \')] 'ido-goto-symbol)
