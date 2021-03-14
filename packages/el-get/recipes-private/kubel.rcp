@@ -1,0 +1,7 @@
+(:name kubel
+       :description "Emacs extension for controlling Kubernetes with limited permissions."
+       :type github
+       :pkgname "abrochard/kubel"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/kubernetes-el")))
+       )

@@ -190,6 +190,8 @@ applications = [Node(path = "applications/init.el",
                      msg = "Email configration"),
                 Node(path = "applications/prodigy-apps.el",
                      msg = "Different services to run"),
+                Node(path = "applications/kubernetes/init.el",
+                     msg = "Init kubernetes"),
                 ]
 
 packages = [Node(path = "packages/el-get",

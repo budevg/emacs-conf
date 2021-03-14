@@ -1,0 +1,7 @@
+(:name kubernetes-el
+       :description "A magit-style interface to the Kubernetes command-line client."
+       :type github
+       :pkgname "chrisbarrett/kubernetes-el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/kubernetes-el")))
+       )
