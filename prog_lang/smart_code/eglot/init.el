@@ -12,4 +12,5 @@
      (define-key eglot-mode-map (kbd "C-/")  'xref-find-definitions)
      (define-key global-map (kbd "C-?") 'xref-pop-marker-stack)
      (define-key global-map (kbd "C-.")  'xref-find-references)
+     (define-key global-map (kbd "C-c p")  'eglot-format)
      ))
