@@ -2,11 +2,10 @@
 # name: cmain
 # key: cmain
 # --
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> { } }:
 with pkgs;
 mkShell {
-  buildInputs = [
-  ];
+  buildInputs = [ ccls ];
   hardeningDisable = [ "all" ];
   ENV_VAR = "env_var";
 }
