@@ -1,0 +1,12 @@
+(:name c-xrefactory
+       :description "c-xrefactory - a refactoring browser for C and Java."
+       :type github
+       :branch "stable"
+       :website "https://github.com/thoni56/c-xrefactory"
+       :pkgname "thoni56/c-xrefactory"
+       :load-path "editors/emacs"
+       :build (("make"))
+       :load "editors/emacs/c-xrefactory.el"
+       :post-init (progn
+                    (add-to-list 'exec-path (concat default-directory "src"))
+                    (el-get-envpath-prepend "PATH" (concat default-directory "src"))))

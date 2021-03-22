@@ -25,6 +25,10 @@
     (defalias 'package-desc-summary 'package-desc-doc))
   (unless (fboundp 'package-desc-version)
     (defalias 'package-desc-version 'package-desc-vers))
+  ;; Introduced in 24.4
+  (unless (fboundp 'package-desc-archive)
+    (defun package-desc-archive (desc)
+      (aref desc (1- (length desc)))))
 
   ;; In 24.4 each package has a *list* of descriptors, pretend it's so
   ;; in 24.3 and below as well.
@@ -44,16 +48,27 @@ ALIST-ELEM should be an element from `package-alist' or
           (mapc #'package-delete descs)
         ;; Otherwise, just delete the package directory.
         (delete-directory (el-get-elpa-package-directory pkg) 'recursive))))
+
+  (defun el-get-elpa-package-id (pkg)
+    "A compat utility function."
+    ;; In 24.4+ we have a list of descs, earlier versions just use the
+    ;; name (a symbol) to specify the package.
+    (let* ((descs (cdr (assq pkg package-archive-contents))))
+      (cond
+       ((consp descs) (car descs))
+       ((null descs) (error "Couln't find package `%s'" pkg))
+       (t pkg))))
+
+  (defun el-get-elpa-package-archive-base (pkg)
+    "Compat wrapper for `package-archive-base'."
+    (package-archive-base (el-get-elpa-package-id pkg)))
+
   (defun el-get-elpa-install-package (pkg have-deps-p)
     "A wrapper for package.el installion.
 
 Installs the 1st available version. If HAVE-DEPS-P skip
 package.el's dependency computations."
-    (let* ((pkg-avail (assq pkg package-archive-contents))
-           (descs (cdr pkg-avail))
-           ;; In 24.4+ we have a list of descs, earlier versions just
-           ;; have a single package name
-           (to-install (if (listp descs) (car descs) pkg)))
+    (let ((to-install (el-get-elpa-package-id pkg)))
       (if have-deps-p
           (package-download-transaction (list to-install))
         (package-install to-install)))))
@@ -125,8 +140,14 @@ the recipe, then return nil."
       (if (memq system-type '(ms-dos windows-nt))
           ;; in windows, we have to actually copy the directories,
           ;; since symlink is not exactly reliable on those systems
-          (copy-directory (el-get-elpa-package-directory package)
-                          (file-name-as-directory (expand-file-name package el-get-dir)))
+          (let ((arglist (list (el-get-elpa-package-directory package)
+                               (file-name-as-directory (expand-file-name package el-get-dir))
+                               nil nil t)))
+            ;; The COPY-CONTENTS argument is new in 24.1.
+            (condition-case ()
+                (apply #'copy-directory arglist)
+              (wrong-number-of-arguments
+               (apply #'copy-directory (nbutlast arglist 3)))))
         (let ((default-directory el-get-dir))
           (make-symbolic-link elpa-dir package))))))
 
@@ -138,6 +159,7 @@ the recipe, then return nil."
 
 (defun el-get-elpa-install (package url post-install-fun)
   "Ask elpa to install given PACKAGE."
+  (setq package (el-get-as-symbol package))
   (let* ((have-deps-p (plist-member (el-get-package-def package) :depends))
          (elpa-dir (el-get-elpa-package-directory package))
          (elpa-repo (el-get-elpa-package-repo package))
@@ -152,7 +174,6 @@ the recipe, then return nil."
          ;; Prepend elpa-repo to `package-archives' for new package.el
          (package-archives (append (when elpa-repo (list elpa-repo))
                                    (when (boundp 'package-archives) package-archives))))
-    (el-get-insecure-check package url)
 
     (unless (and elpa-dir (file-directory-p elpa-dir))
       ;; package-install does these only for interactive calls
@@ -167,6 +188,12 @@ the recipe, then return nil."
                                (car elpa-new-repo)
                                (cdr elpa-new-repo))))
              (package-read-all-archive-contents)))
+      ;; We can only get the url after `package-archive-contents' is
+      ;; initialized.
+      (setq url (or (cdr elpa-repo)
+                    (el-get-elpa-package-archive-base package)))
+      (el-get-insecure-check package url)
+
       ;; TODO: should we refresh and retry once if package-install fails?
       ;; package-install generates autoloads, byte compiles
       (let (emacs-lisp-mode-hook fundamental-mode-hook prog-mode-hook)
@@ -202,6 +229,7 @@ first time.")
 
 (defun el-get-elpa-update (package url post-update-fun)
   "Ask elpa to update given PACKAGE."
+  (setq package (el-get-as-symbol package))
   (unless package--initialized
     (package-initialize t))
   (el-get-insecure-check package url)
@@ -217,8 +245,8 @@ first time.")
     ;; in windows, we don't have real symlinks, so its better to remove
     ;; the directory and copy everything again
     (when (memq system-type '(ms-dos windows-nt))
-      (delete-directory (el-get-elpa-package-directory package) t)
-      (el-get-elpa-symlink-package package)))
+      (delete-directory (el-get-elpa-package-directory package) t))
+    (el-get-elpa-symlink-package package))
   (funcall post-update-fun package))
 
 (defun el-get-elpa-remove (package url post-remove-fun)
@@ -230,6 +258,7 @@ first time.")
 
 (defun el-get-elpa-post-remove (package)
   "Do remove the ELPA bits for package, now"
+  (setq package (el-get-as-symbol package))
   (el-get-elpa-delete-package package))
 
 (add-hook 'el-get-elpa-remove-hook 'el-get-elpa-post-remove)
@@ -274,40 +303,43 @@ DO-NOT-UPDATE will not update the package archive contents before running this."
                         (car command-line-args-left)
                         el-get-recipe-path-elpa))
         (coding-system-for-write 'utf-8)
-        pkg package description)
+        (pkgs nil))
+
+    (unless (file-directory-p target-dir)
+      (make-directory target-dir 'recursive))
 
     (when (or (not package-archive-contents)
               (and package-archive-contents
                    (not do-not-update)))
       (package-refresh-contents))
+    (setq pkgs package-archive-contents)
 
-    (unless (file-directory-p target-dir)
-      (make-directory target-dir 'recursive))
-
-    (mapc (lambda (pkg)
-            (let* ((package     (format "%s" (car pkg)))
-                   (pkg-desc    (car (el-get-elpa-descs pkg)))
-                   (description (package-desc-summary pkg-desc))
-                   (pkg-deps    (package-desc-reqs pkg-desc))
-                   (depends     (remq 'emacs (mapcar #'car pkg-deps)))
-                   (emacs-dep   (assq 'emacs pkg-deps))
-                   (repo
-                    (assoc (aref pkg-desc (- (length pkg-desc) 1))
-                           package-archives)))
-              (with-temp-file (expand-file-name (concat package ".rcp")
-                                                target-dir)
-                (message "%s:%s" package description)
-                (insert
-                 (format
-                  "(:name %s\n:auto-generated t\n:type elpa\n:description \"%s\"\n:repo %S\n"
-                  package description repo))
-                (when depends
-                  (insert (format ":depends %s\n" depends)))
-                (when emacs-dep
-                  (insert (format ":minimum-emacs-version %s\n"
-                                  (cadr emacs-dep))))
-                (insert ")")
-                (indent-region (point-min) (point-max)))))
-          package-archive-contents)))
+    (with-temp-buffer
+      (dotimes-with-progress-reporter (_ (length package-archive-contents))
+          "Generating recipes from package.el descriptors..."
+        (let* ((pkg         (pop pkgs))
+               (package     (format "%s" (car pkg)))
+               (pkg-desc    (car (el-get-elpa-descs pkg)))
+               (description (package-desc-summary pkg-desc))
+               (pkg-deps    (package-desc-reqs pkg-desc))
+               (depends     (remq 'emacs (mapcar #'car pkg-deps)))
+               (emacs-dep   (assq 'emacs pkg-deps))
+               (repo        (assoc (package-desc-archive pkg-desc)
+                                   package-archives)))
+          (erase-buffer)
+          (insert
+           (format
+            "(:name %s\n:auto-generated t\n:type elpa\n:description %S\n:repo %S\n"
+            package description repo))
+          (when depends
+            (insert (format ":depends %s\n" depends)))
+          (when emacs-dep
+            (insert (format ":minimum-emacs-version %s\n"
+                            (cadr emacs-dep))))
+          (insert ")")
+          (goto-char (point-min))
+          (write-region nil nil
+                        (expand-file-name (concat package ".rcp") target-dir)
+                        nil 0))))))
 
 (provide 'el-get-elpa)

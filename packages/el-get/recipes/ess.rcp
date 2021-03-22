@@ -6,8 +6,7 @@
        :info "doc/info/"
        :build `(("make" "clean" "all" ,(concat "EMACS=" (shell-quote-argument
                                                          el-get-emacs))))
-       :load "ess-autoloads.el"
-       :prepare (progn
-                  (autoload 'R-mode "ess-site" nil t)
-                  (autoload 'Rd-mode "ess-site" nil t)
-                  (autoload 'Rnw-mode "ess-site" nil t)))
+       :load-path ("./lisp")
+       ;; Use the make-generated autoload file instead of ours.
+       :load "lisp/ess-autoloads.el"
+       :autoloads nil)

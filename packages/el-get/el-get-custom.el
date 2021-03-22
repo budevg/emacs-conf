@@ -40,7 +40,9 @@
 
 (defcustom el-get-status-file
   (concat (file-name-as-directory el-get-dir) ".status.el")
-  "Define where to store and read the package statuses")
+  "Define where to store and read the package statuses"
+  :group 'el-get
+  :type 'file)
 
 (defvar el-get-autoload-file
   (concat (file-name-as-directory el-get-dir) ".loaddefs.el")
@@ -614,8 +616,17 @@ platforms where this recipe should apply"
 
 ;; TODO: this should be nil; change at the next major version bump
 (defcustom el-get-allow-insecure t
-  "Allow packages to be installed over insecure connections."
+  "Allow packages to be installed over insecure connections.
+
+See `el-get-insecure-check'."
   :group 'el-get
   :type 'boolean)
+
+(defcustom el-get-secure-protocols '("https" "ssh" "git+ssh" "bzr+ssh" "sftp")
+  "List of secure protocols.
+
+See `el-get-insecure-check'."
+  :group 'el-get
+  :type '(repeat string))
 
 (provide 'el-get-custom)

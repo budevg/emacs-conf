@@ -23,7 +23,7 @@
 
   (unless (and (fboundp 'gnutls-available-p) (gnutls-available-p))
     (display-warning
-     'el-get
+     '(el-get tls)
      (concat "Your Emacs doesn't support HTTPS (TLS)"
              (if (eq system-type 'windows-nt)
                  ",\n  see https://github.com/dimitri/el-get/wiki/Installation-on-Windows."
@@ -49,8 +49,11 @@
 
            ;; First clone el-get
            (status
-            (call-process
-             git nil `(,buf t) t "--no-pager" "clone" "-v" url package)))
+            (apply #'call-process
+                   `(,git nil (,buf t) t "--no-pager" "clone" "-v"
+                     ,@(when (boundp 'el-get-install-shallow-clone)
+                         '("--depth" "1"))
+                     ,url ,package))))
 
       (unless (zerop status)
         (error "Couldn't clone el-get from the Git repository: %s" url))

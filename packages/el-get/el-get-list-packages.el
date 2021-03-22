@@ -359,11 +359,11 @@ in el-get package menu."
     (when type
       (insert (propertize (replace-regexp-in-string "\n" " " type)
                           'font-lock-face face)))
-    (indent-to (cdr (assoc "Description" el-get-package-list-column-alist)) 1)
     (when desc
-      (insert (propertize (replace-regexp-in-string "\n" " " desc)
-                          'font-lock-face face)
-              "\n"))))
+      (indent-to (cdr (assoc "Description" el-get-package-list-column-alist)) 1)
+      (let ((eol (position ?\n desc)))
+        (when eol (setq desc (substring desc 0 eol))))
+      (insert (propertize desc 'font-lock-face face) "\n"))))
 
 (defun el-get-list-all-packages ()
   (with-current-buffer (get-buffer-create "*el-get packages*")
@@ -403,7 +403,9 @@ in el-get package menu."
 (defun el-get-package-menu-sort-by-column (&optional e)
   "Sort the package menu by the last column clicked on."
   (interactive (list last-input-event))
-  (if e (mouse-select-window e))
+  ;; On Emacs 24.3 and earlier, `mouse-select-window' is not defined
+  ;; on tty only builds.
+  (if (and e (fboundp 'mouse-select-window)) (mouse-select-window e))
   (let* ((pos (event-start e))
          (obj (posn-object pos))
          (col (if obj
