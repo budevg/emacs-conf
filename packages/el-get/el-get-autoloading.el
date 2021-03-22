@@ -102,6 +102,11 @@
     (concat "^[^=.].*" (regexp-opt tmp t) "\\'"))
   "copied from `update-directory-autoloads'")
 
+(defun autoload-file-load-name-compat (file)
+  (if (>= emacs-major-version 28)
+      (autoload-file-load-name file (default-value 'generated-autoload-file))
+    (autoload-file-load-name file)))
+
 (defun el-get-remove-autoloads (package)
   "Remove from `el-get-autoload-file' any autoloads associated
 with the named PACKAGE"
@@ -111,7 +116,7 @@ with the named PACKAGE"
                               (directory-files dir t el-get-autoload-regexp)))
                           (el-get-load-path package)))
            (generated-autoload-file el-get-autoload-file)
-           (load-names (mapcar #'autoload-file-load-name files))
+           (load-names (mapcar #'autoload-file-load-name-compat files))
            (recentf-exclude (cons (regexp-quote el-get-autoload-file)
                                   (bound-and-true-p recentf-exclude)))
            (visited (find-buffer-visiting el-get-autoload-file)))
