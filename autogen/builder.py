@@ -40,6 +40,7 @@ class ConfigBuilder(object):
         self._data.append("")
 
     def _create(self):
+        self._native_compilation_flags()
         self._optimize_startup_time_start()
         self._gen_config_path()
         self._newline()
@@ -53,6 +54,10 @@ class ConfigBuilder(object):
         self._optimize_startup_time_end()
         self._newline()
         self._write_init_file()
+
+    def _native_compilation_flags(self):
+        self._data.append('''
+(setq comp-enable-subr-trampolines nil)''')
 
     def _optimize_startup_time_start(self):
         self._data.append('''
