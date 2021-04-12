@@ -650,7 +650,8 @@ Consult the existing formatters for examples of BODY."
    (format-all--buffer-easy
     executable
     "-ln" (cl-case (and (boundp 'sh-shell) (symbol-value 'sh-shell))
-            (bash "bash") (mksh "mksh") (t "posix")))))
+            (bash "bash") (mksh "mksh") (t "posix"))
+    "-i" (format "%d" sh-basic-offset))))
 
 (define-format-all-formatter sqlformat
   (:executable "sqlformat")
