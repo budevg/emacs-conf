@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ponce
+# key: ponce
+# --
+#pragma once$0
