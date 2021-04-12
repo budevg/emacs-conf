@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: ccmake
+# key: ccmake
+# --
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON$0
