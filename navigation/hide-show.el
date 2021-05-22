@@ -23,4 +23,5 @@
      (add-hook 'nxml-mode-hook 'hide-show-hook)
      (add-hook 'sh-mode-hook 'hide-show-hook)
      (add-hook 'rust-mode-hook 'hide-show-hook)
+     (add-hook 'nix-mode-hook 'hide-show-hook)
      (add-hook 'go-mode-hook 'hide-show-hook)))
