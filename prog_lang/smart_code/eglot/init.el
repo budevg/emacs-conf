@@ -12,5 +12,5 @@
      (define-key eglot-mode-map (kbd "C-/")  'xref-find-definitions)
      (define-key eglot-mode-map (kbd "C-?") 'xref-pop-marker-stack)
      (define-key eglot-mode-map (kbd "C-.")  'xref-find-references)
-     (define-key eglot-mode-map (kbd "C-c p")  'eglot-format)
+     (define-key eglot-mode-map (kbd "C-c P")  'eglot-format)
      ))
