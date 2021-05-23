@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: gomain
+# key: gomain
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ go_1_16 gopls ];
+  ENV_VAR = "env_var";
+}
+$0
