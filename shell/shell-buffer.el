@@ -97,9 +97,11 @@ If N is negative, search forwards for the -Nth following match."
       (setq exec-path-orig (copy-sequence exec-path)))
   (if (not (boundp 'process-environment-orig))
       (setq process-environment-orig (copy-sequence process-environment)))
-  (let ((direnv--executable (executable-find "nix-shell"))
-        (direnv--executable-args '("--run" "jq -n env"))
-        (direnv-always-show-summary nil))
+  (let* ((direnv--executable (executable-find "nix-shell"))
+         (nix-shell-path (locate-dominating-file default-directory "shell.nix"))
+         (direnv--executable-args `("--run" "jq -n env"
+                                    ,(expand-file-name (concat nix-shell-path "shell.nix"))))
+         (direnv-always-show-summary nil))
     (direnv-update-environment))
   (message "nix shell environment was loaded"))
 
