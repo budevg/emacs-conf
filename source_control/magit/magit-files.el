@@ -1,12 +1,14 @@
 ;;; magit-files.el --- finding files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -29,9 +31,6 @@
 ;; modes.
 
 ;;; Code:
-
-(eval-when-compile
-  (require 'subr-x))
 
 (require 'magit)
 
@@ -206,21 +205,25 @@ is done using `magit-find-index-noselect'."
     (unless (equal magit-buffer-refname "{index}")
       (user-error "%s isn't visiting the index" file))
     (if (y-or-n-p (format "Update index with contents of %s" (buffer-name)))
-        (let ((index (make-temp-file "index"))
+        (let ((index (make-temp-name (magit-git-dir "magit-update-index-")))
               (buffer (current-buffer)))
           (when magit-wip-before-change-mode
             (magit-wip-commit-before-change (list file) " before un-/stage"))
-          (let ((coding-system-for-write buffer-file-coding-system))
-            (with-temp-file index
-              (insert-buffer-substring buffer)))
-          (magit-with-toplevel
-            (magit-call-git "update-index" "--cacheinfo"
-                            (substring (magit-git-string "ls-files" "-s" file)
-                                       0 6)
-                            (magit-git-string "hash-object" "-t" "blob" "-w"
-                                              (concat "--path=" file)
-                                              "--" index)
-                            file))
+          (unwind-protect
+              (progn
+                (let ((coding-system-for-write buffer-file-coding-system))
+                  (with-temp-file index
+                    (insert-buffer-substring buffer)))
+                (magit-with-toplevel
+                  (magit-call-git
+                   "update-index" "--cacheinfo"
+                   (substring (magit-git-string "ls-files" "-s" file)
+                              0 6)
+                   (magit-git-string "hash-object" "-t" "blob" "-w"
+                                     (concat "--path=" file)
+                                     "--" (magit-convert-filename-for-git index))
+                   file)))
+            (ignore-errors (delete-file index)))
           (set-buffer-modified-p nil)
           (when magit-wip-after-apply-mode
             (magit-wip-commit-after-apply (list file) " after un-/stage")))
@@ -279,19 +282,13 @@ directory, while reading the FILENAME."
                           (confirm-nonexistent-file-or-buffer))))
   (find-file-other-frame filename wildcards))
 
-;;; File Mode
-
-(defvar magit-file-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "\C-xg"    'magit-status)
-    (define-key map "\C-x\M-g" 'magit-dispatch)
-    (define-key map "\C-c\M-g" 'magit-file-dispatch)
-    map)
-  "Keymap for `magit-file-mode'.")
+;;; File Dispatch
 
 ;;;###autoload (autoload 'magit-file-dispatch "magit" nil t)
-(define-transient-command magit-file-dispatch ()
-  "Invoke a Magit command that acts on the visited file."
+(transient-define-prefix magit-file-dispatch ()
+  "Invoke a Magit command that acts on the visited file.
+When invoked outside a file-visiting buffer, then fall back
+to `magit-dispatch'."
   :info-manual "(magit) Minor Mode for Buffers Visiting Files"
   ["Actions"
    [("s" "Stage"      magit-stage-file)
@@ -317,39 +314,12 @@ directory, while reading the FILENAME."
    [(5 "C-c r" "Rename file"   magit-file-rename)
     (5 "C-c d" "Delete file"   magit-file-delete)
     (5 "C-c u" "Untrack file"  magit-file-untrack)
-    (5 "C-c c" "Checkout file" magit-file-checkout)]])
-
-(defvar magit-file-mode-lighter "")
-
-(define-minor-mode magit-file-mode
-  "Enable some Magit features in a file-visiting buffer.
-
-Currently this only adds the following key bindings.
-\n\\{magit-file-mode-map}"
-  :package-version '(magit . "2.2.0")
-  :lighter magit-file-mode-lighter
-  :keymap  magit-file-mode-map)
-
-(defun magit-file-mode-turn-on ()
-  (and buffer-file-name
-       (magit-inside-worktree-p t)
-       (magit-file-mode)))
-
-;;;###autoload
-(define-globalized-minor-mode global-magit-file-mode
-  magit-file-mode magit-file-mode-turn-on
-  :package-version '(magit . "2.13.0")
-  :link '(info-link "(magit)Minor Mode for Buffers Visiting Files")
-  :group 'magit-essentials
-  :group 'magit-modes
-  :init-value t)
-;; Unfortunately `:init-value t' only sets the value of the mode
-;; variable but does not cause the mode function to be called, and we
-;; cannot use `:initialize' to call that explicitly because the option
-;; is defined before the functions, so we have to do it here.
-(cl-eval-when (load eval)
-  (when global-magit-file-mode
-    (global-magit-file-mode 1)))
+    (5 "C-c c" "Checkout file" magit-file-checkout)]]
+  (interactive)
+  (transient-setup
+   (if (magit-file-relative-name)
+       'magit-file-dispatch
+     'magit-dispatch)))
 
 ;;; Blob Mode
 
@@ -430,20 +400,27 @@ the same location in the respective file in the working tree."
 ;;; File Commands
 
 (defun magit-file-rename (file newname)
-  "Rename the FILE to NEWNAME.
-If FILE isn't tracked in Git, fallback to using `rename-file'."
+  "Rename or move FILE to NEWNAME.
+NEWNAME may be a file or directory name.  If FILE isn't tracked in
+Git, fallback to using `rename-file'."
   (interactive
    (let* ((file (magit-read-file "Rename file"))
           (dir (file-name-directory file))
-          (newname (read-file-name (format "Rename %s to file: " file)
+          (newname (read-file-name (format "Move %s to destination: " file)
                                    (and dir (expand-file-name dir)))))
      (list (expand-file-name file (magit-toplevel))
            (expand-file-name newname))))
-  (let ((oldbuf (get-file-buffer file)))
+  (let ((oldbuf (get-file-buffer file))
+        (dstdir (file-name-directory newname))
+        (dstfile (if (directory-name-p newname)
+                     (concat newname (file-name-nondirectory file))
+                   newname)))
     (when (and oldbuf (buffer-modified-p oldbuf))
       (user-error "Save %s before moving it" file))
-    (when (file-exists-p newname)
-      (user-error "%s already exists" newname))
+    (when (file-exists-p dstfile)
+      (user-error "%s already exists" dstfile))
+    (unless (file-exists-p dstdir)
+      (user-error "Destination directory %s does not exist" dstdir))
     (if (magit-file-tracked-p (magit-convert-filename-for-git file))
         (magit-call-git "mv"
                         (magit-convert-filename-for-git file)
@@ -452,7 +429,7 @@ If FILE isn't tracked in Git, fallback to using `rename-file'."
     (when oldbuf
       (with-current-buffer oldbuf
         (let ((buffer-read-only buffer-read-only))
-          (set-visited-file-name newname nil t))
+          (set-visited-file-name dstfile nil t))
         (if (fboundp 'vc-refresh-state)
             (vc-refresh-state)
           (with-no-warnings

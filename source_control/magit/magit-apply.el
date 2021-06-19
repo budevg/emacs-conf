@@ -1,12 +1,14 @@
 ;;; magit-apply.el --- apply Git diffs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -30,9 +32,6 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'subr-x))
-
 (require 'magit-core)
 (require 'magit-diff)
 (require 'magit-wip)
@@ -53,6 +52,7 @@
                   (path &optional prefer-short))
 (declare-function borg--maybe-absorb-gitdir "borg" (pkg))
 (declare-function borg--sort-submodule-sections "borg" (file))
+(declare-function borg-assimilate "borg" (package url &optional partially))
 (defvar borg-user-emacs-directory)
 
 ;;; Options
@@ -231,7 +231,7 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
          (ignore-context (magit-diff-ignore-any-space-p)))
     (unless (magit-diff-context-p)
       (user-error "Not enough context to apply patch.  Increase the context"))
-    (when (and magit-wip-before-change-mode (not inhibit-magit-refresh))
+    (when (and magit-wip-before-change-mode (not magit-inhibit-refresh))
       (magit-wip-commit-before-change files (concat " before " command)))
     (with-temp-buffer
       (insert patch)
@@ -239,7 +239,7 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
        "apply" args "-p0"
        (and ignore-context "-C0")
        "--ignore-space-change" "-"))
-    (unless inhibit-magit-refresh
+    (unless magit-inhibit-refresh
       (when magit-wip-after-apply-mode
         (magit-wip-commit-after-apply files (concat " after " command)))
       (magit-refresh))))
@@ -362,28 +362,24 @@ ignored) files."
                           `((file . ,repo) (untracked) (status)))
                          start))
         (let* ((topdir (magit-toplevel))
+               (url (let ((default-directory
+                            (file-name-as-directory (expand-file-name repo))))
+                      (or (magit-get "remote" (magit-get-some-remote) "url")
+                          (concat (file-name-as-directory ".") repo))))
                (package
                 (and (equal (bound-and-true-p borg-user-emacs-directory)
                             topdir)
                      (file-name-nondirectory (directory-file-name repo)))))
-          (magit-submodule-add-1
-           (let ((default-directory
-                   (file-name-as-directory (expand-file-name repo))))
-             (or (magit-get "remote" (magit-get-some-remote) "url")
-                 (concat (file-name-as-directory ".") repo)))
-           repo
-           (magit-submodule-read-name-for-path repo package))
-          (when package
-            (borg--sort-submodule-sections
-             (expand-file-name ".gitmodules" topdir))
-            (let ((default-directory borg-user-emacs-directory))
-              (borg--maybe-absorb-gitdir package))
-            (when (and (y-or-n-p
-                        (format "Also build and activate `%s' drone?" package))
-                       (fboundp 'borg-build)
-                       (fboundp 'borg-activate))
-              (borg-build package)
-              (borg-activate package))))))
+          (if (and package
+                   (y-or-n-p (format "Also assimilate `%s' drone?" package)))
+              (borg-assimilate package url)
+            (magit-submodule-add-1
+             url repo (magit-submodule-read-name-for-path repo package))
+            (when package
+              (borg--sort-submodule-sections
+               (expand-file-name ".gitmodules" topdir))
+              (let ((default-directory borg-user-emacs-directory))
+                (borg--maybe-absorb-gitdir package)))))))
     (magit-wip-commit-after-apply files " after stage")))
 
 ;;;; Unstage
@@ -486,7 +482,7 @@ without requiring confirmation."
          nil (if (magit-file-section-p section)
                  (oref section value)
                (magit-section-parent-value section)))
-        (progn (let ((inhibit-magit-refresh t))
+        (progn (let ((magit-inhibit-refresh t))
                  (funcall apply section "--reverse" "--cached")
                  (funcall apply section "--reverse" "--reject"))
                (magit-refresh))
@@ -506,7 +502,7 @@ without requiring confirmation."
            nil (if (magit-file-section-p section)
                    (oref section value)
                  (magit-section-parent-value section)))
-          (progn (let ((inhibit-magit-refresh t))
+          (progn (let ((magit-inhibit-refresh t))
                    (funcall apply sections "--reverse" "--cached")
                    (funcall apply sections "--reverse" "--reject"))
                  (magit-refresh))
@@ -544,7 +540,7 @@ without requiring confirmation."
           (`(?Y ,_            ?D ) (push file resurrect))
           (`(?X ?R ,(or ?  ?M ?D)) (push file rename)))))
     (unwind-protect
-        (let ((inhibit-magit-refresh t))
+        (let ((magit-inhibit-refresh t))
           (magit-wip-commit-before-change files " before discard")
           (when resolve
             (magit-discard-files--resolve (nreverse resolve)))

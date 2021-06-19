@@ -1,6 +1,6 @@
 ;;; git-rebase.el --- Edit Git rebase files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
@@ -8,7 +8,7 @@
 ;; Author: Phil Jackson <phil@shellarchive.co.uk>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
-;; This file is not part of GNU Emacs.
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -74,21 +74,13 @@
 
 ;;; Code:
 
-(require 'dash)
+(require 'magit)
+
 (require 'easymenu)
 (require 'server)
 (require 'with-editor)
-(require 'magit)
 
-(and (require 'async-bytecomp nil t)
-     (let ((pkgs (bound-and-true-p async-bytecomp-allowed-packages)))
-       (if (consp pkgs)
-           (cl-intersection '(all magit) pkgs)
-         (memq pkgs '(all t))))
-     (fboundp 'async-bytecomp-package-mode)
-     (async-bytecomp-package-mode 1))
-
-(eval-when-compile (require 'recentf))
+(defvar recentf-exclude)
 
 ;;; Options
 ;;;; Variables
@@ -223,27 +215,32 @@
 ;;; Commands
 
 (defun git-rebase-pick ()
-  "Use commit on current line."
+  "Use commit on current line.
+If the region is active, act on all lines touched by the region."
   (interactive)
   (git-rebase-set-action "pick"))
 
 (defun git-rebase-reword ()
-  "Edit message of commit on current line."
+  "Edit message of commit on current line.
+If the region is active, act on all lines touched by the region."
   (interactive)
   (git-rebase-set-action "reword"))
 
 (defun git-rebase-edit ()
-  "Stop at the commit on the current line."
+  "Stop at the commit on the current line.
+If the region is active, act on all lines touched by the region."
   (interactive)
   (git-rebase-set-action "edit"))
 
 (defun git-rebase-squash ()
-  "Meld commit on current line into previous commit, edit message."
+  "Meld commit on current line into previous commit, edit message.
+If the region is active, act on all lines touched by the region."
   (interactive)
   (git-rebase-set-action "squash"))
 
 (defun git-rebase-fixup ()
-  "Meld commit on current line into previous commit, discard its message."
+  "Meld commit on current line into previous commit, discard its message.
+If the region is active, act on all lines touched by the region."
   (interactive)
   (git-rebase-set-action "fixup"))
 
@@ -287,7 +284,7 @@
                               "r" "reword"
                               "s" "squash")
                             "\\(?1:")
-                " \\(?3:[^ \n]+\\) \\(?4:.*\\)"))
+                " \\(?3:[^ \n]+\\) ?\\(?4:.*\\)"))
     (exec . "\\(?1:x\\|exec\\) \\(?3:.*\\)")
     (bare . ,(concat (regexp-opt '("b" "break" "noop") "\\(?1:")
                      " *$"))
@@ -309,11 +306,11 @@ instance with all nil values is returned."
     (goto-char (line-beginning-position))
     (if-let ((re-start (concat "^\\(?5:" (regexp-quote comment-start)
                                "\\)? *"))
-             (type (-some (lambda (arg)
-                            (let ((case-fold-search nil))
-                              (and (looking-at (concat re-start (cdr arg)))
-                                   (car arg))))
-                          git-rebase-line-regexps)))
+             (type (seq-some (lambda (arg)
+                               (let ((case-fold-search nil))
+                                 (and (looking-at (concat re-start (cdr arg)))
+                                      (car arg))))
+                             git-rebase-line-regexps)))
         (git-rebase-action
          :action-type    type
          :action         (when-let ((action (match-string-no-properties 1)))
@@ -327,16 +324,40 @@ instance with all nil values is returned."
       (git-rebase-action))))
 
 (defun git-rebase-set-action (action)
-  (goto-char (line-beginning-position))
-  (with-slots (action-type target trailer)
-      (git-rebase-current-line)
-    (if (eq action-type 'commit)
-        (let ((inhibit-read-only t))
-          (magit-delete-line)
-          (insert (concat action " " target " " trailer "\n"))
-          (unless git-rebase-auto-advance
-            (forward-line -1)))
-      (ding))))
+  "Set action of commit line to ACTION.
+If the region is active, operate on all lines that it touches.
+Otherwise, operate on the current line.  As a special case, an
+ACTION of nil comments the rebase line, regardless of its action
+type."
+  (pcase (git-rebase-region-bounds t)
+    (`(,beg ,end)
+     (let ((end-marker (copy-marker end))
+           (pt-below-p (and mark-active (< (mark) (point)))))
+       (set-marker-insertion-type end-marker t)
+       (goto-char beg)
+       (while (< (point) end-marker)
+         (with-slots (action-type target trailer comment-p)
+             (git-rebase-current-line)
+           (cond
+            ((and action (eq action-type 'commit))
+             (let ((inhibit-read-only t))
+               (magit-delete-line)
+               (insert (concat action " " target " " trailer "\n"))))
+            ((and action-type (not (or action comment-p)))
+             (let ((inhibit-read-only t))
+               (insert comment-start " "))
+             (forward-line))
+            (t
+             ;; In the case of --rebase-merges, commit lines may have
+             ;; other lines with other action types, empty lines, and
+             ;; "Branch" comments interspersed.  Move along.
+             (forward-line)))))
+       (goto-char
+        (if git-rebase-auto-advance
+            end-marker
+          (if pt-below-p (1- end-marker) beg)))
+       (goto-char (line-beginning-position))))
+    (_ (ding))))
 
 (defun git-rebase-line-p (&optional pos)
   (save-excursion
@@ -344,15 +365,24 @@ instance with all nil values is returned."
     (and (oref (git-rebase-current-line) action-type)
          t)))
 
-(defun git-rebase-region-bounds ()
-  (when (use-region-p)
+(defun git-rebase-region-bounds (&optional fallback)
+  "Return region bounds if both ends touch rebase lines.
+Each bound is extended to include the entire line touched by the
+point or mark.  If the region isn't active and FALLBACK is
+non-nil, return the beginning and end of the current rebase line,
+if any."
+  (cond
+   ((use-region-p)
     (let ((beg (save-excursion (goto-char (region-beginning))
                                (line-beginning-position)))
           (end (save-excursion (goto-char (region-end))
                                (line-end-position))))
       (when (and (git-rebase-line-p beg)
                  (git-rebase-line-p end))
-        (list beg (1+ end))))))
+        (list beg (1+ end)))))
+   ((and fallback (git-rebase-line-p))
+    (list (line-beginning-position)
+          (1+ (line-end-position))))))
 
 (defun git-rebase-move-line-down (n)
   "Move the current commit (or command) N lines down.
@@ -423,16 +453,10 @@ current line."
   (funcall (default-value 'redisplay-unhighlight-region-function) rol))
 
 (defun git-rebase-kill-line ()
-  "Kill the current action line."
+  "Kill the current action line.
+If the region is active, act on all lines touched by the region."
   (interactive)
-  (goto-char (line-beginning-position))
-  (unless (oref (git-rebase-current-line) comment-p)
-    (let ((inhibit-read-only t))
-      (insert comment-start)
-      (insert " "))
-    (goto-char (line-beginning-position))
-    (when git-rebase-auto-advance
-      (forward-line))))
+  (git-rebase-set-action nil))
 
 (defun git-rebase-insert (rev)
   "Read an arbitrary commit and insert it below current line."
@@ -794,8 +818,8 @@ By default, this is the same except for the \"pick\" command."
 (add-to-list 'with-editor-server-window-alist
              (cons git-rebase-filename-regexp 'switch-to-buffer))
 
-(eval-after-load 'recentf
-  '(add-to-list 'recentf-exclude git-rebase-filename-regexp))
+(with-eval-after-load 'recentf
+  (add-to-list 'recentf-exclude git-rebase-filename-regexp))
 
 (add-to-list 'with-editor-file-name-history-exclude git-rebase-filename-regexp)
 

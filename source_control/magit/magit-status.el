@@ -1,12 +1,14 @@
 ;;; magit-status.el --- the grand overview  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -26,9 +28,6 @@
 ;; This library implements the status buffer.
 
 ;;; Code:
-
-(eval-when-compile
-  (require 'subr-x))
 
 (require 'magit)
 
@@ -176,6 +175,33 @@ AUTHOR-WIDTH has to be an integer.  When the name of the author
   :set-after '(magit-log-margin)
   :set (apply-partially #'magit-margin-set-variable 'magit-status-mode))
 
+(defcustom magit-status-use-buffer-arguments 'selected
+  "Whether `magit-status' reuses arguments when the buffer already exists.
+
+This option has no effect when merely refreshing the status
+buffer using `magit-refresh'.
+
+Valid values are:
+
+`always': Always use the set of arguments that is currently
+  active in the status buffer, provided that buffer exists
+  of course.
+`selected': Use the set of arguments from the status
+  buffer, but only if it is displayed in a window of the
+  current frame.  This is the default.
+`current': Use the set of arguments from the status buffer,
+  but only if it is the current buffer.
+`never': Never use the set of arguments from the status
+  buffer."
+  :package-version '(magit . "3.0.0")
+  :group 'magit-buffers
+  :group 'magit-commands
+  :type '(choice
+          (const :tag "always use args from buffer" always)
+          (const :tag "use args from buffer if displayed in frame" selected)
+          (const :tag "use args from buffer if it is current" current)
+          (const :tag "never use args from buffer" never)))
+
 ;;; Commands
 
 ;;;###autoload
@@ -242,8 +268,9 @@ prefix arguments:
   (interactive
    (let ((magit--refresh-cache (list (cons 0 0))))
      (list (and (or current-prefix-arg (not (magit-toplevel)))
-                (magit-read-repository
-                 (>= (prefix-numeric-value current-prefix-arg) 16)))
+                (progn (magit--assert-usable-git)
+                       (magit-read-repository
+                        (>= (prefix-numeric-value current-prefix-arg) 16))))
            magit--refresh-cache)))
   (let ((magit--refresh-cache (or cache (list (cons 0 0)))))
     (if directory
@@ -290,7 +317,7 @@ also contains other useful hints.")
       (if-let ((version (let ((default-directory directory))
                           (magit-git-version))))
           (if (version<= magit--minimal-git version)
-              (push version magit--remotes-using-recent-git)
+              (push remote magit--remotes-using-recent-git)
             (display-warning 'magit (format "\
 Magit requires Git >= %s, but on %s the version is %s.
 
@@ -327,7 +354,7 @@ doesn't find the executable, then consult the info node
     map)
   "Keymap for `magit-status-mode'.")
 
-(define-transient-command magit-status-jump ()
+(transient-define-prefix magit-status-jump ()
   "In a Magit-Status buffer, jump to a section."
   ["Jump to"
    [("z " "Stashes" magit-jump-to-stashes
@@ -344,10 +371,16 @@ doesn't find the executable, then consult the info node
      :if (lambda () (memq 'magit-insert-unpulled-from-upstream magit-status-sections-hook)))
     ("fp" "Unpulled from pushremote" magit-jump-to-unpulled-from-pushremote
      :if (lambda () (memq 'magit-insert-unpulled-from-pushremote magit-status-sections-hook)))
-    ("pu" "Unpushed to upstream" magit-jump-to-unpushed-to-upstream
+    ("pu" magit-jump-to-unpushed-to-upstream
      :if (lambda ()
            (or (memq 'magit-insert-unpushed-to-upstream-or-recent magit-status-sections-hook)
-               (memq 'magit-insert-unpushed-to-upstream magit-status-sections-hook))))
+               (memq 'magit-insert-unpushed-to-upstream magit-status-sections-hook)))
+     :description (lambda ()
+                    (let ((upstream (magit-get-upstream-branch)))
+                      (if (or (not upstream)
+                              (magit-rev-ancestor-p "HEAD" upstream))
+                          "Recent commits"
+                        "Unmerged into upstream"))))
     ("pp" "Unpushed to pushremote" magit-jump-to-unpushed-to-pushremote
      :if (lambda () (memq 'magit-insert-unpushed-to-pushremote magit-status-sections-hook)))
     ("a " "Assumed unstaged" magit-jump-to-assume-unchanged
@@ -397,8 +430,10 @@ Type \\[magit-commit] to create a commit.
     (setq directory default-directory))
   (magit--tramp-asserts directory)
   (let* ((default-directory directory)
-         (d (magit-diff--get-value 'magit-status-mode))
-         (l (magit-log--get-value  'magit-status-mode))
+         (d (magit-diff--get-value 'magit-status-mode
+                                   magit-status-use-buffer-arguments))
+         (l (magit-log--get-value 'magit-status-mode
+                                  magit-status-use-buffer-arguments))
          (file (and magit-status-goto-file-position
                     (magit-file-relative-name)))
          (line (and file (line-number-at-pos)))

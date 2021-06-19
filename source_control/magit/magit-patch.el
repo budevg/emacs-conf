@@ -1,12 +1,14 @@
 ;;; magit-patch.el --- creating and applying patches  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2020  The Magit Project Contributors
+;; Copyright (C) 2008-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -26,9 +28,6 @@
 ;; This library implements patch commands.
 
 ;;; Code:
-
-(eval-when-compile
-  (require 'subr-x))
 
 (require 'magit)
 
@@ -55,7 +54,7 @@ the prefix argument."
 ;;; Commands
 
 ;;;###autoload (autoload 'magit-patch "magit-patch" nil t)
-(define-transient-command magit-patch ()
+(transient-define-prefix magit-patch ()
   "Create or apply patches."
   ["Actions"
    ("c"  "Create patches"     magit-patch-create)
@@ -64,22 +63,30 @@ the prefix argument."
    ("r"  "Request pull"       magit-request-pull)])
 
 ;;;###autoload (autoload 'magit-patch-create "magit-patch" nil t)
-(define-transient-command magit-patch-create (range args files)
+(transient-define-prefix magit-patch-create (range args files)
   "Create patches for the commits in RANGE.
 When a single commit is given for RANGE, create a patch for the
 changes introduced by that commit (unlike 'git format-patch'
 which creates patches for all commits that are reachable from
 `HEAD' but not from the specified commit)."
   :man-page "git-format-patch"
+  :incompatible '(("--subject-prefix=" "--rfc"))
   ["Mail arguments"
-   (magit-format-patch:--in-reply-to)
-   (magit-format-patch:--thread)
+   (6 magit-format-patch:--in-reply-to)
+   (6 magit-format-patch:--thread)
+   (6 magit-format-patch:--from)
+   (6 magit-format-patch:--to)
+   (6 magit-format-patch:--cc)]
+  ["Patch arguments"
+   (magit-format-patch:--base)
    (magit-format-patch:--reroll-count)
+   (5 magit-format-patch:--interdiff)
+   (magit-format-patch:--range-diff)
    (magit-format-patch:--subject-prefix)
+   ("C-m r  " "RFC subject prefix" "--rfc")
    ("C-m l  " "Add cover letter" "--cover-letter")
-   (magit-format-patch:--from)
-   (magit-format-patch:--to)
-   (magit-format-patch:--cc)
+   (5 magit-format-patch:--cover-from-description)
+   (5 magit-format-patch:--notes)
    (magit-format-patch:--output-directory)]
   ["Diff arguments"
    (magit-diff:-U)
@@ -92,7 +99,7 @@ which creates patches for all commits that are reachable from
   ["Actions"
    ("c" "Create patches" magit-patch-create)]
   (interactive
-   (if (not (eq current-transient-command 'magit-patch-create))
+   (if (not (eq transient-current-command 'magit-patch-create))
        (list nil nil nil)
      (cons (if-let ((revs (magit-region-values 'commit t)))
                (concat (car (last revs)) "^.." (car revs))
@@ -111,29 +118,45 @@ which creates patches for all commits that are reachable from
       (save-match-data
         (find-file
          (expand-file-name
-          (concat (--some (and (string-match "\\`--reroll-count=\\(.+\\)" it)
-                               (format "v%s-" (match-string 1 it)))
-                          args)
+          (concat (when-let ((v (transient-arg-value "--reroll-count=" args)))
+                    (format "v%s-" v))
                   "0000-cover-letter.patch")
           (let ((topdir (magit-toplevel)))
-            (or (--some (and (string-match "\\`--output-directory=\\(.+\\)" it)
-                             (expand-file-name (match-string 1 it) topdir))
-                        args)
-                topdir))))))))
+            (if-let ((dir (transient-arg-value "--output-directory=" args)))
+                (expand-file-name dir topdir)
+              topdir))))))))
 
-(define-infix-argument magit-format-patch:--in-reply-to ()
+(transient-define-argument magit-format-patch:--in-reply-to ()
   :description "In reply to"
   :class 'transient-option
-  :key "C-m r  "
+  :key "C-m C-r"
   :argument "--in-reply-to=")
 
-(define-infix-argument magit-format-patch:--thread ()
+(transient-define-argument magit-format-patch:--thread ()
   :description "Thread style"
   :class 'transient-option
   :key "C-m s  "
-  :argument "--thread=")
+  :argument "--thread="
+  :reader #'magit-format-patch-select-thread-style)
 
-(define-infix-argument magit-format-patch:--reroll-count ()
+(defun magit-format-patch-select-thread-style (&rest _ignore)
+  (magit-read-char-case "Thread style " t
+    (?d "[d]eep" "deep")
+    (?s "[s]hallow" "shallow")))
+
+(transient-define-argument magit-format-patch:--base ()
+  :description "Insert base commit"
+  :class 'transient-option
+  :key "C-m b  "
+  :argument "--base="
+  :reader #'magit-format-patch-select-base)
+
+(defun magit-format-patch-select-base (prompt initial-input history)
+  (or (magit-completing-read prompt (cons "auto" (magit-list-refnames))
+                             nil nil initial-input history "auto")
+      (user-error "Nothing selected")))
+
+(transient-define-argument magit-format-patch:--reroll-count ()
   :description "Reroll count"
   :class 'transient-option
   :key "C-m v  "
@@ -141,34 +164,72 @@ which creates patches for all commits that are reachable from
   :argument "--reroll-count="
   :reader 'transient-read-number-N+)
 
-(define-infix-argument magit-format-patch:--subject-prefix ()
+(transient-define-argument magit-format-patch:--interdiff ()
+  :description "Insert interdiff"
+  :class 'transient-option
+  :key "C-m d i"
+  :argument "--interdiff="
+  :reader #'magit-transient-read-revision)
+
+(transient-define-argument magit-format-patch:--range-diff ()
+  :description "Insert range-diff"
+  :class 'transient-option
+  :key "C-m d r"
+  :argument "--range-diff="
+  :reader #'magit-format-patch-select-range-diff)
+
+(defun magit-format-patch-select-range-diff (prompt _initial-input _history)
+  (magit-read-range-or-commit prompt))
+
+(transient-define-argument magit-format-patch:--subject-prefix ()
   :description "Subject Prefix"
   :class 'transient-option
   :key "C-m p  "
   :argument "--subject-prefix=")
 
-(define-infix-argument magit-format-patch:--from ()
+(transient-define-argument magit-format-patch:--cover-from-description ()
+  :description "Use branch description"
+  :class 'transient-option
+  :key "C-m D  "
+  :argument "--cover-from-description="
+  :reader #'magit-format-patch-select-description-mode)
+
+(defun magit-format-patch-select-description-mode (&rest _ignore)
+  (magit-read-char-case "Use description as " t
+    (?m "[m]essage" "message")
+    (?s "[s]ubject" "subject")
+    (?a "[a]uto"    "auto")
+    (?n "[n]othing" "none")))
+
+(transient-define-argument magit-format-patch:--notes ()
+  :description "Insert commentary from notes"
+  :class 'transient-option
+  :key "C-m n  "
+  :argument "--notes="
+  :reader #'magit-notes-read-ref)
+
+(transient-define-argument magit-format-patch:--from ()
   :description "From"
   :class 'transient-option
   :key "C-m C-f"
   :argument "--from="
   :reader 'magit-transient-read-person)
 
-(define-infix-argument magit-format-patch:--to ()
+(transient-define-argument magit-format-patch:--to ()
   :description "To"
   :class 'transient-option
   :key "C-m C-t"
   :argument "--to="
   :reader 'magit-transient-read-person)
 
-(define-infix-argument magit-format-patch:--cc ()
+(transient-define-argument magit-format-patch:--cc ()
   :description "CC"
   :class 'transient-option
   :key "C-m C-c"
   :argument "--cc="
   :reader 'magit-transient-read-person)
 
-(define-infix-argument magit-format-patch:--output-directory ()
+(transient-define-argument magit-format-patch:--output-directory ()
   :description "Output directory"
   :class 'transient-option
   :key "C-m o  "
@@ -177,7 +238,7 @@ which creates patches for all commits that are reachable from
   :reader 'transient-read-existing-directory)
 
 ;;;###autoload (autoload 'magit-patch-apply "magit-patch" nil t)
-(define-transient-command magit-patch-apply (file &rest args)
+(transient-define-prefix magit-patch-apply (file &rest args)
   "Apply the patch file FILE."
   :man-page "git-apply"
   ["Arguments"
@@ -187,7 +248,7 @@ which creates patches for all commits that are reachable from
   ["Actions"
    ("a"  "Apply patch" magit-patch-apply)]
   (interactive
-   (if (not (eq current-transient-command 'magit-patch-apply))
+   (if (not (eq transient-current-command 'magit-patch-apply))
        (list nil)
      (list (expand-file-name
             (read-file-name "Apply patch: "
@@ -244,7 +305,7 @@ same differences as those shown in the buffer are always used."
 
 ;;;###autoload
 (defun magit-request-pull (url start end)
-  "Request upstream to pull from you public repository.
+  "Request upstream to pull from your public repository.
 
 URL is the url of your publicly accessible repository.
 START is a commit that already is in the upstream repository.

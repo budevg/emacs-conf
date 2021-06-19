@@ -1,12 +1,14 @@
 ;;; magit-process.el --- process functionality  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -31,18 +33,13 @@
 
 ;;; Code:
 
-(require 'ansi-color)
-(require 'cl-lib)
-(require 'dash)
-
-(eval-when-compile
-  (require 'subr-x))
-
-(require 'with-editor)
 (require 'magit-utils)
 (require 'magit-section)
 (require 'magit-git)
 (require 'magit-mode)
+
+(require 'ansi-color)
+(require 'with-editor)
 
 (declare-function auth-source-search "auth-source"
                   (&rest spec &key max require create delete &allow-other-keys))
@@ -98,6 +95,13 @@ When this is nil, no sections are ever removed."
   :package-version '(magit . "2.1.0")
   :group 'magit-process
   :type '(choice (const :tag "Never remove old sections" nil) integer))
+
+(defvar magit-process-extreme-logging nil
+  "Whether `magit-process-file' logs to *Messages* buffer.
+Only intended for temporary use when you try to figure out how
+Magit uses Git behind the scene.  Output that normally goes to
+the magit-process buffer continues to go there.  Not all output
+goes to either of these two buffers.")
 
 (defcustom magit-process-error-tooltip-max-lines 20
   "The number of lines for `magit-process-error-lines' to return.
@@ -156,7 +160,7 @@ itself from the hook, to avoid further futile attempts."
           "\\([Nn]o?\\)"
           ;; OpenSSH v8 prints this.  See #3969.
           "\\(?:/\\[fingerprint\\]\\)?"
-          "[\])] ?[?:] ?$")
+          "[\])] ?[?:]? ?$")
   "Regexp matching Yes-or-No prompts of Git and its subprocesses."
   :package-version '(magit . "2.1.0")
   :group 'magit-process
@@ -166,12 +170,15 @@ itself from the hook, to avoid further futile attempts."
   '("^\\(Enter \\)?[Pp]assphrase\\( for \\(RSA \\)?key '.*'\\)?: ?$"
     ;; Match-group 99 is used to identify the "user@host" part.
     "^\\(Enter \\)?[Pp]assword\\( for '?\\(https?://\\)?\\(?99:[^']*\\)'?\\)?: ?$"
+    "Please enter the passphrase for the ssh key"
+    "Please enter the passphrase to unlock the OpenPGP secret key"
     "^.*'s password: ?$"
+    "^Token: $" ; For git-credential-manager-core (#4318).
     "^Yubikey for .*: ?$"
     "^Enter PIN for .*: ?$")
   "List of regexps matching password prompts of Git and its subprocesses.
 Also see `magit-process-find-password-functions'."
-  :package-version '(magit . "2.8.0")
+  :package-version '(magit . "3.0.0")
   :group 'magit-process
   :type '(repeat (regexp)))
 
@@ -396,6 +403,9 @@ Process output goes into a new section in the buffer returned by
 Identical to `process-file' but temporarily enable Cygwin's
 \"noglob\" option during the call and ensure unix eol
 conversion."
+  (when magit-process-extreme-logging
+    (let ((inhibit-message t))
+      (message "$ %s" (magit-process--format-arguments process args))))
   (let ((process-environment (magit-process-environment))
         (default-process-coding-system (magit--process-coding-system)))
     (apply #'process-file process infile buffer display args)))
@@ -424,8 +434,9 @@ conversion."
   "Call Git in a separate process.
 ARGS is flattened and then used as arguments to Git.
 
-The current buffer's content is used as the process' standard
-input.
+The current buffer's content is used as the process's standard
+input.  The buffer is assumed to be temporary and thus OK to
+modify.
 
 Option `magit-git-executable' specifies the Git executable and
 option `magit-git-global-arguments' specifies constant arguments.
@@ -568,11 +579,11 @@ Magit status buffer."
     (when (eq system-type 'windows-nt)
       ;; On w32, git expects UTF-8 encoded input, ignore any user
       ;; configuration telling us otherwise.
-      (set-process-coding-system process 'utf-8-unix))
+      (set-process-coding-system process nil 'utf-8-unix))
     (process-put process 'section section)
     (process-put process 'command-buf (current-buffer))
     (process-put process 'default-dir default-directory)
-    (when inhibit-magit-refresh
+    (when magit-inhibit-refresh
       (process-put process 'inhibit-refresh t))
     (oset section process process)
     (with-current-buffer process-buf
@@ -628,25 +639,7 @@ Magit status buffer."
       (unless (equal (expand-file-name pwd)
                      (expand-file-name default-directory))
         (insert (file-relative-name pwd default-directory) ?\s))
-      (cond
-       ((and args (equal program magit-git-executable))
-        (setq args (-split-at (length magit-git-global-arguments) args))
-        (insert (propertize (file-name-nondirectory program)
-                            'font-lock-face 'magit-section-heading) " ")
-        (insert (propertize (char-to-string magit-ellipsis)
-                            'font-lock-face 'magit-section-heading
-                            'help-echo (mapconcat #'identity (car args) " ")))
-        (insert " ")
-        (insert (propertize (mapconcat #'shell-quote-argument (cadr args) " ")
-                            'font-lock-face 'magit-section-heading)))
-       ((and args (equal program shell-file-name))
-        (insert (propertize (cadr args)
-                            'font-lock-face 'magit-section-heading)))
-       (t
-        (insert (propertize (file-name-nondirectory program)
-                            'font-lock-face 'magit-section-heading) " ")
-        (insert (propertize (mapconcat #'shell-quote-argument args " ")
-                            'font-lock-face 'magit-section-heading))))
+      (insert (magit-process--format-arguments program args))
       (magit-insert-heading)
       (when errlog
         (if (bufferp errlog)
@@ -655,6 +648,32 @@ Magit status buffer."
           (insert-file-contents errlog)
           (goto-char (1- (point-max)))))
       (insert "\n"))))
+
+(defun magit-process--format-arguments (program args)
+  (cond
+   ((and args (equal program magit-git-executable))
+    (setq args (-split-at (length magit-git-global-arguments) args))
+    (concat (propertize (file-name-nondirectory program)
+                        'font-lock-face 'magit-section-heading)
+            " "
+            (propertize (if (stringp magit-ellipsis)
+                            magit-ellipsis
+                          ;; For backward compatibility.
+                          (char-to-string magit-ellipsis))
+                        'font-lock-face 'magit-section-heading
+                        'help-echo (mapconcat #'identity (car args) " "))
+            " "
+            (propertize (mapconcat #'shell-quote-argument (cadr args) " ")
+                        'font-lock-face 'magit-section-heading)))
+   ((and args (equal program shell-file-name))
+    (propertize (cadr args)
+                'font-lock-face 'magit-section-heading))
+   (t
+    (concat (propertize (file-name-nondirectory program)
+                        'font-lock-face 'magit-section-heading)
+            " "
+            (propertize (mapconcat #'shell-quote-argument args " ")
+                        'font-lock-face 'magit-section-heading)))))
 
 (defun magit-process-truncate-log ()
   (let* ((head nil)
@@ -773,13 +792,38 @@ To use this function add it to the appropriate hook
             'magit-process-password-auth-source)
 
 KEY typically derives from a prompt such as:
-  Password for 'https://tarsius@bitbucket.org'
+  Password for 'https://yourname@github.com'
 in which case it would be the string
-  tarsius@bitbucket.org
+  yourname@github.com
 which matches the ~/.authinfo.gpg entry
-  machine bitbucket.org login tarsius password 12345
+  machine github.com login yourname password 12345
 or iff that is undefined, for backward compatibility
-  machine tarsius@bitbucket.org password 12345"
+  machine yourname@github.com password 12345
+
+On github.com you should not use your password but a
+personal access token, see [1].  For information about
+the peculiarities of other forges, please consult the
+respective documentation.
+
+After manually editing ~/.authinfo.gpg you must reset
+the cache using
+  M-x auth-source-forget-all-cached RET
+
+The above will save you from having to repeatedly type
+your token or password, but you might still repeatedly
+be asked for your username.  To prevent that, change an
+URL like
+  https://github.com/foo/bar.git
+to
+  https://yourname@github.com/foo/bar.git
+
+Instead of changing all such URLs manually, they can
+be translated on the fly by doing this once
+  git config --global \
+    url.https://yourname@github.com.insteadOf \
+    https://github.com
+
+[1]: https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token."
   (require 'auth-source)
   (and (string-match "\\`\\(.+\\)@\\([^@]+\\)\\'" key)
        (let* ((user (match-string 1 key))
@@ -792,6 +836,20 @@ or iff that is undefined, for backward compatibility
          (if (functionp secret)
              (funcall secret)
            secret))))
+
+(defun magit-process-git-credential-manager-core (process string)
+  "Authenticate using `git-credential-manager-core'.
+
+To use this function add it to the appropriate hook
+  (add-hook 'magit-process-prompt-functions
+            'magit-process-git-credential-manager-core)"
+  (and (string-match "^option (enter for default): $" string)
+       (progn
+         (magit-process-buffer)
+         (let ((option (format "%c\n"
+                               (read-char-choice "Option: " '(?\r ?\j ?1 ?2)))))
+           (insert-before-markers-and-inherit option)
+           (process-send-string process option)))))
 
 (defun magit-process-password-prompt (process string)
   "Find a password based on prompt STRING and send it to git.
@@ -954,8 +1012,8 @@ If STR is supplied, it replaces the `mode-line-process' text."
       ;; The following closure captures the repokey value, and is
       ;; added to `pre-command-hook'.
       (cl-labels ((enable-magit-process-unset-mode-line
-                   () ;; Remove ourself from the hook variable, so
-                      ;; that we only run once.
+                   () ;;; Remove ourself from the hook variable, so
+                      ;;; that we only run once.
                    (remove-hook 'pre-command-hook
                                 #'enable-magit-process-unset-mode-line)
                    ;; Clear the inhibit flag for the repository in

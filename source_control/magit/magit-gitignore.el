@@ -1,12 +1,14 @@
 ;;; magit-gitignore.el --- intentionally untracked files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2020  The Magit Project Contributors
+;; Copyright (C) 2008-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -27,15 +29,12 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'subr-x))
-
 (require 'magit)
 
 ;;; Transient
 
 ;;;###autoload (autoload 'magit-gitignore "magit-gitignore" nil t)
-(define-transient-command magit-gitignore ()
+(transient-define-prefix magit-gitignore ()
   "Instruct Git to ignore a file or pattern."
   :man-page "gitignore"
   ["Gitignore"
@@ -71,8 +70,8 @@ repository.  Also stage the file."
 
 ;;;###autoload
 (defun magit-gitignore-in-subdir (rule directory)
-  "Add the Git ignore RULE to a \".gitignore\" file.
-Prompted the user for a directory and add the rule to the
+  "Add the Git ignore RULE to a \".gitignore\" file in DIRECTORY.
+Prompt the user for a directory and add the rule to the
 \".gitignore\" file in that directory.  Since such files are
 tracked, they are shared with other clones of the repository.
 Also stage the file."
@@ -81,7 +80,7 @@ Also stage the file."
   (magit-with-toplevel
     (let ((file (expand-file-name ".gitignore" directory)))
       (magit--gitignore rule file)
-      (magit-run-git "add" file))))
+      (magit-run-git "add" (magit-convert-filename-for-git file)))))
 
 ;;;###autoload
 (defun magit-gitignore-in-gitdir (rule)

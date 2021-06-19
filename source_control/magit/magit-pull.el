@@ -1,12 +1,14 @@
 ;;; magit-pull.el --- update local objects and refs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2020  The Magit Project Contributors
+;; Copyright (C) 2008-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -40,7 +42,7 @@
 ;;; Commands
 
 ;;;###autoload (autoload 'magit-pull "magit-pull" nil t)
-(define-transient-command magit-pull ()
+(transient-define-prefix magit-pull ()
   "Pull from another repository."
   :man-page "git-pull"
   [:description
@@ -77,7 +79,7 @@
   (transient-args 'magit-pull))
 
 ;;;###autoload (autoload 'magit-pull-from-pushremote "magit-pull" nil t)
-(define-suffix-command magit-pull-from-pushremote (args)
+(transient-define-suffix magit-pull-from-pushremote (args)
   "Pull from the push-remote of the current branch.
 
 With a prefix argument or when the push-remote is either not
@@ -107,7 +109,7 @@ push-remote."
       (format "%s, setting that" v)))))
 
 ;;;###autoload (autoload 'magit-pull-from-upstream "magit-pull" nil t)
-(define-suffix-command magit-pull-from-upstream (args)
+(transient-define-suffix magit-pull-from-upstream (args)
   "Pull from the upstream of the current branch.
 
 With a prefix argument or when the upstream is either not

@@ -1,12 +1,14 @@
 ;;; magit-stash.el --- stash support for Magit  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2020  The Magit Project Contributors
+;; Copyright (C) 2008-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -27,11 +29,11 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'subr-x))
-
 (require 'magit)
 (require 'magit-reflog)
+
+;; For `magit-stash-drop'.
+(defvar helm-comp-read-use-marked)
 
 ;;; Options
 
@@ -86,7 +88,7 @@ AUTHOR-WIDTH has to be an integer.  When the name of the author
 ;;; Commands
 
 ;;;###autoload (autoload 'magit-stash "magit-stash" nil t)
-(define-transient-command magit-stash ()
+(transient-define-prefix magit-stash ()
   "Stash uncommitted changes."
   :man-page "git-stash"
   ["Arguments"
@@ -231,7 +233,8 @@ When the region is active offer to drop all contained stashes."
   (interactive
    (list (--if-let (magit-region-values 'stash)
              (magit-confirm 'drop-stashes nil "Drop %i stashes" nil it)
-           (magit-read-stash "Drop stash"))))
+           (let ((helm-comp-read-use-marked t))
+             (magit-read-stash "Drop stash")))))
   (dolist (stash (if (listp stash)
                      (nreverse (prog1 stash (setq stash (car stash))))
                    (list stash)))
@@ -269,7 +272,7 @@ The branch is created using `magit-branch-and-checkout', using the
 current branch or `HEAD' as the start-point."
   (interactive (list (magit-read-stash "Branch stash")
                      (magit-read-string-ns "Branch name")))
-  (let ((inhibit-magit-refresh t))
+  (let ((magit-inhibit-refresh t))
     (magit-branch-and-checkout branch (or (magit-get-current-branch) "HEAD")))
   (magit-stash-apply stash))
 
@@ -375,11 +378,12 @@ instead of \"Stashes:\"."
   (let ((verified (magit-rev-verify ref))
         (autostash
          (and (magit-rebase-in-progress-p)
-              (magit-file-line
-               (magit-git-dir
-                (-> (if (file-directory-p (magit-git-dir "rebase-merge"))
-                        "rebase-merge/autostash"
-                      "rebase-apply/autostash")))))))
+              (thread-first
+                  (if (file-directory-p (magit-git-dir "rebase-merge"))
+                      "rebase-merge/autostash"
+                    "rebase-apply/autostash")
+                magit-git-dir
+                magit-file-line))))
     (when (or autostash verified)
       (magit-insert-section (stashes ref)
         (magit-insert-heading heading)

@@ -1,12 +1,14 @@
 ;;; magit-clone.el --- clone a repository  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2020  The Magit Project Contributors
+;; Copyright (C) 2008-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -104,7 +106,7 @@ the name of the owner.  Also see `magit-clone-name-alist'."
 ;;; Commands
 
 ;;;###autoload (autoload 'magit-clone "magit-clone" nil t)
-(define-transient-command magit-clone (&optional transient)
+(transient-define-prefix magit-clone (&optional transient)
   "Clone a repository."
   :man-page "git-clone"
   ["Fetch arguments"
@@ -192,30 +194,48 @@ Then show the status buffer for the new repository."
   (magit-clone-internal repository directory (cons "--mirror" args)))
 
 (defun magit-clone-internal (repository directory args)
-  (run-hooks 'magit-credential-hook)
-  (setq directory (file-name-as-directory (expand-file-name directory)))
-  (magit-run-git-async "clone" args "--" repository
-                       (magit-convert-filename-for-git directory))
-  ;; Don't refresh the buffer we're calling from.
-  (process-put magit-this-process 'inhibit-refresh t)
-  (set-process-sentinel
-   magit-this-process
-   (lambda (process event)
-     (when (memq (process-status process) '(exit signal))
-       (let ((magit-process-raise-error t))
-         (magit-process-sentinel process event)))
-     (when (and (eq (process-status process) 'exit)
-                (= (process-exit-status process) 0))
-       (unless (memq (car args) '("--bare" "--mirror"))
-         (let ((default-directory directory))
-           (when (or (eq  magit-clone-set-remote.pushDefault t)
-                     (and magit-clone-set-remote.pushDefault
-                          (y-or-n-p "Set `remote.pushDefault' to \"origin\"? ")))
-             (setf (magit-get "remote.pushDefault") "origin"))
-           (unless magit-clone-set-remote-head
-             (magit-remote-unset-head "origin"))))
-       (with-current-buffer (process-get process 'command-buf)
-         (magit-status-setup-buffer directory))))))
+  (let* ((checkout (not (memq (car args) '("--bare" "--mirror"))))
+         (remote (or (transient-arg-value "--origin" args)
+                     (magit-get "clone.defaultRemote")
+                     "origin"))
+         (set-push-default
+          (and checkout
+               (or (eq  magit-clone-set-remote.pushDefault t)
+                   (and magit-clone-set-remote.pushDefault
+                        (y-or-n-p (format "Set `remote.pushDefault' to %S? "
+                                          remote)))))))
+    (run-hooks 'magit-credential-hook)
+    (setq directory (file-name-as-directory (expand-file-name directory)))
+    (when (file-exists-p directory)
+      (if (file-directory-p directory)
+          (when (> (length (directory-files directory)) 2)
+            (let ((name (magit-clone--url-to-name repository)))
+              (unless (and name
+                           (setq directory (file-name-as-directory
+                                            (expand-file-name name directory)))
+                           (not (file-exists-p directory)))
+                (user-error "%s already exists" directory))))
+        (user-error "%s already exists and is not a directory" directory)))
+    (magit-run-git-async "clone" args "--" repository
+                         (magit-convert-filename-for-git directory))
+    ;; Don't refresh the buffer we're calling from.
+    (process-put magit-this-process 'inhibit-refresh t)
+    (set-process-sentinel
+     magit-this-process
+     (lambda (process event)
+       (when (memq (process-status process) '(exit signal))
+         (let ((magit-process-raise-error t))
+           (magit-process-sentinel process event)))
+       (when (and (eq (process-status process) 'exit)
+                  (= (process-exit-status process) 0))
+         (when checkout
+           (let ((default-directory directory))
+             (when set-push-default
+               (setf (magit-get "remote.pushDefault") remote))
+             (unless magit-clone-set-remote-head
+               (magit-remote-unset-head remote))))
+         (with-current-buffer (process-get process 'command-buf)
+           (magit-status-setup-buffer directory)))))))
 
 (defun magit-clone-read-args ()
   (let ((repo (magit-clone-read-repository)))
@@ -226,8 +246,7 @@ Then show the status buffer for the new repository."
                (funcall magit-clone-default-directory repo)
              magit-clone-default-directory)
            nil nil
-           (and (string-match "\\([^/:]+?\\)\\(/?\\.git\\)?$" repo)
-                (match-string 1 repo)))
+           (magit-clone--url-to-name repo))
           (transient-args 'magit-clone))))
 
 (defun magit-clone-read-repository ()
@@ -242,25 +261,31 @@ Then show the status buffer for the new repository."
     (?l "or [l]ocal url"
         (concat "file://" (read-directory-name "Clone repository: file://")))))
 
+(defun magit-clone--url-to-name (url)
+  (and (string-match "\\([^/:]+?\\)\\(/?\\.git\\)?$" url)
+       (match-string 1 url)))
+
 (defun magit-clone--name-to-url (name)
-  (or (-some
+  (or (seq-some
        (pcase-lambda (`(,re ,host ,user))
          (and (string-match re name)
               (let ((repo (match-string 1 name)))
-                (format-spec
-                 magit-clone-url-format
-                 `((?h . ,host)
-                   (?n . ,(if (string-match-p "/" repo)
-                              repo
-                            (if (string-match-p "\\." user)
-                                (if-let ((user (magit-get user)))
-                                    (concat user "/" repo)
-                                  (user-error
-                                   "Set %S or specify owner explicitly" user))
-                              (concat user "/" repo)))))))))
+                (magit-clone--format-url host user repo))))
        magit-clone-name-alist)
       (user-error "Not an url and no matching entry in `%s'"
                   'magit-clone-name-alist)))
+
+(defun magit-clone--format-url (host user repo)
+  (format-spec
+   magit-clone-url-format
+   `((?h . ,host)
+     (?n . ,(if (string-match-p "/" repo)
+                repo
+              (if (string-match-p "\\." user)
+                  (if-let ((user (magit-get user)))
+                      (concat user "/" repo)
+                    (user-error "Set %S or specify owner explicitly" user))
+                (concat user "/" repo)))))))
 
 ;;; _
 (provide 'magit-clone)

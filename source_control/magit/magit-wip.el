@@ -1,12 +1,14 @@
 ;;; magit-wip.el --- commit snapshots to work-in-progress refs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -29,9 +31,6 @@
 ;; demand.
 
 ;;; Code:
-
-(eval-when-compile
-  (require 'subr-x))
 
 (require 'magit-core)
 (require 'magit-log)
@@ -107,6 +106,7 @@ is used as `branch-ref'."
 
 ;;; Modes
 
+;;;###autoload
 (define-minor-mode magit-wip-mode
   "Save uncommitted changes to work-in-progress refs.
 
@@ -227,6 +227,14 @@ command which is about to be called are committed."
       (add-hook  'before-save-hook 'magit-wip-commit-initial-backup)
     (remove-hook 'before-save-hook 'magit-wip-commit-initial-backup)))
 
+(defun magit--any-wip-mode-enabled-p ()
+  "Return non-nil if any global wip mode is enabled."
+  (or magit-wip-mode
+      magit-wip-after-save-mode
+      magit-wip-after-apply-mode
+      magit-wip-before-change-mode
+      magit-wip-initial-backup-mode))
+
 (defvar-local magit-wip-buffer-backed-up nil)
 (put 'magit-wip-buffer-backed-up 'permanent-local t)
 
@@ -281,9 +289,24 @@ commit message."
 (defun magit-wip-commit-worktree (ref files msg)
   (let* ((wipref (magit--wip-wtree-ref ref))
          (parent (magit-wip-get-parent ref wipref))
-         (tree (magit-with-temp-index parent "--reset"
+         (tree (magit-with-temp-index parent (list "--reset" "-i")
                  (if files
-                     (magit-call-git "add" "--" files)
+                     ;; Note: `update-index' is used instead of `add'
+                     ;; because `add' will fail if a file is already
+                     ;; deleted in the temporary index.
+                     (magit-call-git
+                      "update-index" "--add" "--remove"
+                      (and (pcase (magit-repository-local-get
+                                   'update-index-has-ignore-sw-p 'unset)
+                             (`unset
+                              (let ((val (version<= "2.25.0"
+                                                    (magit-git-version))))
+                                (magit-repository-local-set
+                                 'update-index-has-ignore-sw-p val)
+                                val))
+                             (val val))
+                           "--ignore-skip-worktree-entries")
+                      "--" files)
                    (magit-with-toplevel
                      (magit-call-git "add" "-u" ".")))
                  (magit-git-string "write-tree"))))
@@ -349,7 +372,8 @@ commit message."
 (defun magit--wip-ref (namespace &optional ref)
   (concat magit-wip-namespace namespace
           (or (and ref (string-prefix-p "refs/" ref) ref)
-              (when-let ((branch (or ref (magit-get-current-branch))))
+              (when-let ((branch (and (not (equal ref "HEAD"))
+                                      (or ref (magit-get-current-branch)))))
                 (concat "refs/heads/" branch))
               "HEAD")))
 

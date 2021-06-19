@@ -1,12 +1,14 @@
 ;;; magit-tag.el --- tag functionality  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2020  The Magit Project Contributors
+;; Copyright (C) 2010-2021  The Magit Project Contributors
 ;;
 ;; You should have received a copy of the AUTHORS.md file which
 ;; lists all contributors.  If not, see http://magit.vc/authors.
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Magit is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
@@ -29,8 +31,11 @@
 
 (require 'magit)
 
+;; For `magit-tag-delete'.
+(defvar helm-comp-read-use-marked)
+
 ;;;###autoload (autoload 'magit-tag "magit" nil t)
-(define-transient-command magit-tag ()
+(transient-define-prefix magit-tag ()
   "Create or delete a tag."
   :man-page "git-tag"
   ["Arguments"
@@ -48,12 +53,12 @@
 (defun magit-tag-arguments ()
   (transient-args 'magit-tag))
 
-(define-infix-argument magit-tag:--local-user ()
+(transient-define-argument magit-tag:--local-user ()
   :description "Sign as"
   :class 'transient-option
   :shortarg "-u"
   :argument "--local-user="
-  :reader 'magit-read-gpg-secret-key
+  :reader 'magit-read-gpg-signing-key
   :history-key 'magit:--gpg-sign)
 
 ;;;###autoload
@@ -78,7 +83,8 @@ defaulting to the tag at point.
 \n(git tag -d TAGS)"
   (interactive (list (--if-let (magit-region-values 'tag)
                          (magit-confirm t nil "Delete %i tags" nil it)
-                       (magit-read-tag "Delete tag" t))))
+                       (let ((helm-comp-read-use-marked t))
+                         (magit-read-tag "Delete tag" t)))))
   (magit-run-git "tag" "-d" tags))
 
 ;;;###autoload
@@ -110,16 +116,33 @@ defaulting to the tag at point.
   (when remote-tags
     (magit-run-git-async "push" remote (--map (concat ":" it) remote-tags))))
 
+(defvar magit-tag-version-regexp-alist
+  '(("^[-._+ ]?snapshot\\.?$" . -4)
+    ("^[-._+]$" . -4)
+    ("^[-._+ ]?\\(cvs\\|git\\|bzr\\|svn\\|hg\\|darcs\\)\\.?$" . -4)
+    ("^[-._+ ]?unknown\\.?$" . -4)
+    ("^[-._+ ]?alpha\\.?$" . -3)
+    ("^[-._+ ]?beta\\.?$" . -2)
+    ("^[-._+ ]?\\(pre\\|rc\\)\\.?$" . -1))
+  "Overrides `version-regexp-alist' for `magit-tag-release'.
+See also `magit-release-tag-regexp'.")
+
 (defvar magit-release-tag-regexp "\\`\
 \\(?1:\\(?:v\\(?:ersion\\)?\\|r\\(?:elease\\)?\\)?[-_]?\\)?\
-\\(?2:[0-9]+\\(?:\\.[0-9]+\\)*\\)\\'"
-  "Regexp used to parse release tag names.
-The first submatch must match the prefix, if any.
-The second submatch must match the version string.")
+\\(?2:[0-9]+\\(?:\\.[0-9]+\\)*\
+\\(?:-[a-zA-Z0-9-]+\\(?:\\.[a-zA-Z0-9-]+\\)*\\)?\\)\\'"
+  "Regexp used by `magit-tag-release' to parse release tags.
+
+The first submatch must match the prefix, if any.  The second
+submatch must match the version string.
+
+If this matches versions that are not dot separated numbers,
+then `magit-tag-version-regexp-alist' has to contain entries
+for the separators allowed here.")
 
 ;;;###autoload
-(defun magit-tag-release (tag msg)
-  "Create an annotated release tag.
+(defun magit-tag-release (tag msg &optional args)
+  "Create a release tag.
 
 Assume that release tags match `magit-release-tag-regexp'.
 
@@ -127,17 +150,13 @@ First prompt for the name of the new tag using the highest
 existing tag as initial input and leaving it to the user to
 increment the desired part of the version string.
 
-Then prompt for the message of the new tag.  Base the proposed
-tag message on the message of the highest tag, provided that
-that contains the corresponding version string and substituting
-the new version string for that.  Otherwise propose something
-like \"Foo-Bar 1.2.3\", given, for example, a TAG \"v1.2.3\" and a
-repository located at something like \"/path/to/foo-bar\".
-
-Then call \"git tag --annotate --sign -m MSG TAG\" to create the,
-tag, regardless of whether these arguments are enabled in the
-popup.  Finally show the refs buffer to let the user quickly
-review the result."
+If `--annotate' is enabled, then prompt for the message of the
+new tag.  Base the proposed tag message on the message of the
+highest tag, provided that that contains the corresponding
+version string and substituting the new version string for that.
+Otherwise propose something like \"Foo-Bar 1.2.3\", given, for
+example, a TAG \"v1.2.3\" and a repository located at something
+like \"/path/to/foo-bar\"."
   (interactive
    (save-match-data
      (pcase-let*
@@ -145,17 +164,22 @@ review the result."
           (tag (read-string "Create release tag: " ptag))
           (ver (and (string-match magit-release-tag-regexp tag)
                     (match-string 2 tag)))
-          (msg (cond ((and pver (string-match (regexp-quote pver) pmsg))
-                      (replace-match ver t t pmsg))
-                     ((and ptag (string-match (regexp-quote ptag) pmsg))
-                      (replace-match tag t t pmsg))
-                     (t (format "%s %s"
-                                (capitalize
-                                 (file-name-nondirectory
-                                  (directory-file-name (magit-toplevel))))
-                                ver)))))
-       (list tag (read-string (format "Message for %S: " tag) msg)))))
-  (magit-run-git-async "tag" "--annotate" "--sign" "-m" msg tag)
+          (args (magit-tag-arguments)))
+       (list tag
+             (and (member "--annotate" args)
+                  (read-string
+                   (format "Message for %S: " tag)
+                   (cond ((and pver (string-match (regexp-quote pver) pmsg))
+                          (replace-match ver t t pmsg))
+                         ((and ptag (string-match (regexp-quote ptag) pmsg))
+                          (replace-match tag t t pmsg))
+                         (t (format "%s %s"
+                                    (capitalize
+                                     (file-name-nondirectory
+                                      (directory-file-name (magit-toplevel))))
+                                    ver)))))
+             args))))
+  (magit-run-git-async "tag" args (and msg (list "-m" msg)) tag)
   (set-process-sentinel
    magit-this-process
    (lambda (process event)
@@ -179,7 +203,9 @@ a tag qualifies as a release tag."
                        (let ((tag (substring line 0 (match-beginning 0)))
                              (msg (substring line (match-end 0))))
                          (and (string-match magit-release-tag-regexp tag)
-                              (let ((ver (match-string 2 tag)))
+                              (let ((ver (match-string 2 tag))
+                                    (version-regexp-alist
+                                     magit-tag-version-regexp-alist))
                                 (list (list (version-to-list ver)
                                             ver tag msg)))))))
                 ;; Cannot rely on "--sort=-version:refname" because
