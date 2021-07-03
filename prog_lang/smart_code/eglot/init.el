@@ -8,6 +8,7 @@
   '(progn
      (setq eglot-autoshutdown t
            eglot-stay-out-of '(eldoc flymake company imenu)
+           eglot-extend-to-xref t
            )
      (define-key eglot-mode-map (kbd "C-/")  'xref-find-definitions)
      (define-key eglot-mode-map (kbd "C-?") 'xref-pop-marker-stack)
