@@ -2,4 +2,4 @@
 # name: frdp
 # key: frdp
 # --
-xfreerdp /u:Administrator '/p:password' /drive:share,\`pwd\` /v:host /cert:ignore /dynamic-resolution$0
+xfreerdp /u:wlocal '/p:123456' /drive:share,\`pwd\` /v:localhost:6666 /cert:ignore /dynamic-resolution$0
