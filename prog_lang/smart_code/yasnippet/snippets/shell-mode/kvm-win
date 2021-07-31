@@ -2,4 +2,4 @@
 # name: kvm for windows
 # key: kvm
 # --
-kvm -snapshot -m 1G -net user,hostfwd=tcp::5555-:3389 -net nic -drive file=`(expand-file-name "~/")`$0
+qemu-kvm -snapshot -m 2G -cpu host,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_synic,hv_stimer,hv_reset,hv_time -no-hpet -global kvm-pit.lost_tick_policy=discard -rtc base=utc,driftfix=slew -nic user,hostfwd=tcp::6666-:3389,model=virtio-net-pci -drive if=virtio,file=`(expand-file-name "~/")`$0
