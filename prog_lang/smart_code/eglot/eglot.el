@@ -119,7 +119,7 @@ argument."
 (defvar eglot-server-programs `((rust-mode . (eglot-rls "rls"))
                                 (python-mode
                                  . ,(eglot-alternatives '("pyls" "pylsp")))
-                                ((js-mode typescript-mode)
+                                ((js-mode typescript-mode web-mode)
                                  . ("typescript-language-server" "--stdio"))
                                 (sh-mode . ("bash-language-server" "start"))
                                 ((php-mode phps-mode)
@@ -1570,7 +1570,7 @@ Use `eglot-managed-p' to determine if current buffer is managed.")
                      :key #'eglot--major-mode)
             (and eglot-extend-to-xref
                  buffer-file-name
-                 (gethash (expand-file-name buffer-file-name) 
+                 (gethash (expand-file-name buffer-file-name)
                           eglot--servers-by-xrefed-file)))))
 
 (defun eglot--current-server-or-lose ()

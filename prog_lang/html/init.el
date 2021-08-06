@@ -39,8 +39,7 @@ This works on the current region."
 
 (autoload 'web-mode "web-mode" nil t)
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.js\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.[tj]sx?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.json\\'" . web-mode))
 
 
