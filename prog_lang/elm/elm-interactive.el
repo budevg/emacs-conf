@@ -46,12 +46,10 @@
 (defvar elm-interactive--current-project nil)
 (defvar elm-interactive--process-name "elm")
 (defvar elm-interactive--buffer-name "*elm*")
-(defvar elm-reactor--process-name "elm-reactor")
 (defvar elm-reactor--buffer-name "*elm-reactor*")
 
 (defcustom elm-interactive-command '("elm" "repl")
-  "The Elm REPL command.
-For Elm 0.18 and earlier, set this to '(\"elm-repl\")."
+  "The Elm REPL command."
   :type '(repeat string)
   :group 'elm)
 
@@ -61,17 +59,16 @@ For Elm 0.18 and earlier, set this to '(\"elm-repl\")."
   :group 'elm)
 
 (defvar elm-interactive-prompt-regexp "^[>|] "
-  "Prompt for `run-elm-interactive'.")
+  "Prompt for `elm-interactive'.")
 
 (defcustom elm-reactor-command '("elm" "reactor")
-  "The Elm Reactor command.
-For Elm 0.18 and earlier, set this to '(\"elm-reactor\")."
+  "The Elm Reactor command."
   :type '(repeat string)
   :group 'elm)
 
-(defcustom elm-reactor-port "8000"
+(defcustom elm-reactor-port 8000
   "The Elm Reactor port."
-  :type '(string)
+  :type '(integer)
   :group 'elm)
 
 (defcustom elm-reactor-address "127.0.0.1"
@@ -79,8 +76,9 @@ For Elm 0.18 and earlier, set this to '(\"elm-reactor\")."
   :type '(string)
   :group 'elm)
 
-(defcustom elm-reactor-arguments `("-p" ,elm-reactor-port "-a" ,elm-reactor-address)
-  "Command line arguments to pass to the Elm Reactor command."
+(defcustom elm-reactor-arguments `((:eval (format "--port=%s" elm-reactor-port)))
+  "Command line arguments to pass to the Elm Reactor command.
+Args are expanded using `elm--expand-args'."
   :type '(repeat string)
   :group 'elm)
 
@@ -92,8 +90,7 @@ For Elm 0.18 and earlier, set this to '(\"elm-reactor\")."
   :group 'elm)
 
 (defcustom elm-compile-arguments '("--output=elm.js")
-  "Command line arguments to pass to the Elm compilation command.
-For Elm 0.18 and earlier, set this to '(\"--yes\" \"--warn\" \"--output=elm.js\")."
+  "Command line arguments to pass to the Elm compilation command."
   :type '(repeat string)
   :group 'elm)
 
@@ -132,9 +129,8 @@ For Elm 0.18 and earlier, set this to '(\"--yes\" \"--warn\" \"--output=elm.js\"
 
 (defvar elm-package-buffer-name "*elm-package*")
 
-(defcustom elm-package-command '("elm-package")
-  "The Elm package command.
-For Elm 0.19 and greater, set this to '(\"elm\" \"package\")."
+(defcustom elm-package-command '("elm" "package")
+  "The Elm package command."
   :type '(repeat string)
   :group 'elm)
 
@@ -164,15 +160,6 @@ For Elm 0.19 and greater, set this to '(\"elm\" \"package\")."
     (define-key map (kbd "C-c C-z") #'elm-repl-return-to-origin)
     map)
   "Keymap for Elm interactive mode.")
-
-(defcustom elm-oracle-command "elm-oracle"
-  "The Elm Oracle command."
-  :type '(string)
-  :group 'elm)
-
-(defconst elm-oracle--pattern
-  "\\(?:[^A-Za-z0-9_.']\\)\\(\\(?:[A-Za-z_][A-Za-z0-9_']*[.]\\)*[A-Za-z0-9_']*\\)"
-  "The prefix pattern used for completion.")
 
 (defvar elm-repl--origin nil
   "Marker for buffer/position from which we jumped to this repl.")
@@ -253,7 +240,7 @@ Stolen from ‘haskell-mode’."
 
 ;;;###autoload
 (define-derived-mode elm-interactive-mode comint-mode "Elm Interactive"
-  "Major mode for `run-elm-interactive'.
+  "Major mode for `elm-interactive'.
 
 \\{elm-interactive-mode-map}"
 
@@ -263,10 +250,10 @@ Stolen from ‘haskell-mode’."
 
   (add-hook 'comint-output-filter-functions #'elm-interactive--spot-prompt nil t)
 
-  (turn-on-elm-font-lock))
+  (elm--font-lock-enable))
 
 ;;;###autoload
-(defun run-elm-interactive ()
+(defun elm-interactive ()
   "Run an inferior instance of `elm-repl' inside Emacs."
   (interactive)
   (elm-interactive-kill-current-session)
@@ -282,6 +269,9 @@ Stolen from ‘haskell-mode’."
         (elm-interactive-mode)
         (setq-local elm-repl--origin origin))
       (pop-to-buffer buffer))))
+
+;;;###autoload
+(define-obsolete-function-alias 'run-elm-interactive 'elm-interactive "2020-04")
 
 (defun elm-repl-return-to-origin ()
   "Jump back to the location from which we last jumped to the repl."
@@ -301,7 +291,7 @@ of the file specified."
   (interactive)
   (save-buffer)
   (let ((import-statement (elm--build-import-statement)))
-    (run-elm-interactive)
+    (elm-interactive)
     (elm-interactive--send-command ":reset\n")
     (elm-interactive--send-command import-statement)))
 
@@ -311,7 +301,7 @@ of the file specified."
   (interactive "r")
   (let* ((to-push (buffer-substring-no-properties beg end))
          (lines (split-string (s-trim-right to-push) "\n")))
-    (run-elm-interactive)
+    (elm-interactive)
     (dolist (line lines)
       (elm-interactive--send-command (concat line " \\\n")))
     (elm-interactive--send-command "\n")))
@@ -321,7 +311,7 @@ of the file specified."
   "Push the current top level declaration to the REPL."
   (interactive)
   (let ((lines (elm--get-decl)))
-    (run-elm-interactive)
+    (elm-interactive)
     (dolist (line lines)
       (elm-interactive--send-command (concat line " \\\n")))
     (elm-interactive--send-command "\n")))
@@ -332,27 +322,45 @@ of the file specified."
       v
     (list v)))
 
+(defun elm--expand-args (args)
+  "Expand any `(:eval ...)' entries in ARGS by evaluating them."
+  (mapcar (lambda (arg)
+            (pcase arg
+              (`(:eval ,sexp) (eval sexp))
+              (_ arg)))
+          args))
+
 ;;; Reactor:
 ;;;###autoload
-(defun run-elm-reactor ()
+(defun elm-reactor ()
   "Run the Elm reactor process."
   (interactive)
   (let ((default-directory (elm--find-dependency-file-path))
-        (process (get-process elm-reactor--process-name)))
+        (cmd (elm--expand-args (append (elm--ensure-list elm-reactor-command) elm-reactor-arguments))))
+    (with-current-buffer (get-buffer-create elm-reactor--buffer-name)
+      (comint-mode)
+      (ansi-color-for-comint-mode-on)
+      (let ((proc (get-buffer-process (current-buffer))))
+        (if (and proc (process-live-p proc))
+            (progn
+              (message "Restarting elm-reactor")
+              (delete-process proc))
+          (message "Starting elm-reactor")))
 
-    (when process
-      (delete-process process))
+      (let ((proc (apply #'start-process "elm reactor" elm-reactor--buffer-name
+                         (car cmd) (cdr cmd))))
+        (when proc
+          (set-process-filter proc 'comint-output-filter))))))
 
-    (let ((cmd (append (elm--ensure-list elm-reactor-command) elm-reactor-arguments)))
-      (apply #'start-process elm-reactor--process-name elm-reactor--buffer-name
-             (car cmd) (cdr cmd)))))
+;;;###autoload
+(define-obsolete-function-alias 'run-elm-reactor 'elm-reactor "2020-04")
 
 (defun elm-reactor--browse (path &optional debug)
   "Open (reactor-relative) PATH in browser with optional DEBUG.
 
 Runs `elm-reactor' first."
-  (run-elm-reactor)
-  (browse-url (concat "http://" elm-reactor-address ":" elm-reactor-port "/" path (when debug "?debug"))))
+  (elm-reactor)
+  (browse-url (format "http://localhost:%s/%s%s" elm-reactor-port path (if debug "?debug" ""))))
 
 ;;;###autoload
 (defun elm-preview-buffer (debug)
@@ -806,6 +814,43 @@ EXPOSING"
           name
         (concat (or .as module-name) suffix)))))
 
+;;;###autoload
+(defun elm-expose-at-point ()
+  "Exposes identifier at point."
+  (interactive)
+  (save-excursion
+    ;; If already at the beginning of defun then
+    ;; elm-beginning-of-defun will go to previous defun.  Thus we go
+    ;; to the beginning of next defun and come back to make sure we
+    ;; will arrive at correct place.
+    (elm-end-of-defun)
+    (elm-beginning-of-defun)
+    (let* (case-fold-search
+           (expose (cond
+                    ((looking-at (rx "type" (+ space) "alias" (+ space)))
+                     (goto-char (match-end 0))
+                     (word-at-point))
+                    ((looking-at (rx "type" (+ space)))
+                     (goto-char (match-end 0))
+                     (concat (word-at-point)
+                             (if (y-or-n-p "Expose constructors? ")
+                                 "(..)"
+                               "")))
+                    ((or (looking-at (rx (or "port" "module" "import") (+ space)))
+                         (null (word-at-point)))
+                     (user-error "No identifier at point"))
+                    (t (word-at-point)))))
+      (goto-char (point-min))
+      (if (re-search-forward (rx bol "module" (+ (or space))
+                                 upper (* (or word (syntax symbol)))
+                                 (+ (any space ?\n)) "exposing" (+ (any space ?\n)) "(")
+                             nil t)
+          (progn
+            (goto-char (match-end 0))
+            (insert expose)
+            (when (looking-at (rx (* (any space ?\n)) word))
+              (insert ", ")))
+        (error "Couldn't find module declaration")))))
 
 (defun elm-documentation--show (documentation)
   "Show DOCUMENTATION in a help buffer."
@@ -864,229 +909,6 @@ EXPOSING"
   (tabulated-list-init-header)
   (tabulated-list-print))
 
-
-(autoload 'popup-make-item "popup")
-
-(defun elm-oracle--completion-prefix-at-point ()
-  "Return the completions prefix found at point."
-  (save-excursion
-    (let* ((_ (re-search-backward elm-oracle--pattern nil t))
-           (beg (1+ (match-beginning 0)))
-           (end (match-end 0)))
-      (s-trim (buffer-substring-no-properties beg end)))))
-
-(defun elm-oracle--get-completions (prefix &optional popup)
-  "Get elm-oracle completions for PREFIX with optional POPUP formatting."
-  (mapcar (if popup
-              (lambda (candidate)
-                (let-alist candidate
-                  (popup-make-item .localName
-                                   :document (concat .signature "\n\n" .comment)
-                                   :summary .signature)))
-            (apply-partially 'alist-get 'localName))
-          (elm-oracle--get-candidates prefix)))
-
-(defun elm-oracle--function-at-point ()
-  "Get the name of the function at point."
-  (save-excursion
-    (skip-chars-forward "[A-Za-z0-9_.']")
-    (let* ((_ (re-search-backward elm-oracle--pattern nil t))
-           (beg (1+ (match-beginning 0)))
-           (end (match-end 0))
-           (item (s-trim (buffer-substring-no-properties beg end))))
-      (if (string-empty-p item)
-          nil
-        item))))
-
-(defun elm-oracle--item-at-point ()
-  "Get the Oracle completion object at point."
-  (let ((prefix (elm-oracle--function-at-point)))
-    (when prefix
-      (cl-find-if
-       (lambda (candidate)
-         (let-alist candidate
-           (string= prefix .localName)))
-       (elm-oracle--get-catalogue)))))
-
-(defun elm-oracle--propertize-completion-type (completion)
-  "Propertize COMPLETION so that it can be displayed in the minibuffer."
-  (when completion
-    (let-alist completion
-      (concat (propertize .localName 'face 'font-lock-function-name-face) ": " .signature))))
-
-(defun elm-oracle--type-at-point ()
-  "Get the type of the function at point."
-  (elm-oracle--propertize-completion-type (elm-oracle--item-at-point)))
-
-;;;###autoload
-(defun elm-oracle-type-at-point ()
-  "Print the type of the function at point to the minibuffer."
-  (interactive)
-  (message (or (elm-oracle--type-at-point) "Unknown type")))
-
-;;;###autoload
-(defun elm-eldoc ()
-  "Get the type of the function at point for eldoc."
-  (elm-oracle--type-at-point))
-
-;;;###autoload
-(defun elm-oracle-doc-at-point ()
-  "Show the documentation of the value at point."
-  (interactive)
-  (let ((completion (elm-oracle--item-at-point)))
-    (if completion
-        (elm-documentation--show completion)
-      (message "Unknown symbol"))))
-
-;;;###autoload
-(defun elm-oracle-completion-at-point-function ()
-  "Completion at point function for elm-oracle."
-  (save-excursion
-    (let* ((_ (re-search-backward elm-oracle--pattern nil t))
-           (beg (1+ (match-beginning 0)))
-           (end (match-end 0))
-           (prefix (s-trim (buffer-substring-no-properties beg end)))
-           (completions (elm-oracle--get-completions prefix)))
-      (list beg end completions :exclusive 'no))))
-
-;;;###autoload
-(defun elm-oracle-setup-completion ()
-  "Set up standard completion.
-Add this function to your `elm-mode-hook' to enable an
-elm-specific `completion-at-point' function."
-  (add-to-list (make-local-variable 'completion-at-point-functions)
-               #'elm-oracle-completion-at-point-function))
-
-(defvar ac-sources)
-(defvar ac-source-elm
-  `((candidates . (elm-oracle--get-completions ac-prefix t))
-    (prefix . ,elm-oracle--pattern)))
-
-;;;###autoload
-(defun elm-oracle-setup-ac ()
-  "Set up auto-complete support.
-Add this function to your `elm-mode-hook'."
-  (add-to-list 'ac-sources 'ac-source-elm))
-
-
-(declare-function company-begin-backend "company")
-(declare-function company-doc-buffer "company")
-
-;;;###autoload
-(defun company-elm (command &optional arg &rest ignored)
-  "Provide completion info according to COMMAND and ARG.  IGNORED is not used."
-  (interactive (list 'interactive))
-  (when (derived-mode-p 'elm-mode)
-    (cl-case command
-      (interactive (company-begin-backend 'company-elm))
-      (sorted t)
-      (prefix (elm-oracle--completion-prefix-at-point))
-      (doc-buffer (elm-company--docbuffer arg))
-      (candidates (cons :async (apply-partially #'elm-company--candidates arg)))
-      (annotation (elm-company--signature arg))
-      (meta (elm-company--meta arg)))))
-
-(defun elm-company--candidates (prefix &optional callback)
-  "Function providing candidates for company-mode for given PREFIX.
-Passes completions to CALLBACK if present, otherwise returns them."
-  (funcall (if callback callback #'identity)
-           (mapcar #'elm-company--make-candidate (elm-oracle--get-candidates prefix))))
-
-(defun elm-company--make-candidate (candidate)
-  "Create a ‘company-mode’ completion candidate from a CANDIDATE obtained via elm-oracle."
-  (let-alist candidate
-    (propertize .localName
-                'signature .signature 'name .fullName 'comment .comment)))
-
-(defun elm-company--signature (candidate)
-  "Return company signature for CANDIDATE."
-  (format " %s" (get-text-property 0 'signature candidate)))
-
-(defun elm-company--meta (candidate)
-  "Return company meta for CANDIDATE."
-  (format "%s : %s"
-          (get-text-property 0 'name candidate)
-          (get-text-property 0 'signature candidate)))
-
-(defun elm-company--docbuffer (candidate)
-  "Return the documentation for CANDIDATE."
-  (company-doc-buffer
-   (format "%s : %s\n\n%s"
-           (get-text-property 0 'name candidate)
-           (get-text-property 0 'signature candidate)
-           (get-text-property 0 'comment candidate))))
-
-
-(defvar-local elm-oracle--cache nil
-  "This is a cons pair of (IMPORTS-LIST . CANDIDATES).
-IMPORTS-LIST is the result of `elm-imports--list' at the time
-`elm-oracle' was run, and CANDIDATES is the set of results.")
-
-(defun elm-oracle--get-candidates (prefix)
-  "Return elm-oracle completion candidates for given PREFIX."
-  (cl-sort
-   (cl-remove-if-not
-    (lambda (candidate)
-      (let-alist candidate
-        (or (string-prefix-p prefix .localName)
-            (string-prefix-p prefix .name))))
-    (elm-oracle--get-catalogue))
-   (lambda (c1 c2)
-     ;; Sort better matches first
-     (let ((n1 (alist-get 'localName c1))
-           (n2 (alist-get 'localName c2)))
-       (> (s-index-of prefix n2) (s-index-of prefix n1))))))
-
-(defun elm-oracle--get-catalogue ()
-  "Return the full elm-oracle catalogue for the current file."
-  (let*
-      ((file (or (buffer-file-name) (elm--find-main-file)))
-       (imports-list (elm-imports--list (current-buffer))))
-    (append
-     (elm-oracle--module-completions imports-list)
-     (if (and imports-list (equal imports-list (car elm-oracle--cache)))
-         (cdr elm-oracle--cache)
-       (setq elm-oracle--cache
-             (cons imports-list (elm-oracle--catalogue-with-local-names file imports-list)))))))
-
-;; These should arguably be in a separate completion backend, since
-;; they could theoretically be used without elm-oracle
-(defun elm-oracle--module-completions (imports-list)
-  "Return completions for modules in IMPORTS-LIST.
-Completions are in the same format as those returned by
-  `elm-oracle--catalogue-with-local-names'."
-  (mapcar
-   (lambda (import)
-     (let ((full-name (car import)))
-       (list (cons 'localName (alist-get 'as (cdr import)))
-             (cons 'name "")
-             (cons 'fullName full-name)
-             (cons 'signature ""))))
-   imports-list))
-
-
-(defun elm-oracle--catalogue-with-local-names (file imports-list)
-  "Given FILE and IMPORTS-LIST, get an alias-adjusted catalogue of all symbols known to elm-oracle."
-  (mapcar
-   #'(lambda (candidate)
-       (let-alist candidate
-         (cons (cons 'localName
-                     (concat (elm-imports--aliased imports-list .name .fullName)))
-               candidate)))
-   (elm-oracle--run "" file)))
-
-(defun elm-oracle--run (prefix &optional file)
-  "Get completions for PREFIX inside FILE."
-  (when (executable-find elm-oracle-command)
-    (let ((default-directory (elm--find-dependency-file-path))
-          (command (s-join " " (list elm-oracle-command
-                                     (shell-quote-argument file)
-                                     (shell-quote-argument prefix))))
-          (json-array-type 'list))
-      (seq-uniq
-       (json-read-from-string (shell-command-to-string command))
-       (lambda (i1 i2)
-         (string-equal (alist-get 'fullName i1) (alist-get 'fullName i2)))))))
 
 ;;;###autoload
 (defun elm-test-project ()

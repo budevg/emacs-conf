@@ -27,6 +27,7 @@
 (require 'json)
 (require 'let-alist)
 (require 's)
+(require 'pulse)
 
 (require 'haskell-decl-scan nil 'noerror)
 (require 'inf-haskell nil 'noerror)
@@ -42,11 +43,23 @@
   :group 'elm-util)
 
 (defcustom elm-package-json
-  "elm-package.json"
-  "The name of the package JSON configuration file.
-Set to \"elm.json\" for use with Elm 0.19."
+  "elm.json"
+  "The name of the package JSON configuration file."
   :type 'string
   :group 'elm-util)
+
+(when (require 'project nil t)
+  (defun elm-project-find-function (dir)
+    "Find a project for project.el looking upwards from DIR.
+This can be added to `project-find-functions' so that
+`project-root' will return the directory in which the
+`elm-package-json' file is found."
+    (let ((root-dir (locate-dominating-file elm-package-json dir)))
+      (when root-dir
+        (cons 'elm root-dir))))
+
+  (cl-defmethod project-root ((project (head elm)))
+    (cdr project)))
 
 (defun elm--get-module-name ()
   "Return the qualified name of the module in the current buffer."
@@ -69,9 +82,11 @@ Relies on `haskell-mode' stuff."
            (end (or (haskell-ds-forward-decl) (point-max)))
            (raw-decl (s-trim-right (buffer-substring start end)))
            (lines (split-string raw-decl "\n"))
-           (first-line (car lines)))
+           (first-line (car lines))
+           ;; Shadow the defcustom pulse-delay variable.
+           (pulse-delay (/ elm-flash-duration 10.0)))
 
-      (inferior-haskell-flash-decl start end elm-flash-duration)
+      (pulse-momentary-highlight-region start end)
       (if (string-match-p "^[a-z].*:" first-line)
           (cdr lines)
         lines))))
