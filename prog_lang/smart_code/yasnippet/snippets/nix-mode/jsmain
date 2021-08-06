@@ -2,10 +2,9 @@
 # name: jsmain
 # key: jsmain
 # --
-{ pkgs ? import <nixpkgs> {}
-}:
+{ pkgs ? import <nixpkgs> { } }:
 with pkgs;
 stdenv.mkDerivation {
   name = "js-project";
-  buildInputs = [nodejs-8_x flow];
+  buildInputs = [ nodejs flow nodePackages.typescript-language-server ];
 }
