@@ -6,5 +6,10 @@
 with pkgs;
 stdenv.mkDerivation {
   name = "js-project";
-  buildInputs = [ nodejs flow nodePackages.typescript-language-server ];
+  buildInputs = [
+    nodejs
+    flow
+    nodePackages.typescript-language-server
+    nodePackages.prettier
+  ];
 }
