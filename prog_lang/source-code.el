@@ -41,11 +41,12 @@
  (web-mode . ((web-mode-markup-indent-offset . 4)
               (web-mode-code-indent-offset . 4)
               (web-mode-code-indent-offset . 4)
-             ))
+              ))
 
  (nil . ((tab-width . 4)
-          (tab-stop-list . (4 8 12 16 20 24 28 32 36 40 44 48 52 56 60))
-          ))
+         (tab-stop-list . (4 8 12 16 20 24 28 32 36 40 44 48 52 56 60))
+         ;;(create-lockfiles . nil)
+         ))
  )
 "))
 
