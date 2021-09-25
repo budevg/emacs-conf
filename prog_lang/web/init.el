@@ -57,9 +57,20 @@ This works on the current region."
 (eval-after-load "web-mode"
   '(progn
      (add-hook 'web-mode-hook  'my-web-mode-hook)
-     (setq web-mode-content-types-alist '(("jsx" . "\\.js[x]?\\'")))))
+     (setq web-mode-content-types-alist '(("jsx" . "\\.[tj]sx?\\'")))
+     ))
 
 
 (autoload 'emmet-mode "emmet-mode" nil t)
 (add-hook 'web-mode-hook 'emmet-mode)
 (add-hook 'css-mode-hook  'emmet-mode)
+
+(eval-after-load "sgml-mode"
+  '(progn
+     (define-key html-mode-map "\C-m" 'newline-and-indent)))
+
+(eval-after-load "js"
+  '(progn
+     (define-key js-mode-map "\C-m" 'newline-and-indent)
+     (define-key js-mode-map [(meta ?.)] nil)
+     (setq js-indent-level 2)))

@@ -5,5 +5,5 @@
        :branch "master"
        :pkgname "smihica/emmet-mode"
        :build `(,(concat "cp *.el "
-                         (in-emacs-d "prog_lang/html")))
+                         (in-emacs-d "prog_lang/web")))
        )
