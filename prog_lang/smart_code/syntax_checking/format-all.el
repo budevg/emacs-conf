@@ -606,11 +606,7 @@ Consult the existing formatters for examples of BODY."
             ((equal ct "html")
              (cond ((equal en "angular") "angular")
                    ((equal en "vue") "vue")
-                   ;; TODO: Use html-tidy instead of prettier for
-                   ;; plain HTML. Enable prettier's HTML support once
-                   ;; we have multi-formatter support.
-                   ;;
-                   ;; ((equal en "none") "html")
+                   ((equal en "none") "html")
                    (t nil)))
             (t nil))))
    (yaml-mode "yaml"))
