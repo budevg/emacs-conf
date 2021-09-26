@@ -56,7 +56,6 @@ If N is negative, search forwards for the -Nth following match."
          ;;(goto-char opoint)
          ))
 
-     (setq ansi-color-names-vector ["black" "red" "green" "yellow" "yellow" "magenta" "cyan" "white"])
      (ansi-color-for-comint-mode-on)
      (define-key comint-mode-map [(meta p)] nil)
      (define-key comint-mode-map [C-up] 'comint-previous-matching-input-from-input)

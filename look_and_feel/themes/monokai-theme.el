@@ -79,6 +79,8 @@
    `(smerge-refined-added ((t (:inherit diff-added :weight bold))))
    `(smerge-refined-change ((t (:inherit diff-changed :weight bold))))
    `(smerge-refined-removed ((t (:inherit diff-removed :weight bold))))
+   ;; ansi colors
+   '(ansi-color-blue ((t :foreground "CadetBlue2" :background "CadetBlue2")))
    ))
 
 ;;;###autoload
