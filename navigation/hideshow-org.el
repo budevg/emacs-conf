@@ -39,7 +39,7 @@
 ;;
 ;; (add-to-list 'load-path "/path/to/hideshow-org-directory")
 ;; (require 'hideshow-org)
-;; 
+;;
 ;;; Keymaps:
 ;;
 ;; I set this as my global key.
@@ -64,7 +64,7 @@
 ;; TAB.  Hopefully, this will be sufficient such that
 ;; hs-org/minor-mode does not get in the way of anyone's normal
 ;; programming habits.
-;; 
+;;
 ;; Many thanks to the developers of hideshow.el.  Thanks to
 ;; yasnippets.el for showing me how one could piggyback on an already
 ;; bound key.
@@ -98,7 +98,7 @@
   (make-variable-buffer-local var))
 
 (defmacro hs-org/define-keys ()
-  `(progn 
+  `(progn
      ,@(mapcar (lambda (key) `(hs-org/define-key ,key hs-org/hideshow)) hs-org/trigger-keys-block)
      ,@(mapcar (lambda (key) `(hs-org/define-key ,key hs-org/hideshow-all)) hs-org/trigger-keys-all)
     ))
@@ -120,9 +120,9 @@ state of the entire file.
 
 You can customize the key through `hs-org/trigger-key-block'."
   ;; The initial value.
-  nil
+  :init-value nil
   ;; The indicator for the mode line.  Nothing.  hs will already be in there.
-  ""
+  :lighter ""
   :group 'editing
 
   (hs-org/define-keys)
@@ -133,7 +133,7 @@ You can customize the key through `hs-org/trigger-key-block'."
           (progn (condition-case err
                      (hs-minor-mode t)
                    ;; Catch the error, and handle it.
-                   (error 
+                   (error
                     ;; If we can't turn on hideshow, we can't turn on
                     ;; hs-org.
                     (hs-org/minor-mode nil)
@@ -142,7 +142,7 @@ You can customize the key through `hs-org/trigger-key-block'."
           (setq hs-org/started-hideshow-p nil))
       ;; hs-org/minor-mode was turned off.
       (when hs-org/started-hideshow-p
-        (condition-case err 
+        (condition-case err
             (hs-minor-mode nil)
           (error (error "hs-org: %s" (cadr err))))))
   (let ((hs (cdr (assoc 'hs-minor-mode minor-mode-alist))))
@@ -174,7 +174,7 @@ You can customize the key through `hs-org/trigger-key-block'."
 
 ;;       (hs-life-goes-on
 ;;        (if (hs-already-hidden-p)
-;;            (progn 
+;;            (progn
 ;;              (hs-show-block)
 ;;              (when hs-org/last-point
 ;;                (goto-char hs-org/last-point)))
@@ -200,5 +200,5 @@ You can customize the key through `hs-org/trigger-key-block'."
           (hs-show-all)
           (hs-hide-all))
       (setq hs-org/hide-show-all-next (not hs-org/hide-show-all-next)))))
-  
+
 (provide 'hideshow-org)

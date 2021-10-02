@@ -25,7 +25,7 @@
      (define-key haskell-mode-map (kbd "C-?") 'pop-tag-mark)
      (define-key haskell-mode-map (kbd "C-c C-p") 'haskell-mode-stylish-buffer)
      (define-key haskell-mode-map (kbd "C-c C-c") 'haskell-process-load-file)
-     (define-key haskell-mode-map (kbd "C-c C-t") '(lambda () (interactive) (haskell-process-do-type t)))
+     (define-key haskell-mode-map (kbd "C-c C-t") (lambda () (interactive) (haskell-process-do-type t)))
      (custom-set-variables
       '(haskell-process-show-debug-tips nil)
       '(haskell-process-log t)

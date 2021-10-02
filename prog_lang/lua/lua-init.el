@@ -4,8 +4,8 @@
 (add-hook 'lua-mode-hook
           (lambda ()
             (define-key lua-mode-map "\C-m" 'newline-and-indent)
-            (define-key lua-mode-map [(control P)] '(lambda ()
-                                                      (interactive)
-                                                      (lua-start-process)
-                                                      (lua-show-process-buffer)))
+            (define-key lua-mode-map [(control P)] (lambda ()
+                                                     (interactive)
+                                                     (lua-start-process)
+                                                     (lua-show-process-buffer)))
             (define-key lua-mode-map [(control c) (control c)] 'lua-send-buffer)))

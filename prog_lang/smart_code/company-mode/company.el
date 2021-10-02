@@ -689,7 +689,7 @@ regular keymap (`company-mode-map'):
 keymap during active completions (`company-active-map'):
 
 \\{company-active-map}"
-  nil company-lighter company-mode-map
+  :init-value nil :lighter company-lighter :keymap company-mode-map
   (if company-mode
       (progn
         (when (eq company-idle-delay t)
@@ -1708,7 +1708,7 @@ from the rest of the back-ends in the group, if any, will be left at the end."
   "Search mode for completion candidates.
 Don't start this directly, use `company-search-candidates' or
 `company-filter-candidates'."
-  nil company-search-lighter nil
+  :init-value nil :lighter company-search-lighter :keymap nil
   (if company-search-mode
       (if (company-manual-begin)
           (progn

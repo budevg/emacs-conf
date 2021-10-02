@@ -153,7 +153,7 @@ Fall back to `completing-read' otherwise."
 (global-set-key (kbd "C-x j") 'ace-jump-char-mode)
 ;   only use lowercase letters for lookup
 (setq ace-jump-mode-move-keys
-  (nconc (loop for i from ?a to ?z collect i)))
+  (nconc (cl-loop for i from ?a to ?z collect i)))
 
 ; find file in projects
 (autoload 'find-file-in-project "find-file-in-project.el" nil t)
@@ -194,8 +194,8 @@ Fall back to `completing-read' otherwise."
            ag-arg-filesearch "--color never --smart-case --files -g"
            )
      (define-key ag-mode-map (kbd "q")
-       '(lambda () (interactive)
-          (let (kill-buffer-query-functions) (kill-buffer))))))
+       (lambda () (interactive)
+         (let (kill-buffer-query-functions) (kill-buffer))))))
 
 (defun ag-here (string)
   (interactive (list (read-from-minibuffer "Search string: " (ag/dwim-at-point))))

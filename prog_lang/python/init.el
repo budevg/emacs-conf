@@ -26,10 +26,10 @@
 
      (add-hook
       'inferior-python-mode-hook
-      '(lambda ()
-         (set (make-local-variable 'comint-prompt-read-only) nil)
-         (compilation-shell-minor-mode -1)
-         ))
+      (lambda ()
+        (set (make-local-variable 'comint-prompt-read-only) nil)
+        (compilation-shell-minor-mode -1)
+        ))
      ))
 
 (autoload 'yaml-mode "yaml-mode" nil t)
@@ -40,8 +40,8 @@
   '(progn
      (add-hook
       'yaml-mode-hook
-      '(lambda ()
-         (define-key yaml-mode-map "\C-m" 'newline-and-indent)))))
+      (lambda ()
+        (define-key yaml-mode-map "\C-m" 'newline-and-indent)))))
 
 (defun flymake-pylint-init ()
   (let* ((temp-file (flymake-init-create-temp-buffer-copy

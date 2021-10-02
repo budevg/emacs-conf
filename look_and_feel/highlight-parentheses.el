@@ -113,7 +113,7 @@ This is used to prevent analyzing the same context over and over.")
 ;;;###autoload
 (define-minor-mode highlight-parentheses-mode
   "Minor mode to highlight the surrounding parentheses."
-  nil " hl-p" nil
+  :init-value nil :lighter " hl-p" :keymap nil
   (if highlight-parentheses-mode
       (progn
         (hl-paren-create-overlays)

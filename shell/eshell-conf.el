@@ -10,7 +10,7 @@
      (setenv "PAGER" "cat")
      (set-face-attribute 'eshell-prompt nil :foreground "turquoise1")
      (add-hook 'eshell-mode-hook ;; for some reason this needs to be a hook
-	       '(lambda () (define-key eshell-mode-map "\C-a" 'eshell-bol)))
+	       (lambda () (define-key eshell-mode-map "\C-a" 'eshell-bol)))
      (add-to-list 'eshell-visual-commands "ssh")
      (add-to-list 'eshell-visual-commands "tail")
      (add-to-list 'eshell-command-completions-alist

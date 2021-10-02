@@ -66,6 +66,6 @@ Position the cursor at it's beginning, according to the current mode."
   (forward-line -1)
   (indent-according-to-mode))
 
-(add-hook 'prog-mode-hook '(lambda ()
-                             (local-set-key (kbd "M-o") 'smart-open-line)
-                             (local-set-key (kbd "M-O") 'smart-open-line-above)))
+(add-hook 'prog-mode-hook (lambda ()
+                            (local-set-key (kbd "M-o") 'smart-open-line)
+                            (local-set-key (kbd "M-O") 'smart-open-line-above)))

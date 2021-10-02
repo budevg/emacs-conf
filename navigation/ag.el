@@ -213,8 +213,8 @@ different window, according to `ag-reuse-window'."
 
 (define-key ag-mode-map (kbd "p") #'compilation-previous-error)
 (define-key ag-mode-map (kbd "n") #'compilation-next-error)
-(define-key ag-mode-map (kbd "k") '(lambda () (interactive)
-                                     (let (kill-buffer-query-functions) (kill-buffer))))
+(define-key ag-mode-map (kbd "k") (lambda () (interactive)
+                                    (let (kill-buffer-query-functions) (kill-buffer))))
 
 (defun ag/buffer-name (search-string directory regexp)
   "Return a buffer name formatted according to ag.el conventions."
