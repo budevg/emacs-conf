@@ -8,7 +8,7 @@
   (imenu--make-index-alist)
   (let ((name-and-pos '())
         (symbol-names '()))
-    (cl-flet ((addsymbols (symbol-list)
+    (cl-labels ((addsymbols (symbol-list)
                           (when (listp symbol-list)
                             (dolist (symbol symbol-list)
                               (let ((name nil) (position nil))
