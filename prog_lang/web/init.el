@@ -58,6 +58,7 @@ This works on the current region."
   '(progn
      (add-hook 'web-mode-hook  'my-web-mode-hook)
      (setq web-mode-content-types-alist '(("jsx" . "\\.[tj]sx?\\'")))
+     (add-to-list 'web-mode-comment-formats '("jsx" . "//" ))
      ))
 
 
