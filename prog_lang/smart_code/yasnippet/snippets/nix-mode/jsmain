@@ -10,6 +10,7 @@ stdenv.mkDerivation {
     nodejs
     flow
     nodePackages.typescript-language-server
+    nodePackages.typescript
     nodePackages.prettier
   ];
 }
