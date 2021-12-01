@@ -45,8 +45,11 @@ This works on the current region."
 
 (defun my-web-mode-hook ()
   "Hooks for Web mode."
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
+  (setq web-mode-markup-indent-offset 2
+        web-mode-code-indent-offset 2
+        web-mode-enable-sexp-functions nil
+        web-mode-enable-auto-indentation nil
+        web-mode-enable-auto-quoting nil)
   (define-key web-mode-map (kbd "M-3") 'web-mode-comment-or-uncomment)
   (define-key web-mode-map (kbd "C-<down>") (lambda () (interactive) (web-mode-tag-match)))
   (define-key web-mode-map (kbd "C-<up>") (lambda () (interactive) (web-mode-tag-match)))
