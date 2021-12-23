@@ -162,7 +162,7 @@ language-server/bin/php-language-server.php"))
                                 (go-mode . ("gopls"))
                                 ((R-mode ess-r-mode) . ("R" "--slave" "-e"
                                                         "languageserver::run()"))
-                                (java-mode . eglot--eclipse-jdt-contact)
+                                (java-mode . ("java-language-server"))
                                 (dart-mode . ("dart_language_server"))
                                 (elixir-mode . ("language_server.sh"))
                                 (ada-mode . ("ada_language_server"))

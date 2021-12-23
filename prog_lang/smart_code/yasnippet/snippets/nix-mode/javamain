@@ -1,0 +1,14 @@
+# -*- mode: snippet -*-
+# name: javamain
+# key: javamain
+# --
+{ pkgs ? import <nixpkgs> {}, unstable ? import <unstable> {} }:
+with pkgs;
+mkShell {
+  buildInputs = [
+    unstable.java-language-server
+    openjdk
+    maven
+  ];
+  ENV_VAR = "env_var";
+}
