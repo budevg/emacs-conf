@@ -58,7 +58,8 @@
      (define-key dired-mode-map [(control x) (control q)] 'wdired-change-to-wdired-mode)
      (require 'dired-x)
      (setq dired-omit-extensions (append dired-omit-extensions
-                                         '(".ko" ".ko.cmd" ".mod.c" ".mod.o.cmd" ".o.cmd" ".d") ))
+                                         '(".ko" ".ko.cmd" ".mod.c" ".mod.o.cmd" ".o.cmd" ".d") )
+           dired-subtree-use-backgrounds nil)
      (define-key dired-mode-map [(meta o)] 'dired-omit-mode)
      (defun sudired ()
        (interactive)
