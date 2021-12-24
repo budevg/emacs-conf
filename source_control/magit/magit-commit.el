@@ -91,6 +91,34 @@ Also see `git-commit-post-finish-hook'."
   :group 'magit-commands
   :type 'hook)
 
+(defcustom magit-commit-diff-inhibit-same-window nil
+  "Whether to inhibit use of same window when showing diff while committing.
+
+When writing a commit, then a diff of the changes to be committed
+is automatically shown.  The idea is that the diff is shown in a
+different window of the same frame and for most users that just
+works.  In other words most users can completely ignore this
+option because its value doesn't make a difference for them.
+
+However for users who configured Emacs to never create a new
+window even when the package explicitly tries to do so, then
+displaying two new buffers necessarily means that the first is
+immediately replaced by the second.  In our case the message
+buffer is immediately replaced by the diff buffer, which is of
+course highly undesirable.
+
+A workaround is to suppress this user configuration in this
+particular case.  Users have to explicitly opt-in by toggling
+this option.  We cannot enable the workaround unconditionally
+because that again causes issues for other users: if the frame
+is too tiny or the relevant settings too aggressive, then the
+diff buffer would end up being displayed in a new frame.
+
+Also see https://github.com/magit/magit/issues/4132."
+  :package-version '(magit . "3.3.0")
+  :group 'magit-commands
+  :type 'boolean)
+
 (defvar magit-post-commit-hook-commands
   '(magit-commit-extend
     magit-commit-fixup
@@ -153,7 +181,7 @@ Also see `git-commit-post-finish-hook'."
 (defun magit-read-gpg-secret-key
     (prompt &optional initial-input history predicate)
   (require 'epa)
-  (let* ((keys (mapcan
+  (let* ((keys (cl-mapcan
                 (lambda (cert)
                   (and (or (not predicate)
                            (funcall predicate cert))
@@ -318,7 +346,7 @@ depending on the value of option `magit-commit-squash-confirm'."
 
 (defun magit-commit-squash-internal
     (option commit &optional args rebase edit confirmed)
-  (when-let ((args (magit-commit-assert args t)))
+  (when-let ((args (magit-commit-assert args (not edit))))
     (when commit
       (when (and rebase (not (magit-rev-ancestor-p commit "HEAD")))
         (magit-read-char-case
@@ -382,9 +410,9 @@ depending on the value of option `magit-commit-squash-confirm'."
              (or (member "--amend" args)
                  (member "--allow-empty" args)
                  (member "--reset-author" args)
-                 (member "--author" args)
                  (member "--signoff" args)
-                 (cl-find-if (lambda (a) (string-match-p "\\`--date=" a)) args))))
+                 (transient-arg-value "--author=" args)
+                 (transient-arg-value "--date=" args))))
     (or args (list "--")))
    ((and (magit-rebase-in-progress-p)
          (not (magit-anything-unstaged-p))
@@ -574,7 +602,11 @@ See `magit-commit-absorb' for an alternative implementation."
               (magit-inhibit-save-previous-winconf 'unset)
               (magit-display-buffer-noselect t)
               (inhibit-quit nil)
-              (display-buffer-overriding-action '(nil (inhibit-same-window t))))
+              (display-buffer-overriding-action
+               display-buffer-overriding-action))
+          (when magit-commit-diff-inhibit-same-window
+            (setq display-buffer-overriding-action
+                  '(nil (inhibit-same-window t))))
           (message "Diffing changes to be committed (C-g to abort diffing)")
           (cl-case last-command
             (magit-commit

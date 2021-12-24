@@ -39,8 +39,8 @@
 (require 'transient) ; See #3732.
 
 ;; For `magit-apply'
-(declare-function magit-am "magit-sequence" ())
-(declare-function magit-patch-apply "magit-files" ())
+(declare-function magit-am "magit-sequence" () t)
+(declare-function magit-patch-apply "magit-patch" () t)
 ;; For `magit-discard-files'
 (declare-function magit-checkout-stage "magit-merge" (file arg))
 (declare-function magit-checkout-read-stage "magit-merge" (file))
@@ -54,6 +54,11 @@
 (declare-function borg--sort-submodule-sections "borg" (file))
 (declare-function borg-assimilate "borg" (package url &optional partially))
 (defvar borg-user-emacs-directory)
+
+(cl-eval-when (compile load)
+  (when (< emacs-major-version 26)
+    (defalias 'smerge-keep-upper 'smerge-keep-mine)
+    (defalias 'smerge-keep-lower 'smerge-keep-other)))
 
 ;;; Options
 
@@ -177,7 +182,7 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
          (offset (if (string-match diff-hunk-header-re-unified first-hunk)
                      (- (string-to-number (match-string 3 first-hunk))
                         (string-to-number (match-string 1 first-hunk)))
-                   (error "Hunk does not have expected header"))))
+                   (error "Header hunks have to be applied individually"))))
     (if (= offset 0)
         hunks
       (mapcar (lambda (hunk)
@@ -207,10 +212,15 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
 (defun magit-apply-hunk (section &rest args)
   (when (string-match "^diff --cc" (magit-section-parent-value section))
     (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
-  (magit-apply-patch (oref section parent) args
-                     (concat (magit-diff-file-header section)
-                             (magit-apply--adjust-hunk-new-start
-                              (magit-apply--section-content section)))))
+  (let* ((header (car (oref section value)))
+         (header (and (symbolp header) header))
+         (content (magit-apply--section-content section)))
+    (magit-apply-patch
+     (oref section parent) args
+     (concat (magit-diff-file-header section (not (eq header 'rename)))
+             (if header
+                 content
+               (magit-apply--adjust-hunk-new-start content))))))
 
 (defun magit-apply-region (section &rest args)
   (when (string-match "^diff --cc" (magit-section-parent-value section))
@@ -444,6 +454,8 @@ without requiring confirmation."
 (defun magit-unstage-all ()
   "Remove all changes from the staging area."
   (interactive)
+  (unless (magit-anything-staged-p)
+    (user-error "Nothing to unstage"))
   (when (or (magit-anything-unstaged-p)
             (magit-untracked-files))
     (magit-confirm 'unstage-all-changes))
@@ -454,7 +466,11 @@ without requiring confirmation."
 ;;;; Discard
 
 (defun magit-discard ()
-  "Remove the change at point."
+  "Remove the change at point.
+
+On a hunk or file with unresolved conflicts prompt which side to
+keep (while discarding the other).  If point is within the text
+of a side, then keep that side without prompting."
   (interactive)
   (--when-let (magit-apply--get-selection)
     (pcase (list (magit-diff-type) (magit-diff-scope))
@@ -473,7 +489,10 @@ without requiring confirmation."
 
 (defun magit-discard-hunk (section)
   (magit-confirm 'discard "Discard hunk")
-  (magit-discard-apply section 'magit-apply-hunk))
+  (let ((file (magit-section-parent-value section)))
+    (pcase (cddr (car (magit-file-status file)))
+      (`(?U ?U) (magit-smerge-keep-current))
+      (_ (magit-discard-apply section 'magit-apply-hunk)))))
 
 (defun magit-discard-apply (section apply)
   (if (eq (magit-diff-type section) 'unstaged)
@@ -729,6 +748,60 @@ a separate commit.  A typical workflow would be:
    and then type \"c c\" to create a new commit."
   (interactive)
   (magit-reverse (cons "--cached" args)))
+
+;;; Smerge Support
+
+(defun magit-smerge-keep-current ()
+  "Keep the current version of the conflict at point."
+  (interactive)
+  (magit-call-smerge #'smerge-keep-current))
+
+(defun magit-smerge-keep-upper ()
+  "Keep the upper/our version of the conflict at point."
+  (interactive)
+  (magit-call-smerge #'smerge-keep-upper))
+
+(defun magit-smerge-keep-base ()
+  "Keep the base version of the conflict at point."
+  (interactive)
+  (magit-call-smerge #'smerge-keep-base))
+
+(defun magit-smerge-keep-lower ()
+  "Keep the lower/their version of the conflict at point."
+  (interactive)
+  (magit-call-smerge #'smerge-keep-lower))
+
+(defun magit-call-smerge (fn)
+  (pcase-let* ((file (magit-file-at-point t t))
+               (keep (get-file-buffer file))
+               (`(,buf ,pos)
+                (let ((magit-diff-visit-jump-to-change nil))
+                  (magit-diff-visit-file--noselect file))))
+    (with-current-buffer buf
+      (save-excursion
+        (save-restriction
+          (unless (<= (point-min) pos (point-max))
+            (widen))
+          (goto-char pos)
+          (condition-case nil
+              (smerge-match-conflict)
+            (error
+             (if (eq fn 'smerge-keep-current)
+                 (when (eq this-command 'magit-discard)
+                   (re-search-forward smerge-begin-re nil t)
+                   (setq fn
+                         (magit-read-char-case "Keep side: " t
+                           (?o "[o]urs/upper"   #'smerge-keep-upper)
+                           (?b "[b]ase"         #'smerge-keep-base)
+                           (?t "[t]heirs/lower" #'smerge-keep-lower))))
+               (re-search-forward smerge-begin-re nil t))))
+          (funcall fn)))
+      (when (and keep (magit-anything-unmerged-p file))
+        (smerge-start-session))
+      (save-buffer))
+    (unless keep
+      (kill-buffer buf))
+    (magit-refresh)))
 
 ;;; _
 (provide 'magit-apply)

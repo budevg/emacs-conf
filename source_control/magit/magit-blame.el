@@ -197,19 +197,19 @@ Also see option `magit-blame-styles'."
 Also see option `magit-blame-styles'."
   :group 'magit-faces)
 
-(defface magit-blame-summary nil
+(defface magit-blame-summary '((t nil))
   "Face used for commit summaries when blaming."
   :group 'magit-faces)
 
-(defface magit-blame-hash nil
+(defface magit-blame-hash '((t nil))
   "Face used for commit hashes when blaming."
   :group 'magit-faces)
 
-(defface magit-blame-name nil
+(defface magit-blame-name '((t nil))
   "Face used for author and committer names when blaming."
   :group 'magit-faces)
 
-(defface magit-blame-date nil
+(defface magit-blame-date '((t nil))
   "Face used for dates when blaming."
   :group 'magit-faces)
 
@@ -227,25 +227,27 @@ Also see option `magit-blame-styles'."
    ;; filename <orig-file>
    (orig-file)))
 
-(defun magit-current-blame-chunk (&optional type)
+(defun magit-current-blame-chunk (&optional type noerror)
   (or (and (not (and type (not (eq type magit-blame-type))))
            (magit-blame-chunk-at (point)))
       (and type
            (let ((rev  (or magit-buffer-refname magit-buffer-revision))
-                 (file (magit-file-relative-name nil (not magit-buffer-file-name)))
+                 (file (and (not (derived-mode-p 'dired-mode))
+                            (magit-file-relative-name
+                             nil (not magit-buffer-file-name))))
                  (line (format "%i,+1" (line-number-at-pos))))
-             (unless file
-               (error "Buffer does not visit a tracked file"))
-             (with-temp-buffer
-               (magit-with-toplevel
-                 (magit-git-insert
-                  "blame" "--porcelain"
-                  (if (memq magit-blame-type '(final removal))
-                      (cons "--reverse" (magit-blame-arguments))
-                    (magit-blame-arguments))
-                  "-L" line rev "--" file)
-                 (goto-char (point-min))
-                 (car (magit-blame--parse-chunk type))))))))
+             (cond (file (with-temp-buffer
+                           (magit-with-toplevel
+                             (magit-git-insert
+                              "blame" "--porcelain"
+                              (if (memq magit-blame-type '(final removal))
+                                  (cons "--reverse" (magit-blame-arguments))
+                                (magit-blame-arguments))
+                              "-L" line rev "--" file)
+                             (goto-char (point-min))
+                             (car (magit-blame--parse-chunk type)))))
+                   (noerror nil)
+                   (t (error "Buffer does not visit a tracked file")))))))
 
 (defun magit-blame-chunk-at (pos)
   (--some (overlay-get it 'magit-blame-chunk)
@@ -895,6 +897,7 @@ instead of the hash, like `kill-ring-save' would."
   ["Arguments"
    ("-w" "Ignore whitespace" "-w")
    ("-r" "Do not treat root commits as boundaries" "--root")
+   ("-P" "Follow only first parent" "--first-parent")
    (magit-blame:-M)
    (magit-blame:-C)]
   ["Actions"
@@ -914,12 +917,14 @@ instead of the hash, like `kill-ring-save' would."
   :description "Detect lines moved or copied within a file"
   :class 'transient-option
   :argument "-M"
+  :allow-empty t
   :reader 'transient-read-number-N+)
 
 (transient-define-argument magit-blame:-C ()
   :description "Detect lines moved or copied between files"
   :class 'transient-option
   :argument "-C"
+  :allow-empty t
   :reader 'transient-read-number-N+)
 
 ;;; Utilities

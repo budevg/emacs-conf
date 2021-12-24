@@ -34,7 +34,7 @@
 (require 'magit-core)
 (require 'magit-diff)
 
-(declare-function magit-blob-visit "magit-files" (blob-or-file line))
+(declare-function magit-blob-visit "magit-files" (blob-or-file))
 (declare-function magit-insert-head-branch-header "magit-status"
                   (&optional branch))
 (declare-function magit-insert-upstream-branch-header "magit-status"
@@ -77,11 +77,11 @@
   :options '("--follow" "--grep" "-G" "-S" "-L"))
 
 (defcustom magit-log-revision-headers-format "\
-%+b
+%+b%+N
 Author:    %aN <%aE>
 Committer: %cN <%cE>"
   "Additional format string used with the `++header' argument."
-  :package-version '(magit . "2.3.0")
+  :package-version '(magit . "3.2.0")
   :group 'magit-log
   :type 'string)
 
@@ -406,8 +406,8 @@ the upstream isn't ahead of the current branch) show."
   ["Commit limiting"
    (magit-log:-n)
    (magit:--author)
-   (7 "=s" "Limit to commits since" "--since=" transient-read-date)
-   (7 "=u" "Limit to commits until" "--until=" transient-read-date)
+   (7 magit-log:--since)
+   (7 magit-log:--until)
    (magit-log:--grep)
    (7 "-i" "Search case-insensitive" ("-i" "--regexp-ignore-case"))
    (7 "-I" "Invert search pattern"   "--invert-grep")
@@ -549,6 +549,20 @@ the upstream isn't ahead of the current branch) show."
   :key "-A"
   :argument "--author="
   :reader 'magit-transient-read-person)
+
+(transient-define-argument magit-log:--since ()
+  :description "Limit to commits since"
+  :class 'transient-option
+  :key "=s"
+  :argument "--since="
+  :reader 'transient-read-date)
+
+(transient-define-argument magit-log:--until ()
+  :description "Limit to commits until"
+  :class 'transient-option
+  :key "=u"
+  :argument "--until="
+  :reader 'transient-read-date)
 
 (transient-define-argument magit-log:--*-order ()
   :description "Order commits by"
@@ -770,7 +784,7 @@ commits instead.
 This command requires git-when-merged, which is available from
 https://github.com/mhagger/git-when-merged."
   (interactive
-   (append (let ((commit (magit-read-branch-or-commit "Commit")))
+   (append (let ((commit (magit-read-branch-or-commit "Log merge of commit")))
              (list commit
                    (magit-read-other-branch "Merged into" commit)))
            (magit-log-arguments)))
@@ -780,11 +794,9 @@ https://github.com/mhagger/git-when-merged."
   (let (exit m)
     (with-temp-buffer
       (save-excursion
-        (setq exit (magit-process-file
-                    magit-git-executable nil t nil
-                    "when-merged" "-c"
-                    "--abbrev" (number-to-string (magit-abbrev-length))
-                    commit branch)))
+        (setq exit (magit-process-git t "when-merged" "-c"
+                                      (magit-abbrev-arg)
+                                      commit branch)))
       (setq m (buffer-substring-no-properties (point) (line-end-position))))
     (if (zerop exit)
         (magit-log-setup-buffer (list (format "%s^1..%s" m m))
@@ -918,11 +930,15 @@ of the current repository first; creating it if necessary."
    ("r" "range" magit-shortlog-range)])
 
 (defun magit-git-shortlog (rev args)
-  (with-current-buffer (get-buffer-create "*magit-shortlog*")
-    (erase-buffer)
-    (save-excursion
-      (magit-git-insert "shortlog" args rev))
-    (switch-to-buffer-other-window (current-buffer))))
+  (let ((dir default-directory))
+    (with-current-buffer (get-buffer-create "*magit-shortlog*")
+      (setq default-directory dir)
+      (setq buffer-read-only t)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (save-excursion
+          (magit-git-insert "shortlog" args rev))
+        (switch-to-buffer-other-window (current-buffer))))))
 
 ;;;###autoload
 (defun magit-shortlog-since (rev args)
@@ -949,9 +965,9 @@ of the current repository first; creating it if necessary."
 (defvar magit-log-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map magit-mode-map)
-    (define-key map "\C-c\C-b" 'magit-go-backward)
-    (define-key map "\C-c\C-f" 'magit-go-forward)
-    (define-key map "\C-c\C-n" 'magit-log-move-to-parent)
+    (define-key map (kbd "C-c C-b") 'magit-go-backward)
+    (define-key map (kbd "C-c C-f") 'magit-go-forward)
+    (define-key map (kbd "C-c C-n") 'magit-log-move-to-parent)
     (define-key map "j" 'magit-log-move-to-revision)
     (define-key map "=" 'magit-log-toggle-commit-limit)
     (define-key map "+" 'magit-log-double-commit-limit)
@@ -1005,9 +1021,7 @@ Type \\[magit-reset] to reset `HEAD' to the commit at point.
         (files magit-buffer-log-files))
     (magit-set-header-line-format
      (funcall magit-log-header-line-function revs args files))
-    (if (= (length files) 1)
-        (unless (magit-file-tracked-p (car files))
-          (setq args (cons "--full-history" args)))
+    (unless (= (length files) 1)
       (setq args (remove "--follow" args)))
     (when (and (car magit-log-remove-graph-args)
                (--any-p (string-match-p
@@ -1426,8 +1440,7 @@ If there is no blob buffer in the same frame, then do nothing."
                  (save-excursion
                    (magit-blob-visit (list (magit-rev-parse rev)
                                            (magit-file-relative-name
-                                            magit-buffer-file-name))
-                                     (line-number-at-pos))))))))))))
+                                            magit-buffer-file-name)))))))))))))
 
 (defun magit-log-goto-commit-section (rev)
   (let ((abbrev (magit-rev-format "%h" rev)))
@@ -1529,13 +1542,13 @@ The shortstat style is experimental and rather slow."
 (defvar magit-log-select-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map magit-log-mode-map)
-    (define-key map "\C-c\C-b" 'undefined)
-    (define-key map "\C-c\C-f" 'undefined)
-    (define-key map "."        'magit-log-select-pick)
-    (define-key map "e"        'magit-log-select-pick)
-    (define-key map "\C-c\C-c" 'magit-log-select-pick)
-    (define-key map "q"        'magit-log-select-quit)
-    (define-key map "\C-c\C-k" 'magit-log-select-quit)
+    (define-key map (kbd "C-c C-b") 'undefined)
+    (define-key map (kbd "C-c C-f") 'undefined)
+    (define-key map (kbd ".")       'magit-log-select-pick)
+    (define-key map (kbd "e")       'magit-log-select-pick)
+    (define-key map (kbd "C-c C-c") 'magit-log-select-pick)
+    (define-key map (kbd "q")       'magit-log-select-quit)
+    (define-key map (kbd "C-c C-k") 'magit-log-select-quit)
     map)
   "Keymap for `magit-log-select-mode'.")
 

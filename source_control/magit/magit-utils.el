@@ -49,10 +49,6 @@
 (require 'crm)
 
 (eval-when-compile (require 'ido))
-(declare-function ido-completing-read+ "ido-completing-read+"
-                  (prompt collection &optional predicate
-                          require-match initial-input
-                          hist def inherit-input-method))
 (declare-function Info-get-token "info" (pos start all &optional errorstring))
 
 (eval-when-compile (require 'vc-git))
@@ -282,11 +278,11 @@ Edit published history:
   editing commits that have already been pushed to one of the
   branches listed in `magit-published-branches'.
 
-  `amend-published' Affects most commands that amend to \"HEAD\".
+  `amend-published' Affects most commands that amend to `HEAD'.
 
   `rebase-published' Affects commands that perform interactive
   rebases.  This includes commands from the commit popup that
-  modify a commit other than \"HEAD\", namely the various fixup
+  modify a commit other than `HEAD', namely the various fixup
   and squash variants.
 
   `edit-published' Affects the commands `magit-edit-line-commit'
@@ -599,13 +595,13 @@ into a list."
 Like `completing-read-multiple' but don't mess with order of
 TABLE and take an additional argument NO-SPLIT, which causes
 the user input to be returned as a single unmodified string.
-Also work around various misfeatures of various third-party
-completion frameworks."
+Also work around various incompatible features of various
+third-party completion frameworks."
   (cl-letf*
       (;; To implement NO-SPLIT we have to manipulate the respective
        ;; `split-string' invocation.  We cannot simply advice it to
        ;; return the input string because `SELECTRUM' would choke on
-       ;; it that string.  Use a variable to pass along the raw user
+       ;; that string.  Use a variable to pass along the raw user
        ;; input string. aa5f098ab
        (input nil)
        (split-string (symbol-function 'split-string))
@@ -634,10 +630,25 @@ completion frameworks."
        ;; when reading commit ranges. 798aff564
        (helm-crm-default-separator
         (if no-split nil (bound-and-true-p helm-crm-default-separator)))
-       ;; And now, the moment we have all been waiting for...
-       (values (completing-read-multiple
-                prompt table predicate require-match initial-input
-                hist def inherit-input-method)))
+       (values
+        (if (and no-split
+                 (advice-member-p 'consult-completing-read-multiple
+                                  'completing-read-multiple))
+            ;; Our NO-SPLIT hack is not compatible with `CONSULT's
+            ;; implemenation so fall back to the original function.
+            ;; #4437
+            (unwind-protect
+                (progn
+                  (advice-remove 'completing-read-multiple
+                                 'consult-completing-read-multiple)
+                  (completing-read-multiple
+                   prompt table predicate require-match initial-input
+                   hist def inherit-input-method))
+              (advice-add 'completing-read-multiple :override
+                          'consult-completing-read-multiple))
+          (completing-read-multiple
+           prompt table predicate require-match initial-input
+           hist def inherit-input-method))))
     (if no-split input values)))
 
 (defun magit-ido-completing-read
@@ -648,7 +659,8 @@ Unfortunately `ido-completing-read' is not suitable as a
 drop-in replacement for `completing-read', instead we use
 `ido-completing-read+' from the third-party package by the
 same name."
-  (if (require 'ido-completing-read+ nil t)
+  (if (and (require 'ido-completing-read+ nil t)
+           (fboundp 'ido-completing-read+))
       (ido-completing-read+ prompt choices predicate require-match
                             initial-input hist
                             (or def (and require-match (car choices))))

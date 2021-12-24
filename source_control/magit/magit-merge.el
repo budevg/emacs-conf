@@ -47,6 +47,8 @@
    ("-n" "No fast-forward"   "--no-ff")
    (magit-merge:--strategy)
    (5 magit-merge:--strategy-option)
+   (5 "-b" "Ignore changes in amount of whitespace" "-Xignore-space-change")
+   (5 "-w" "Ignore whitespace when comparing lines" "-Xignore-all-space")
    (5 magit-diff:--diff-algorithm :argument "-Xdiff-algorithm=")
    (5 magit:--gpg-sign)]
   ["Actions"
@@ -137,7 +139,7 @@ provided the respective remote branch already exists, ensuring
 that the respective pull-request (if any) won't get stuck on some
 obsolete version of the commits that are being merged.  Finally
 if `forge-branch-pullreq' was used to create the merged branch,
-branch, then also remove the respective remote branch."
+then also remove the respective remote branch."
   (interactive
    (list (magit-read-other-local-branch
           (format "Merge `%s' into"

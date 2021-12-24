@@ -2,6 +2,6 @@
        :description "Use the Emacsclient as $EDITOR"
        :type github
        :pkgname "magit/with-editor"
-       :build `(,(concat "cp *.el "
+       :build `(,(concat "cp lisp/*.el "
                          (in-emacs-d "lisp_lib")))
        )

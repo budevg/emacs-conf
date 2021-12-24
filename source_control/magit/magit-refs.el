@@ -63,7 +63,7 @@ branch Show counts for branches only.
 nil    Never show counts.
 
 To change the value in an existing buffer use the command
-`magit-refs-show-commit-count'"
+`magit-refs-set-show-commit-count'."
   :package-version '(magit . "2.1.0")
   :group 'magit-refs
   :safe (lambda (val) (memq val '(all branch nil)))
@@ -277,8 +277,8 @@ the outcome.
 (defvar magit-refs-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map magit-mode-map)
-    (define-key map "\C-y" 'magit-refs-set-show-commit-count)
-    (define-key map "L"    'magit-margin-settings)
+    (define-key map (kbd "C-y") 'magit-refs-set-show-commit-count)
+    (define-key map (kbd "L")   'magit-margin-settings)
     map)
   "Keymap for `magit-refs-mode'.")
 
@@ -341,7 +341,9 @@ Type \\[magit-reset] to reset `HEAD' to the commit at point.
   ["Actions"
    ("y" "Show refs, comparing them with HEAD"           magit-show-refs-head)
    ("c" "Show refs, comparing them with current branch" magit-show-refs-current)
-   ("o" "Show refs, comparing them with other branch"   magit-show-refs-other)]
+   ("o" "Show refs, comparing them with other branch"   magit-show-refs-other)
+   ("r" "Show refs, changing commit count display"
+    magit-refs-set-show-commit-count)]
   (interactive (list (or (derived-mode-p 'magit-refs-mode)
                          current-prefix-arg)))
   (if transient
@@ -527,9 +529,12 @@ line is inserted at all."
                 (magit-insert-heading
                   (magit-refs--format-focus-column tag 'tag)
                   (propertize tag 'font-lock-face 'magit-tag)
-                  (make-string (max 1 (- magit-refs-primary-column-width
-                                         (length tag)))
-                               ?\s)
+                  (make-string
+                   (max 1 (- (if (consp magit-refs-primary-column-width)
+                                 (car magit-refs-primary-column-width)
+                               magit-refs-primary-column-width)
+                             (length tag)))
+                   ?\s)
                   (and msg (magit-log-propertize-keywords nil msg)))
                 (when (and magit-refs-margin-for-tags (magit-buffer-margin-p))
                   (magit-refs--format-margin tag))
@@ -568,9 +573,12 @@ line is inserted at all."
                       (magit-refs--format-focus-column branch)
                       (magit-refs--propertize-branch
                        abbrev ref (and headp 'magit-branch-remote-head))
-                      (make-string (max 1 (- magit-refs-primary-column-width
-                                             (length abbrev)))
-                                   ?\s)
+                      (make-string
+                       (max 1 (- (if (consp magit-refs-primary-column-width)
+                                     (car magit-refs-primary-column-width)
+                                   magit-refs-primary-column-width)
+                                 (length abbrev)))
+                       ?\s)
                       (and msg (magit-log-propertize-keywords nil msg))))
                   (when (magit-buffer-margin-p)
                     (magit-refs--format-margin branch))
@@ -645,8 +653,7 @@ line is inserted at all."
               (if branch
                   (magit-refs--propertize-branch
                    branch ref (and headp 'magit-branch-current))
-                (magit--propertize-face "(detached)"
-                                        'font-lock-warning-face)))
+                (magit--propertize-face "(detached)" 'magit-branch-warning)))
              (u:ahead  (and u:track
                             (string-match "ahead \\([0-9]+\\)" u:track)
                             (magit--propertize-face

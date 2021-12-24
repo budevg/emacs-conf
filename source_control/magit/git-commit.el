@@ -13,8 +13,8 @@
 
 ;; Keywords: git tools vc
 ;; Homepage: https://github.com/magit/magit
-;; Package-Requires: ((emacs "25.1") (dash "20210330") (transient "20210701") (with-editor "20210524"))
-;; Package-Version: 3.1.0
+;; Package-Requires: ((emacs "25.1") (transient "0.3.6") (with-editor "3.0.5"))
+;; Package-Version: 3.3.0
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -112,10 +112,11 @@
 ;;; Code:
 ;;;; Dependencies
 
-(require 'dash)
+(require 'seq)
 (require 'subr-x)
 
 (require 'magit-git nil t)
+(require 'magit-mode nil t)
 (require 'magit-utils nil t)
 
 (require 'log-edit)
@@ -214,6 +215,7 @@ The major mode configured here is turned on by the minor mode
              git-commit-setup-changelog-support
              magit-generate-changelog
              git-commit-turn-on-auto-fill
+             git-commit-turn-on-orglink
              git-commit-turn-on-flyspell
              git-commit-propertize-diff
              bug-reference-mode
@@ -303,8 +305,18 @@ already using it, then you probably shouldn't start doing so."
     "Co-authored-by")
   "A list of Git pseudo headers to be highlighted."
   :group 'git-commit
-  :safe (lambda (val) (and (listp val) (-all-p 'stringp val)))
+  :safe (lambda (val) (and (listp val) (seq-every-p #'stringp val)))
   :type '(repeat string))
+
+(defcustom git-commit-use-local-message-ring nil
+  "Whether to use a local message ring instead of the global one.
+This can be set globally, in which case every repository gets its
+own commit message ring, or locally for a single repository.  If
+Magit isn't available, then setting this to a non-nil value has
+no effect."
+  :group 'git-commit
+  :safe 'booleanp
+  :type 'boolean)
 
 ;;;; Faces
 
@@ -392,6 +404,8 @@ This is only used if Magit is available."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "M-p")     'git-commit-prev-message)
     (define-key map (kbd "M-n")     'git-commit-next-message)
+    (define-key map (kbd "C-c M-p") 'git-commit-search-message-backward)
+    (define-key map (kbd "C-c M-n") 'git-commit-search-message-forward)
     (define-key map (kbd "C-c C-i") 'git-commit-insert-pseudo-header)
     (define-key map (kbd "C-c C-a") 'git-commit-ack)
     (define-key map (kbd "C-c M-i") 'git-commit-suggested)
@@ -465,24 +479,27 @@ This is only used if Magit is available."
 (defun git-commit-file-not-found ()
   ;; cygwin git will pass a cygwin path (/cygdrive/c/foo/.git/...),
   ;; try to handle this in window-nt Emacs.
-  (--when-let
-      (and (or (string-match-p git-commit-filename-regexp buffer-file-name)
-               (and (boundp 'git-rebase-filename-regexp)
-                    (string-match-p git-rebase-filename-regexp
-                                    buffer-file-name)))
-           (not (file-accessible-directory-p
-                 (file-name-directory buffer-file-name)))
-           (if (require 'magit-git nil t)
-               ;; Emacs prepends a "c:".
-               (magit-expand-git-file-name (substring buffer-file-name 2))
-             ;; Fallback if we can't load `magit-git'.
-             (and (string-match "\\`[a-z]:/\\(cygdrive/\\)?\\([a-z]\\)/\\(.*\\)"
-                                buffer-file-name)
-                  (concat (match-string 2 buffer-file-name) ":/"
-                          (match-string 3 buffer-file-name)))))
-    (when (file-accessible-directory-p (file-name-directory it))
+  (when-let
+      ((file (and (or (string-match-p git-commit-filename-regexp
+                                      buffer-file-name)
+                      (and (boundp 'git-rebase-filename-regexp)
+                           (string-match-p git-rebase-filename-regexp
+                                           buffer-file-name)))
+                  (not (file-accessible-directory-p
+                        (file-name-directory buffer-file-name)))
+                  (if (require 'magit-git nil t)
+                      ;; Emacs prepends a "c:".
+                      (magit-expand-git-file-name
+                       (substring buffer-file-name 2))
+                    ;; Fallback if we can't load `magit-git'.
+                    (and (string-match
+                          "\\`[a-z]:/\\(cygdrive/\\)?\\([a-z]\\)/\\(.*\\)"
+                          buffer-file-name)
+                         (concat (match-string 2 buffer-file-name) ":/"
+                                 (match-string 3 buffer-file-name)))))))
+    (when (file-accessible-directory-p (file-name-directory file))
       (let ((inhibit-read-only t))
-        (insert-file-contents it t)
+        (insert-file-contents file t)
         t))))
 
 (when (eq system-type 'windows-nt)
@@ -500,6 +517,17 @@ to recover older messages")
     ;; That library declares this functions without loading
     ;; magit-process.el, which defines it.
     (require 'magit-process nil t))
+  (when git-commit-major-mode
+    (let ((auto-mode-alist (list (cons (concat "\\`"
+                                               (regexp-quote buffer-file-name)
+                                               "\\'")
+                                       git-commit-major-mode)))
+          ;; The major-mode hook might want to consult these minor
+          ;; modes, while the minor-mode hooks might want to consider
+          ;; the major mode.
+          (git-commit-mode t)
+          (with-editor-mode t))
+      (normal-mode t)))
   ;; Pretend that git-commit-mode is a major-mode,
   ;; so that directory-local settings can be used.
   (let ((default-directory
@@ -516,17 +544,6 @@ to recover older messages")
           (major-mode 'git-commit-mode)) ; trick dir-locals-collect-variables
       (hack-dir-local-variables)
       (hack-local-variables-apply)))
-  (when git-commit-major-mode
-    (let ((auto-mode-alist (list (cons (concat "\\`"
-                                               (regexp-quote buffer-file-name)
-                                               "\\'")
-                                       git-commit-major-mode)))
-          ;; The major-mode hook might want to consult these minor
-          ;; modes, while the minor-mode hooks might want to consider
-          ;; the major mode.
-          (git-commit-mode t)
-          (with-editor-mode t))
-      (normal-mode t)))
   ;; Show our own message using our hook.
   (setq with-editor-show-usage nil)
   (setq with-editor-usage-message git-commit-usage-message)
@@ -555,9 +572,9 @@ to recover older messages")
       (magit-wip-maybe-add-commit-hook)))
   (setq with-editor-cancel-message
         'git-commit-cancel-message)
-  (make-local-variable 'log-edit-comment-ring-index)
   (git-commit-mode 1)
   (git-commit-setup-font-lock)
+  (git-commit-prepare-message-ring)
   (when (boundp 'save-place)
     (setq save-place nil))
   (save-excursion
@@ -608,6 +625,16 @@ to `git-commit-fill-column'."
     (setq fill-column git-commit-fill-column))
   (setq-local comment-auto-fill-only-comments nil)
   (turn-on-auto-fill))
+
+(defun git-commit-turn-on-orglink ()
+  "Turn on Orglink mode if it is available.
+If `git-commit-major-mode' is `org-mode', then silently forgo
+turning on `orglink-mode'."
+  (when (and (not (derived-mode-p 'org-mode))
+             (boundp 'orglink-match-anywhere)
+             (fboundp 'orglink-mode))
+    (setq-local orglink-match-anywhere t)
+    (orglink-mode 1)))
 
 (defun git-commit-turn-on-flyspell ()
   "Unconditionally turn on Flyspell mode.
@@ -699,13 +726,53 @@ With a numeric prefix ARG, go forward ARG comments."
   (interactive "*p")
   (git-commit-prev-message (- arg)))
 
+(defun git-commit-search-message-backward (string)
+  "Search backward through message history for a match for STRING.
+Save current message first."
+  (interactive
+   ;; Avoid `format-prompt' because it isn't available until Emacs 28.
+   (list (read-string (format "Comment substring (default %s): "
+                              log-edit-last-comment-match)
+                      nil nil log-edit-last-comment-match)))
+  (cl-letf (((symbol-function #'log-edit-previous-comment)
+             (symbol-function #'git-commit-prev-message)))
+    (log-edit-comment-search-backward string)))
+
+(defun git-commit-search-message-forward (string)
+  "Search forward through message history for a match for STRING.
+Save current message first."
+  (interactive
+   ;; Avoid `format-prompt' because it isn't available until Emacs 28.
+   (list (read-string (format "Comment substring (default %s): "
+                              log-edit-last-comment-match)
+                      nil nil log-edit-last-comment-match)))
+  (cl-letf (((symbol-function #'log-edit-previous-comment)
+             (symbol-function #'git-commit-prev-message)))
+    (log-edit-comment-search-forward string)))
+
 (defun git-commit-save-message ()
   "Save current message to `log-edit-comment-ring'."
   (interactive)
-  (when-let ((message (git-commit-buffer-message)))
-    (when-let ((index (ring-member log-edit-comment-ring message)))
-      (ring-remove log-edit-comment-ring index))
-    (ring-insert log-edit-comment-ring message)))
+  (if-let ((message (git-commit-buffer-message)))
+      (progn
+        (when-let ((index (ring-member log-edit-comment-ring message)))
+          (ring-remove log-edit-comment-ring index))
+        (ring-insert log-edit-comment-ring message)
+        (when (and git-commit-use-local-message-ring
+                   (fboundp 'magit-repository-local-set))
+          (magit-repository-local-set 'log-edit-comment-ring
+                                      log-edit-comment-ring))
+        (message "Message saved"))
+    (message "Only whitespace and/or comments; message not saved")))
+
+(defun git-commit-prepare-message-ring ()
+  (make-local-variable 'log-edit-comment-ring-index)
+  (when (and git-commit-use-local-message-ring
+             (fboundp 'magit-repository-local-get))
+    (setq-local log-edit-comment-ring
+                (magit-repository-local-get
+                 'log-edit-comment-ring
+                 (make-ring log-edit-maximum-comment-ring-size)))))
 
 (defun git-commit-buffer-message ()
   (let ((flush (concat "^" comment-start))
