@@ -38,9 +38,12 @@ This works on the current region."
      ))
 
 (autoload 'web-mode "web-mode" nil t)
+(autoload 'typescript-mode "typescript-mode" nil t)
+
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.[tj]sx?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.json\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-mode))
 
 
 (defun my-web-mode-hook ()

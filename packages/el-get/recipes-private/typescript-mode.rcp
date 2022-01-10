@@ -1,0 +1,8 @@
+(:name typescript-mode
+       :description "TypeScript mode"
+       :type github
+       :pkgname "ananthakumaran/typescript.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/web")))
+
+       )
