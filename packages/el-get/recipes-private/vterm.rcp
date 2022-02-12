@@ -1,0 +1,7 @@
+(:name vterm
+       :description "The missing hash table utility library for Emacs."
+       :type github
+       :pkgname "akermu/emacs-libvterm"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "shell")))
+       )

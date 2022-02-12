@@ -64,8 +64,17 @@ If N is negative, search forwards for the -Nth following match."
   )
 
 
-(autoload 'vterm "vterm" nil t)
-(global-set-key [f3] 'vterm)
+(autoload 'vterm-mode "vterm" nil t)
+(defun new-vterm ()
+  (interactive)
+  (let ((buf (generate-new-buffer "*vterm*")))
+    (pop-to-buffer-same-window buf)
+    (with-current-buffer buf
+      (unless (derived-mode-p 'vterm-mode)
+        (vterm-mode)))
+    ))
+
+(global-set-key [f3] 'new-vterm)
 (eval-after-load "vterm"
   '(progn
      (defun vterm-cua-paste (&optional arg)
