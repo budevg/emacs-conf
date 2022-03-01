@@ -10,6 +10,7 @@
            eglot-stay-out-of '(eldoc flymake company imenu)
            eglot-extend-to-xref t
            )
+     (push '(java-mode . ("java-language-server")) eglot-server-programs)
      (define-key eglot-mode-map (kbd "C-/")  'xref-find-definitions)
      (define-key eglot-mode-map (kbd "C-?") 'xref-pop-marker-stack)
      (define-key eglot-mode-map (kbd "C-.")  'xref-find-references)
