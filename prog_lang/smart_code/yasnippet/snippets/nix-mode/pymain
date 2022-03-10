@@ -10,7 +10,6 @@ in mkShell {
   buildInputs = [
     (python3.withPackages py-packages)
     python3Packages.black
-    python3Packages.python-language-server
+    python3Packages.python-lsp-server
   ];
-  ENV_VAR = "env_var";
 }
