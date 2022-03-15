@@ -80,7 +80,8 @@
    `(smerge-refined-change ((t (:inherit diff-changed :weight bold))))
    `(smerge-refined-removed ((t (:inherit diff-removed :weight bold))))
    ;; ansi colors
-   '(ansi-color-blue ((t :foreground "CadetBlue2" :background "CadetBlue2")))
+   '(ansi-color-blue ((t :foreground "CadetBlue3" :background "CadetBlue3")))
+   '(ansi-color-bright-blue ((t :foreground "CadetBlue2" :background "CadetBlue2")))
    ))
 
 ;;;###autoload
