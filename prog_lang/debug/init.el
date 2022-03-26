@@ -11,6 +11,9 @@
    (in-emacs-d "prog_lang/debug/.gdbinit-common")
    "~/.gdbinit"))
 
+(defun dot-gdbinit ()
+  (interactive)
+  (comint-send-file "~/.gdbinit" "~/.gdbinit"))
 
 
 (eval-after-load "gud"
