@@ -165,6 +165,12 @@ Fall back to `completing-read' otherwise."
       (let ((ffip-patterns patterns))
         (find-file-in-project)))))
 
+(defun project-try-local (dir)
+  (let ((root (locate-dominating-file dir ".project")))
+    (and root (cons 'transient root))))
+
+(add-hook 'project-find-functions #'project-try-local)
+
 (global-set-key (kbd "C-f c")
                 (ffip-create-pattern-file-finder "*.c" "*.h" "*.cpp" "*.hpp" "*.cc"))
 (global-set-key (kbd "C-f f")
