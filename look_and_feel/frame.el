@@ -14,8 +14,9 @@
 
 ;; zoom in/out
 
-(autoload 'zoom-frm-in "zoom-frm" "zoom-frm-in autoload" t)
-(autoload 'zoom-frm-out "zoom-frm" "zoom-frm-out autoload" t)
+(autoload 'zoom-frm-in "zoom-frm" nil t)
+(autoload 'zoom-frm-out "zoom-frm" nil t)
+(autoload 'zoom-frm-unzoom "zoom-frm" nil t)
 
 (global-set-key (vector (list 'meta mouse-wheel-down-event)) 'zoom-frm-in)
 (global-set-key (vector (list 'meta mouse-wheel-up-event)) 'zoom-frm-out)
@@ -28,10 +29,12 @@
  (kbd "C-f z")
  (defhydra hydra-zoom ()
    "zoom"
-   ("<up>" text-scale-decrease "[-]" :color red)
-   ("<down>" text-scale-increase "[+]" :color red)
+   ("C-<left>" text-scale-decrease "[-]" :color red)
+   ("C-<right>" text-scale-increase "[+]" :color red)
+   ("C-<down>" text-scale-set "[=]" :color red)
    ("<left>" zoom-frm-out "-" :color red)
    ("<right>" zoom-frm-in "+" :color red)
+   ("<down>" zoom-frm-unzoom "=" :color red)
    ("q" nil "cancel" :color blue)))
 
 (global-set-key
