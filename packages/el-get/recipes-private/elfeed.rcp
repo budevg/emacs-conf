@@ -1,0 +1,6 @@
+(:name elfeed
+       :description "An Emacs web feeds client"
+       :type github
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/elfeed")))
+       :pkgname "skeeto/elfeed")
