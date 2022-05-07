@@ -14,4 +14,15 @@
 (eval-after-load "eww"
   '(progn
      (setq eww-download-directory temporary-file-directory)
+     (define-key eww-mode-map (kbd ",") 'eww-back-url)
+     (define-key eww-mode-map (kbd ".") 'eww-forward-url)
+     (define-key eww-mode-map (kbd "/") 'eww-follow-link)
+     (define-key eww-mode-map (kbd "M-/") 'eww-open-in-new-buffer)
+     (define-key eww-mode-map (kbd "C-/")
+       #'(lambda ()
+           (interactive)
+           (let ((url (get-text-property (point) 'shr-url)))
+             (cond
+              ((not url) (message "No link under point"))
+              (t (funcall browse-url-secondary-browser-function url))))))
      ))

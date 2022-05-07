@@ -6,18 +6,25 @@
 
      (setq elfeed-search-remain-on-entry t)
 
+     (defun elfeed-show-url-in-eww (url &optional arg)
+       (with-current-buffer (generate-new-buffer "*feed*")
+         (eww-mode)
+         (eww url)))
+
      (defun elfeed-show-eww-open ()
        (interactive)
-       (let ((browse-url-browser-function #'eww-browse-url))
+       (let ((browse-url-browser-function #'elfeed-show-url-in-eww))
          (elfeed-show-visit nil)))
 
      (defun elfeed-search-eww-open ()
        (interactive)
-       (let ((browse-url-browser-function #'eww-browse-url))
+       (let ((browse-url-browser-function #'elfeed-show-url-in-eww))
          (elfeed-search-browse-url nil)))
 
-     (define-key elfeed-show-mode-map (kbd "B") 'elfeed-show-eww-open)
-     (define-key elfeed-search-mode-map (kbd "B") 'elfeed-search-eww-open)
+     (define-key elfeed-show-mode-map (kbd "/") 'elfeed-show-eww-open)
+     (define-key elfeed-search-mode-map (kbd "/") 'elfeed-search-eww-open)
+     (define-key elfeed-show-mode-map (kbd "C-/") 'elfeed-show-visit)
+     (define-key elfeed-search-mode-map (kbd "C-/") 'elfeed-search-browse-url)
 
      (mapcar
       (lambda (e)
