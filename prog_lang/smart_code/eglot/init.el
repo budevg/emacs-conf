@@ -10,7 +10,14 @@
            eglot-stay-out-of '(eldoc flymake company imenu)
            eglot-extend-to-xref t
            )
-     (push '(java-mode . ("java-language-server")) eglot-server-programs)
+
+     (add-to-list 'eglot-server-programs
+                  '(java-mode . ("java-language-server")))
+     (add-to-list 'eglot-server-programs
+                  `((js-mode typescript-mode) .
+                    ,(eglot-alternatives
+                      '(("deno" "lsp") ("typescript-language-server" "--stdio")))))
+
      (define-key eglot-mode-map (kbd "C-/")  'xref-find-definitions)
      (define-key eglot-mode-map (kbd "C-?") 'xref-pop-marker-stack)
      (define-key eglot-mode-map (kbd "C-.")  'xref-find-references)
