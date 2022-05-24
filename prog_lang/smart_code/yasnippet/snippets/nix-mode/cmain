@@ -5,7 +5,7 @@
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;
 mkShell {
-  buildInputs = [ ccls ];
+  buildInputs = [ ccls clang-tools ];
   hardeningDisable = [ "all" ];
   ENV_VAR = "env_var";
 }
