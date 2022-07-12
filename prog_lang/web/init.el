@@ -81,3 +81,5 @@ This works on the current region."
      (define-key js-mode-map "\C-m" 'newline-and-indent)
      (define-key js-mode-map [(meta ?.)] nil)
      (setq js-indent-level 2)))
+
+(autoload 'restclient-mode "restclient" nil t)

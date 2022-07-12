@@ -1,0 +1,7 @@
+(:name restclient
+       :description "HTTP REST client tool for emacs"
+       :type github
+       :pkgname "pashky/restclient.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/web")))
+       )
