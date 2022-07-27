@@ -14,7 +14,7 @@
      (add-to-list 'eglot-server-programs
                   '(java-mode . ("java-language-server")))
      (add-to-list 'eglot-server-programs
-                  `((js-mode typescript-mode) .
+                  `((js-mode typescript-mode jsx-mode) .
                     ,(eglot-alternatives
                       '(("deno" "lsp") ("typescript-language-server" "--stdio")))))
 
