@@ -1,7 +1,8 @@
 
 (autoload 'tea-time "tea-time" nil t)
 (autoload 'tomatinho "tomatinho" nil t)
-(global-set-key (kbd "C-f t") 'tomatinho)
+(autoload 'speed-type-region "speed-type" nil t)
+(global-set-key (kbd "C-f t") 'speed-type-region)
 
 
 (setq esup-insignificant-time 0.0001)

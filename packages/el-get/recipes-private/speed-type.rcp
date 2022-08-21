@@ -1,0 +1,7 @@
+(:name speed-type
+       :description "Practice touch/speed typing in emacs"
+       :type github
+       :pkgname "hagleitn/speed-type"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications")))
+       )
