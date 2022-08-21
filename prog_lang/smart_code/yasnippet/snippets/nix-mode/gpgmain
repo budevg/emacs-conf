@@ -1,0 +1,18 @@
+# -*- mode: snippet -*-
+# name: gpgmain
+# key: gpgmain
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ gnupg pass pinentry-gtk2 ];
+  shellHook = ''
+    mkdir -p \`pwd\`/.gnupg
+    cat << "EOF" > .gnupg/gpg-agent.conf
+    pinentry-program \${pinentry-gtk2}/bin/pinentry
+    EOF
+    gpgconf --reload gpg-agent
+    export GNUPGHOME=\`pwd\`/.gnupg
+    export PASSWORD_STORE_DIR=\`pwd\`/.password-store
+  '';
+}$0
