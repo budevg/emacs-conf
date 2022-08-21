@@ -36,7 +36,15 @@
 (delete 'try-complete-lisp-symbol hippie-expand-try-functions-list)
 
 
-(global-set-key "\C-w" 'backward-kill-word)
+(defun delete-word (arg)
+  (interactive "p")
+  (delete-region (point) (progn (forward-word arg) (point))))
+
+(defun backward-delete-word (arg)
+  (interactive "p")
+  (delete-word (- arg)))
+
+(global-set-key "\C-w" 'backward-delete-word)
 
 (defun copy-loc ()
   (interactive)
