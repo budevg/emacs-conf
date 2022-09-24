@@ -41,10 +41,12 @@ This works on the current region."
 (autoload 'typescript-mode "typescript-mode" nil t)
 
 (define-derived-mode jsx-mode web-mode "jsx" "")
+(define-derived-mode vue-mode web-mode "vue" "")
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.[tj]sx?\\'" . jsx-mode))
 (add-to-list 'auto-mode-alist '("\\.json\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-mode))
+(add-to-list 'auto-mode-alist '("\\.vue\\'" . vue-mode))
 
 
 (defun my-web-mode-hook ()
