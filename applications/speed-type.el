@@ -379,7 +379,8 @@ Accuracy is computed as (CORRECT-ENTRIES - CORRECTIONS) / TOTAL-ENTRIES."
         (cl-decf speed-type--remaining)
 	(let ((overlay (make-overlay pos (1+ pos))))
 	  (overlay-put overlay 'face (if correct 'speed-type-correct
-				       'speed-type-mistake)))))))
+				       'speed-type-mistake))
+          (remove-overlays 0 (- pos 256)))))))
 
 (defun speed-type--change (start end length)
   "Handle buffer change.
