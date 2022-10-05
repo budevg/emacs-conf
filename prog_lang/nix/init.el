@@ -8,3 +8,6 @@
      (define-key nix-mode-map (kbd "C-S-p") 'nix-repl)
      (define-key nix-mode-map (kbd "C-c p") 'nix-format-buffer)
      ))
+
+(autoload 'nix-env-load-or-reset "nix-env" nil t)
+(global-set-key (kbd "C-f x") 'nix-env-load-or-reset)

@@ -94,38 +94,3 @@ If N is negative, search forwards for the -Nth following match."
   (comint-send-file
    (in-emacs-d "shell/.dircolors")
    "~/.dircolors"))
-
-(autoload 'direnv-envrc-mode "direnv" nil t)
-(add-to-list 'auto-mode-alist '("\\.envrc\\'" . direnv-envrc-mode))
-(autoload 'direnv-mode "direnv" nil t)
-(autoload 'direnv-update-environment "direnv" nil t)
-
-(defun nix-shell-env-load ()
-  (if (not (boundp 'exec-path-orig))
-      (setq exec-path-orig (copy-sequence exec-path)))
-  (if (not (boundp 'process-environment-orig))
-      (setq process-environment-orig (copy-sequence process-environment)))
-  (let* ((direnv--executable (executable-find "nix-shell"))
-         (nix-shell-path (locate-dominating-file default-directory "shell.nix"))
-         (direnv--executable-args `("--run" "jq -n env"
-                                    ,(expand-file-name (concat nix-shell-path "shell.nix"))))
-         (direnv-always-show-summary nil))
-    (direnv-update-environment))
-  (message "nix shell environment was loaded"))
-
-(defun nix-shell-env-reset ()
-  (when (boundp 'exec-path-orig)
-      (setq exec-path exec-path-orig)
-      (makunbound 'exec-path-orig))
-  (when (boundp 'process-environment-orig)
-      (setq process-environment process-environment-orig)
-      (makunbound 'process-environment-orig))
-  (message "nix shell environment was reset"))
-
-(defun nix-shell-env-load-or-reset ()
-  (interactive)
-  (if (or (boundp 'exec-path-orig) (boundp 'process-environment-orig))
-      (nix-shell-env-reset)
-    (nix-shell-env-load)))
-
-(global-set-key (kbd "C-f x") 'nix-shell-env-load-or-reset)
