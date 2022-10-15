@@ -34,7 +34,9 @@
 
 ;;;###autoload
 (defun haskell-move-nested (cols)
-  "Shift the nested off-side-rule block adjacent to point by COLS columns to the right.
+  "Shift the nested off-side-rule block adjacent to point.
+It shift the nested off-side-rule block adjacent to point by COLS
+columns to the right.
 
 In Transient Mark mode, if the mark is active, operate on the contents
 of the region instead.
@@ -57,8 +59,7 @@ Use a numeric prefix argument to indicate amount of indentation to apply.
 In Transient Mark mode, if the mark is active, operate on the contents
 of the region instead."
   (interactive "p")
-  (haskell-move-nested cols)
-  )
+  (haskell-move-nested cols))
 
 ;;;###autoload
 (defun haskell-move-nested-left (cols)
@@ -69,8 +70,7 @@ Use a numeric prefix argument to indicate amount of indentation to apply.
 In Transient Mark mode, if the mark is active, operate on the contents
 of the region instead."
   (interactive "p")
-  (haskell-move-nested (- cols))
-  )
+  (haskell-move-nested (- cols)))
 
 (defun haskell-move-nested-region ()
   "Infer region off-side-rule block adjacent to point.

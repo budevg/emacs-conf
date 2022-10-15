@@ -26,7 +26,6 @@
 (require 'cl-lib)
 (require 'json)
 (require 'url-util)
-(require 'haskell-compat)
 (require 'haskell-session)
 (require 'haskell-customize)
 (require 'haskell-string)
@@ -87,19 +86,6 @@ HPTYPE is the result of calling `'haskell-process-type`' function."
                       (list
                        (append (haskell-process-path-to-list haskell-process-path-ghci)
                                haskell-process-args-ghci)))))
-      ('cabal-new-repl
-       (append (list (format "Starting inferior `cabal new-repl' process using %s ..."
-                             haskell-process-path-cabal)
-                     session-name
-                     nil)
-               (apply haskell-process-wrapper-function
-                      (list
-                       (append
-                        (haskell-process-path-to-list haskell-process-path-cabal)
-                        (list "new-repl")
-                        haskell-process-args-cabal-new-repl
-                        (let ((target (haskell-session-target session)))
-                          (if target (list target) nil)))))))
       ('cabal-repl
        (append (list (format "Starting inferior `cabal repl' process using %s ..."
                              haskell-process-path-cabal)
@@ -219,7 +205,8 @@ HPTYPE is the result of calling `'haskell-process-type`' function."
     t))
 
 (defun haskell-process-send-string (process string)
-  "Try to send a string to the process's process. Ask to restart if it's not running."
+  "Try to send a string to the process's process.
+Ask to restart if it's not running."
   (let ((child (haskell-process-process process)))
     (if (equal 'run (process-status child))
         (let ((out (concat string "\n")))
@@ -324,7 +311,7 @@ Returns NIL when no completions found."
           (let ((cnt1 (match-string 1 h0))
                 (h1 (haskell-string-literal-decode (match-string 3 h0))))
             (unless (= (string-to-number cnt1) (length cs))
-              (error "Lengths inconsistent in `:complete' reponse"))
+              (error "Lengths inconsistent in `:complete' response"))
             (cons h1 cs)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

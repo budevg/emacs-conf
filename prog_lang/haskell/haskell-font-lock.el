@@ -27,11 +27,10 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'haskell-compat)
 (require 'haskell-lexeme)
+(require 'haskell-string)
 (require 'font-lock)
 
-;;;###autoload
 (defgroup haskell-appearance nil
   "Haskell Appearance."
   :group 'haskell)
@@ -145,19 +144,16 @@ font faces assigned as if respective mode was enabled."
   :group 'haskell-appearance
   :type '(repeat (cons string symbol)))
 
-;;;###autoload
 (defface haskell-keyword-face
   '((t :inherit font-lock-keyword-face))
   "Face used to highlight Haskell keywords."
   :group 'haskell-appearance)
 
-;;;###autoload
 (defface haskell-type-face
   '((t :inherit font-lock-type-face))
   "Face used to highlight Haskell types"
   :group 'haskell-appearance)
 
-;;;###autoload
 (defface haskell-constructor-face
   '((t :inherit font-lock-type-face))
   "Face used to highlight Haskell constructors."
@@ -165,7 +161,7 @@ font faces assigned as if respective mode was enabled."
 
 ;; This used to be `font-lock-variable-name-face' but it doesn't result in
 ;; a highlighting that's consistent with other modes (it's mostly used
-;; for function defintions).
+;; for function definitions).
 (defface haskell-definition-face
   '((t :inherit font-lock-function-name-face))
   "Face used to highlight Haskell definitions."
@@ -174,25 +170,21 @@ font faces assigned as if respective mode was enabled."
 ;; This is probably just wrong, but it used to use
 ;; `font-lock-function-name-face' with a result that was not consistent with
 ;; other major modes, so I just exchanged with `haskell-definition-face'.
-;;;###autoload
 (defface haskell-operator-face
   '((t :inherit font-lock-variable-name-face))
   "Face used to highlight Haskell operators."
   :group 'haskell-appearance)
 
-;;;###autoload
 (defface haskell-pragma-face
   '((t :inherit font-lock-preprocessor-face))
   "Face used to highlight Haskell pragmas ({-# ... #-})."
   :group 'haskell-appearance)
 
-;;;###autoload
 (defface haskell-liquid-haskell-annotation-face
   '((t :inherit haskell-pragma-face))
   "Face used to highlight LiquidHaskell annotations ({-@ ... @-})."
   :group 'haskell-appearance)
 
-;;;###autoload
 (defface haskell-literate-comment-face
   '((t :inherit font-lock-doc-face))
   "Face with which to fontify literate comments.
@@ -417,15 +409,16 @@ on an uppercase identifier."
 
             ;; Special case for `as', `hiding', `safe' and `qualified', which are
             ;; keywords in import statements but are not otherwise reserved.
-            ("\\<import[ \t]+\\(?:\\(safe\\>\\)[ \t]*\\)?\\(?:\\(qualified\\>\\)[ \t]*\\)?\\(?:\"[^\"]*\"[\t ]*\\)?[^ \t\n()]+[ \t]*\\(?:\\(\\<as\\>\\)[ \t]*[^ \t\n()]+[ \t]*\\)?\\(\\<hiding\\>\\)?"
+            ("\\<import[ \t]+\\(?:\\(safe\\>\\)[ \t]*\\)?\\(?:\\(qualified\\>\\)[ \t]*\\)?\\(?:\"[^\"]*\"[\t ]*\\)?[^ \t\n()]+[ \t]*\\(?:\\(qualified\\>\\)[ \t]*\\)?\\(?:\\(\\<as\\>\\)[ \t]*[^ \t\n()]+[ \t]*\\)?\\(\\<hiding\\>\\)?"
              (1 'haskell-keyword-face nil lax)
              (2 'haskell-keyword-face nil lax)
              (3 'haskell-keyword-face nil lax)
-             (4 'haskell-keyword-face nil lax))
+             (4 'haskell-keyword-face nil lax)
+             (5 'haskell-keyword-face nil lax))
 
             ;; Special case for `foreign import'
             ;; keywords in foreign import statements but are not otherwise reserved.
-            ("\\<\\(foreign\\)[ \t]+\\(import\\)[ \t]+\\(?:\\(ccall\\|stdcall\\|cplusplus\\|jvm\\|dotnet\\)[ \t]+\\)?\\(?:\\(safe\\|unsafe\\|interruptible\\)[ \t]+\\)?"
+            ("\\<\\(foreign\\)[ \t]+\\(import\\)[ \t]+\\(?:\\(ccall\\|capi\\|stdcall\\|cplusplus\\|jvm\\|dotnet\\)[ \t]+\\)?\\(?:\\(safe\\|unsafe\\|interruptible\\)[ \t]+\\)?"
              (1 'haskell-keyword-face nil lax)
              (2 'haskell-keyword-face nil lax)
              (3 'haskell-keyword-face nil lax)
@@ -540,7 +533,8 @@ on an uppercase identifier."
                         (goto-char (nth 8 state))
                         (skip-syntax-backward "w._")
                         (buffer-substring-no-properties (point) (nth 8 state))))
-               (lang-mode (cdr (assoc qqname haskell-font-lock-quasi-quote-modes))))
+               (lang-mode (cdr (assoc (haskell-string-drop-qualifier qqname)
+                                      haskell-font-lock-quasi-quote-modes))))
 
           (if (and lang-mode
                    (fboundp lang-mode))

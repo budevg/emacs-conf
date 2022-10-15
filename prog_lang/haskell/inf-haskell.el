@@ -4,7 +4,7 @@
 ;; Copyright (C) 2017 Vasantha Ganesh Kanniappan <vasanthaganesh.k@tuta.io>
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
-;; Keywords: Haskell
+;; Keywords: languages, Haskell
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -33,7 +33,6 @@
 (require 'comint)
 (require 'shell)             ; For directory tracking.
 (require 'etags)
-(require 'haskell-compat)
 (require 'compile)
 (require 'haskell-decl-scan)
 (require 'haskell-cabal)
@@ -41,7 +40,6 @@
 (require 'cl-lib)
 (require 'haskell-string)
 
-;;;###autoload
 (defgroup inferior-haskell nil
   "Settings for REPL interaction via `inferior-haskell-mode'"
   :link '(custom-manual "(haskell-mode)inferior-haskell-mode")
@@ -57,19 +55,14 @@
   "Return the command with the arguments to start the repl based on the
 directory structure."
   (cl-ecase (haskell-process-type)
-    ('ghci       (cond ((eq system-type 'cygwin) (nconc "ghcii.sh"
-                                                        haskell-process-args-ghci))
+    ('ghci       (cond ((eq system-type 'cygwin) `("ghcii.sh" ,@haskell-process-args-ghci))
                        (t (append
                            (if (listp haskell-process-path-ghci)
                                haskell-process-path-ghci
                              (list haskell-process-path-ghci))
                            haskell-process-args-ghci))))
-    ('cabal-repl (nconc `(,haskell-process-path-cabal
-                          "repl")
-                        haskell-process-args-cabal-repl))
-    ('stack-ghci (nconc `(,haskell-process-path-stack
-                          "ghci")
-                        haskell-process-args-stack-ghci))))
+    ('cabal-repl `(,haskell-process-path-cabal "repl" ,@haskell-process-args-cabal-repl))
+    ('stack-ghci `(,haskell-process-path-stack "ghci" ,@haskell-process-args-stack-ghci))))
 
 (defconst inferior-haskell-info-xref-re
   "-- Defined at \\(.+\\):\\([0-9]+\\):\\([0-9]+\\)\\(?:-\\([0-9]+\\)\\)?$")
@@ -80,7 +73,8 @@ directory structure."
 
 (defvar inferior-haskell-multiline-prompt-re
   "^\\*?[[:upper:]][\\._[:alnum:]]*\\(?: \\*?[[:upper:]][\\._[:alnum:]]*\\)*| "
-  "Regular expression for matching multiline prompt (the one inside :{ ... :} blocks).")
+  "Regular expression for matching multiline prompt.
+the one inside :{ ... :} blocks.")
 
 (defconst inferior-haskell-error-regexp-alist
   `(;; Format of error messages used by GHCi.
@@ -114,8 +108,10 @@ directory structure."
 The format should be the same as for `compilation-error-regexp-alist'.")
 
 (defconst haskell-prompt-regexp
-  ;; Why the backslash in [\\._[:alnum:]]?
-  "^\\*?[[:upper:]][\\._[:alnum:]]*\\(?: \\*?[[:upper:]][\\._[:alnum:]]*\\)*\\( λ\\)?> \\|^λ?> $")
+  "^[[:alnum:].*_() |λ]*> "
+  "Ignore everything before the first '> '.  This allows us to
+correctly interpret multi-line input even when modules are
+imported.")
 
 ;;; TODO
 ;;; -> Make font lock work for strings, directories, hyperlinks
@@ -194,9 +190,7 @@ setting up the inferior-haskell buffer."
            (inferior-haskell-process))))
 
 ;;;###autoload
-(defalias 'run-haskell 'switch-to-haskell)
-;;;###autoload
-(defun switch-to-haskell ()
+(defun run-haskell ()
   "Show the inferior-haskell buffer.  Start the process if needed."
   (interactive)
   (let ((proc (inferior-haskell-process)))

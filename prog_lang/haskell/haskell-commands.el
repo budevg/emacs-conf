@@ -27,7 +27,6 @@
 (require 'cl-lib)
 (require 'etags)
 (require 'haskell-mode)
-(require 'haskell-compat)
 (require 'haskell-process)
 (require 'haskell-font-lock)
 (require 'haskell-interactive-mode)
@@ -37,11 +36,17 @@
 (require 'haskell-utils)
 (require 'highlight-uses-mode)
 (require 'haskell-cabal)
+(require 'haskell-ghc-support)
 
 (defcustom haskell-mode-stylish-haskell-path "stylish-haskell"
   "Path to `stylish-haskell' executable."
   :group 'haskell
   :type 'string)
+
+(defcustom haskell-mode-stylish-haskell-args nil
+  "Arguments to pass to program specified by haskell-mode-stylish-haskell-path."
+  :group 'haskell
+  :type 'list)
 
 (defcustom haskell-interactive-set-+c
   t
@@ -84,9 +89,9 @@ You can create new session using function `haskell-session-make'."
     (progn (set-process-sentinel (haskell-process-process process) 'haskell-process-sentinel)
            (set-process-filter (haskell-process-process process) 'haskell-process-filter))
     (haskell-process-send-startup process)
-    (unless (or (eq 'cabal-repl (haskell-process-type))
-                (eq 'cabal-new-repl (haskell-process-type))
-                   (eq 'stack-ghci (haskell-process-type))) ;; Both "cabal repl" and "stack ghci" set the proper CWD.
+    (unless (memq (haskell-process-type)
+                  ;; These all set the proper CWD.
+                  (list 'cabal-repl 'stack-ghci))
       (haskell-process-change-dir session
                                   process
                                   (haskell-session-current-dir session)))
@@ -114,8 +119,8 @@ You can create new session using function `haskell-session-make'."
                                                             '(":set +c"))) ; :type-at in GHC 8+
                                                   "\n"))
           (haskell-process-send-string process ":set prompt \"\\4\"")
-          (haskell-process-send-string process (format ":set prompt2 \"%s\""
-                                                       haskell-interactive-prompt2)))
+          (haskell-process-send-string process (format ":set prompt-cont \"%s\""
+                                                       haskell-interactive-prompt-cont)))
 
     :live (lambda (process buffer)
             (when (haskell-process-consume
@@ -187,29 +192,6 @@ MODULE-BUFFER is the actual Emacs buffer of the module being loaded."
 (defvar url-http-end-of-headers)
 (defvar haskell-cabal-targets-history nil
   "History list for session targets.")
-
-(defun haskell-process-hayoo-ident (ident)
-  "Hayoo for IDENT, return a list of modules"
-  ;; We need a real/simulated closure, because otherwise these
-  ;; variables will be unbound when the url-retrieve callback is
-  ;; called.
-  ;; TODO: Remove when this code is converted to lexical bindings by
-  ;; default (Emacs 24.1+)
-  (let ((url (format haskell-process-hayoo-query-url (url-hexify-string ident))))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (if (= 200 url-http-response-status)
-          (progn
-            (goto-char url-http-end-of-headers)
-            (let* ((res (json-read))
-                   (results (assoc-default 'result res)))
-              ;; TODO: gather packages as well, and when we choose a
-              ;; given import, check that we have the package in the
-              ;; cabal file as well.
-              (cl-mapcan (lambda (r)
-                           ;; append converts from vector -> list
-                           (append (assoc-default 'resultModules r) nil))
-                         results)))
-        (warn "HTTP error %s fetching %s" url-http-response-status url)))))
 
 (defun haskell-process-hoogle-ident (ident)
   "Hoogle for IDENT, return a list of modules."
@@ -372,13 +354,14 @@ If the definition or tag is found, the location from which you jumped
 will be pushed onto `xref--marker-ring', so you can return to that
 position with `xref-pop-marker-stack'."
   (interactive "P")
-  (if (haskell-session-maybe)
-        (let ((initial-loc (point-marker))
-            (loc (haskell-mode-find-def (haskell-ident-at-point))))
-          (haskell-mode-handle-generic-loc loc)
-          (unless (equal initial-loc (point-marker))
-            (xref-push-marker-stack initial-loc)))
-      (call-interactively 'haskell-mode-tag-find)))
+  (if-let ((session (haskell-session-maybe))
+           (initial-loc (point-marker))
+           (loc (haskell-mode-find-def (haskell-ident-at-point))))
+      (progn
+        (haskell-mode-handle-generic-loc loc)
+        (unless (equal initial-loc (point-marker))
+          (xref-push-marker-stack initial-loc)))
+    (call-interactively 'haskell-mode-tag-find)))
 
 ;;;###autoload
 (defun haskell-mode-goto-loc ()
@@ -694,9 +677,9 @@ happened since function invocation)."
                             (cdr (reverse haskell-utils-async-post-command-flag))))
                ;; Present the result only when response is valid and not asked
                ;; to insert result
-               (haskell-command-echo-or-present response)))
+               (haskell-command-echo-or-present response))))
 
-            (haskell-utils-async-stop-watching-changes init-buffer))))))))
+          (haskell-utils-async-stop-watching-changes init-buffer)))))))
 
 (make-obsolete 'haskell-process-generate-tags
                'haskell-mode-generate-tags
@@ -731,8 +714,7 @@ function `xref-find-definitions' after new table was generated."
 Add <cabal-project-dir>/dist/build/autogen/ to GHCi seatch path.
 This allows modules such as 'Path_...', generated by cabal, to be
 loaded by GHCi."
-  (unless (or (eq 'cabal-repl (haskell-process-type))
-              (eq 'cabal-new-repl (haskell-process-type))) ;; redundant with "cabal repl"
+  (unless (eq 'cabal-repl (haskell-process-type))
     (let*
         ((session       (haskell-interactive-session))
          (cabal-dir     (haskell-session-cabal-dir session))
@@ -780,12 +762,7 @@ inferior GHCi process."
   "Set the build TARGET for cabal REPL."
   (interactive
    (list
-    (completing-read "New build target: "
-                     (haskell-cabal-enum-targets (haskell-process-type))
-                     nil
-                     nil
-                     nil
-                     'haskell-cabal-targets-history)))
+    (haskell-session-choose-target "New build target: " nil 'haskell-cabal-targets-history)))
   (let* ((session haskell-session)
          (old-target (haskell-session-get session 'target)))
     (when session
@@ -793,7 +770,7 @@ inferior GHCi process."
       (when (not (string= old-target target))
         (haskell-mode-toggle-interactive-prompt-state)
         (unwind-protect
-            (when (y-or-n-p "Target changed, restart haskell process?")
+            (when (y-or-n-p "Target changed, restart haskell process? ")
               (haskell-process-start session)))
         (haskell-mode-toggle-interactive-prompt-state t)))))
 
@@ -802,51 +779,53 @@ inferior GHCi process."
   "Apply stylish-haskell to the current buffer.
 
 Use `haskell-mode-stylish-haskell-path' to know where to find
-stylish-haskell executable. This function tries to preserve
+stylish-haskell executable.  This function tries to preserve
 cursor position and markers by using
 `haskell-mode-buffer-apply-command'."
   (interactive)
-  (haskell-mode-buffer-apply-command haskell-mode-stylish-haskell-path))
+  (haskell-mode-buffer-apply-command haskell-mode-stylish-haskell-path haskell-mode-stylish-haskell-args))
 
-(defun haskell-mode-buffer-apply-command (cmd)
-  "Execute shell command CMD with current buffer as input and output.
+(defun haskell-mode-buffer-apply-command (cmd &optional args)
+  "Execute shell command CMD with ARGS and current buffer as input and output.
 Use buffer as input and replace the whole buffer with the
 output.  If CMD fails the buffer remains unchanged."
   (set-buffer-modified-p t)
   (let* ((out-file (make-temp-file "stylish-output"))
-         (err-file (make-temp-file "stylish-error")))
-        (unwind-protect
-          (let* ((_errcode
-                  (call-process-region (point-min) (point-max) cmd nil
-                                       `((:file ,out-file) ,err-file)
-                                       nil))
-                 (err-file-empty-p
-                  (equal 0 (nth 7 (file-attributes err-file))))
-                 (out-file-empty-p
-                  (equal 0 (nth 7 (file-attributes out-file)))))
-            (if err-file-empty-p
-                (if out-file-empty-p
-                    (message "Error: %s produced no output and no error information, leaving buffer alone" cmd)
-                  ;; Command successful, insert file with replacement to preserve
-                  ;; markers.
-                  (insert-file-contents out-file nil nil nil t))
-              (progn
-                ;; non-null stderr, command must have failed
-                (with-current-buffer
-                    (get-buffer-create "*haskell-mode*")
-                  (insert-file-contents err-file)
-                  (buffer-string))
-                (message "Error: %s ended with errors, leaving buffer alone, see *haskell-mode* buffer for stderr" cmd)
-                (with-temp-buffer
-                  (insert-file-contents err-file)
-                  ;; use (warning-minimum-level :debug) to see this
-                  (display-warning cmd
-                                   (buffer-substring-no-properties (point-min) (point-max))
-                                   :debug)))))
-          (ignore-errors
-            (delete-file err-file))
-          (ignore-errors
-            (delete-file out-file)))))
+         (err-file (make-temp-file "stylish-error"))
+         (coding-system-for-read 'utf-8)
+         (coding-system-for-write 'utf-8))
+    (unwind-protect
+        (let* ((_errcode
+                (apply 'call-process-region (point-min) (point-max) cmd nil
+                       `((:file ,out-file) ,err-file)
+                       nil args))
+               (err-file-empty-p
+                (equal 0 (nth 7 (file-attributes err-file))))
+               (out-file-empty-p
+                (equal 0 (nth 7 (file-attributes out-file)))))
+          (if err-file-empty-p
+              (if out-file-empty-p
+                  (message "Error: %s produced no output and no error information, leaving buffer alone" cmd)
+                ;; Command successful, insert file with replacement to preserve
+                ;; markers.
+                (insert-file-contents out-file nil nil nil t))
+            (progn
+              ;; non-null stderr, command must have failed
+              (with-current-buffer
+                  (get-buffer-create "*haskell-mode*")
+                (insert-file-contents err-file)
+                (buffer-string))
+              (message "Error: %s ended with errors, leaving buffer alone, see *haskell-mode* buffer for stderr" cmd)
+              (with-temp-buffer
+                (insert-file-contents err-file)
+                ;; use (warning-minimum-level :debug) to see this
+                (display-warning cmd
+                                 (buffer-substring-no-properties (point-min) (point-max))
+                                 :debug)))))
+      (ignore-errors
+        (delete-file err-file))
+      (ignore-errors
+        (delete-file out-file)))))
 
 ;;;###autoload
 (defun haskell-mode-find-uses ()
@@ -956,6 +935,15 @@ newlines and extra whitespace in signature before insertion."
       (let ((col (current-column)))
         (insert sig "\n")
         (indent-to col)))))
+
+(defun haskell-command-insert-language-pragma (extension)
+  "Insert a {-# LANGUAGE _ #-} pragma at the top of the current
+buffer for the given extension."
+  (interactive
+   (list (completing-read "Extension: " haskell-ghc-supported-extensions)))
+  (save-excursion
+    (goto-char (point-min))
+    (insert (format "{-# LANGUAGE %s #-}\n" extension))))
 
 (provide 'haskell-commands)
 ;;; haskell-commands.el ends here

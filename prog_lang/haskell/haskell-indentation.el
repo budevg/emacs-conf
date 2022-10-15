@@ -43,7 +43,6 @@
 (require 'cl-lib)
 (require 'haskell-lexeme)
 
-;;;###autoload
 (defgroup haskell-indentation nil
   "Haskell indentation."
   :link '(custom-manual "(haskell-mode)Indentation")
@@ -242,9 +241,9 @@ indentation points to the right, we switch going to the left."
   ;; try to repeat
   (when (not (haskell-indentation-indent-line-repeat))
     (setq haskell-indentation-dyn-last-direction nil)
-    ;; parse error is intentionally not cought here, it may come from
+    ;; parse error is intentionally not caught here, it may come from
     ;; `haskell-indentation-find-indentations', but escapes the scope
-    ;; and aborts the opertaion before any moving happens
+    ;; and aborts the operation before any moving happens
     (let* ((cc (current-column))
            (ci (haskell-indentation-current-indentation))
            (inds (save-excursion
@@ -372,7 +371,7 @@ and indent when all of the following are true:
 ;; When the scope of this function ends, the variable is automatically
 ;; reverted to its old value.
 
-;; This is basicly a performance hack.  It would have been possible to
+;; This is basically a performance hack.  It would have been possible to
 ;; thread this state using a association-list through the parsers, but it
 ;; would be probably more complicated and slower due to the lack of real
 ;; closures in Emacs Lisp.

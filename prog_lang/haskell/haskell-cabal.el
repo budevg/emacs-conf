@@ -102,12 +102,14 @@ By default these are:
   '(("^[ \t]*--.*" . font-lock-comment-face)
     ("^ *\\([^ \t:]+\\):" (1 font-lock-keyword-face))
     ("^\\(Library\\)[ \t]*\\({\\|$\\)" (1 font-lock-keyword-face))
-    ("^\\(Executable\\|Test-Suite\\|Benchmark\\|Common\\)[ \t]+\\([^\n \t]*\\)"
+    ("^\\(Executable\\|Test-Suite\\|Benchmark\\|Common\\|package\\)[ \t]+\\([^\n \t]*\\)"
      (1 font-lock-keyword-face) (2 font-lock-function-name-face))
-    ("^\\(Flag\\)[ \t]+\\([^\n \t]*\\)"
+    ("^\\(Flag\\|install-dirs\\|repository\\)[ \t]+\\([^\n \t]*\\)"
      (1 font-lock-keyword-face) (2 font-lock-constant-face))
     ("^\\(Source-Repository\\)[ \t]+\\(head\\|this\\)"
      (1 font-lock-keyword-face) (2 font-lock-constant-face))
+    ("^\\(haddock\\|source-repository-package\\|program-locations\\|program-default-options\\)\\([ \t]\\|$\\)"
+     (1 font-lock-keyword-face))
     ("^ *\\(if\\)[ \t]+.*\\({\\|$\\)" (1 font-lock-keyword-face))
     ("^ *\\(}[ \t]*\\)?\\(else\\)[ \t]*\\({\\|$\\)"
      (2 font-lock-keyword-face))
@@ -138,7 +140,7 @@ it from list if one of the following conditions are hold:
   (haskell-cabal-buffers-clean (current-buffer)))
 
 ;;;###autoload
-(add-to-list 'auto-mode-alist '("\\.cabal\\'" . haskell-cabal-mode))
+(add-to-list 'auto-mode-alist '("\\.cabal\\'\\|/cabal\\.project\\|/\\.cabal/config\\'" . haskell-cabal-mode))
 
 (defvar haskell-cabal-mode-map
   (let ((map (make-sparse-keymap)))
@@ -230,8 +232,9 @@ file), then this function returns nil."
 
 ;;;###autoload
 (defun haskell-cabal-get-dir (&optional use-defaults)
-  "Get the Cabal dir for a new project. Various ways of figuring this out,
-   and indeed just prompting the user. Do them all."
+  "Get the Cabal dir for a new project.
+Various ways of figuring this out, and indeed just prompting the user.  Do them
+all."
   (let* ((file (haskell-cabal-find-file))
          (dir (if file (file-name-directory file) default-directory)))
     (if use-defaults
@@ -346,7 +349,6 @@ OTHER-WINDOW use `find-file-other-window'."
     "help"
     "run"))
 
-;;;###autoload
 (defgroup haskell-cabal nil
   "Haskell cabal files"
   :group 'haskell
@@ -359,7 +361,9 @@ OTHER-WINDOW use `find-file-other-window'."
 (defconst haskell-cabal-conditional-regexp "^[ \t]*\\(\\if\\|else\\|}\\)")
 
 (defun haskell-cabal-classify-line ()
-  "Classify the current line into 'section-header 'subsection-header 'section-data 'comment and 'empty '"
+  "Classify the current line's type.
+Possible results are 'section-header 'subsection-header 'section-data 'comment
+and 'empty '"
   (save-excursion
     (beginning-of-line)
     (cond
@@ -462,8 +466,11 @@ OTHER-WINDOW use `find-file-other-window'."
             :beginning (match-end 0)
             :end (save-match-data (haskell-cabal-subsection-end))
             :data-start-column (save-excursion (goto-char (match-end 0))
-                                               (current-column)
-                                               )))))
+                                               (current-column))
+            :data-indent-column (save-excursion (goto-char (match-end 0))
+                                                (when (looking-at "\n  +\\(\\w*\\)") (goto-char (match-beginning 1)))
+                                                (current-column)
+                                                )))))
 
 
 (defun haskell-cabal-section-name (section)
@@ -478,6 +485,9 @@ OTHER-WINDOW use `find-file-other-window'."
 (defun haskell-cabal-section-data-start-column (section)
   (plist-get section :data-start-column))
 
+(defun haskell-cabal-section-data-indent-column (section)
+  (plist-get section :data-indent-column))
+
 (defun haskell-cabal-map-component-type (component-type)
   "Map from cabal file COMPONENT-TYPE to build command component-type."
   (let ((component-type (downcase component-type)))
@@ -486,7 +496,8 @@ OTHER-WINDOW use `find-file-other-window'."
           ((equal component-type "benchmark")  "bench"))))
 
 (defun haskell-cabal-enum-targets (&optional process-type)
-  "Enumerate .cabal targets. PROCESS-TYPE determines the format of the returned target."
+  "Enumerate .cabal targets.
+PROCESS-TYPE determines the format of the returned target."
   (let ((cabal-file (haskell-cabal-find-file))
         (process-type (if process-type process-type 'ghci)))
     (when (and cabal-file (file-readable-p cabal-file))
@@ -916,9 +927,10 @@ resulting buffer-content.  Unmark line at the end."
                     haskell-cabal-source-bearing-sections))))
 
 (defun haskell-cabal-line-filename ()
-  "Expand filename in current line according to the subsection type
+  "Expand filename in current line according to the subsection type.
 
-Module names in exposed-modules and other-modules are expanded by replacing each dot (.) in the module name with a foward slash (/) and appending \".hs\"
+Module names in exposed-modules and other-modules are expanded by replacing each
+dot (.) in the module name with a forward slash (/) and appending \".hs\"
 
 Example: Foo.Bar.Quux ==> Foo/Bar/Quux.hs
 
@@ -1039,7 +1051,7 @@ Source names from main-is and c-sources sections are left untouched
   (cl-case (haskell-cabal-classify-line)
     (section-data
      (save-excursion
-       (let ((indent (haskell-cabal-section-data-start-column
+       (let ((indent (haskell-cabal-section-data-indent-column
                       (haskell-cabal-subsection))))
          (indent-line-to indent)
          (beginning-of-line)

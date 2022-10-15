@@ -34,8 +34,6 @@
      (add-to-list 'haskell-process-args-ghci "-fshow-loaded-modules")
      (add-to-list 'haskell-process-args-cabal-repl
                   "--ghc-options=-fshow-loaded-modules")
-     (add-to-list 'haskell-process-args-cabal-new-repl
-                  "--ghc-options=-fshow-loaded-modules")
      (add-to-list 'haskell-process-args-stack-ghci
                   "--ghci-options=-fshow-loaded-modules")
      ))
