@@ -1,9 +1,8 @@
 (:name format-all
        :type github
+       :depends (inheritenv language-id)
        :pkgname "lassik/emacs-format-all-the-code"
        :description "Auto-format source code in many languages with one command"
        :build `(,(concat "cp *.el "
                          (in-emacs-d "prog_lang/smart_code/syntax_checking")))
-
-       ;;:depends (s dash cl-lib f pkg-info)
        )

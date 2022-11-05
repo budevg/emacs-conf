@@ -1,0 +1,5 @@
+(:name language-id
+       :description "Emacs Lisp library to work with programming language identifiers"
+       :type github
+       :build `(,(concat "cp *.el " (in-emacs-d "lisp_lib")))
+       :pkgname "lassik/emacs-language-id")

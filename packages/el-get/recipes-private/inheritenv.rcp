@@ -1,0 +1,5 @@
+(:name inheritenv
+       :description "Make emacs temp buffers inherit buffer-local environment variables"
+       :type github
+       :build `(,(concat "cp *.el " (in-emacs-d "lisp_lib")))
+       :pkgname "purcell/inheritenv")
