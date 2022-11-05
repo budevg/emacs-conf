@@ -4,7 +4,7 @@
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;
-let ghc = haskellPackages.ghcWithPackages (ps: [ ps.brittany ]);
+let ghc = haskellPackages.ghcWithPackages (ps: [ ps.brittany ps.cabal-fmt ]);
 in mkShell {
   buildInputs = [ ghcid ghc cabal-install haskell-language-server ];
   ENV_VAR = "env_var";
