@@ -14,7 +14,9 @@
 (setq browse-url-browser-function 'browse-url-chromium)
 (eval-after-load "eww"
   '(progn
-     (setq eww-download-directory temporary-file-directory)
+     (setq eww-download-directory temporary-file-directory
+           shr-inhibit-images t
+           shr-use-fonts nil)
      (define-key eww-mode-map (kbd ",") 'eww-back-url)
      (define-key eww-mode-map (kbd ".") 'eww-forward-url)
      (define-key eww-mode-map (kbd "/") 'eww-follow-link)
