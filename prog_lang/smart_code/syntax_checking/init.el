@@ -4,3 +4,8 @@
 
 (autoload 'format-all-buffer "format-all" nil t)
 (global-set-key (kbd "C-c p") 'format-all-buffer)
+(setq format-all-formatters
+      '(("Python" black)
+        ("Go" goimports)
+        ("Haskell" brittany)
+        ))
