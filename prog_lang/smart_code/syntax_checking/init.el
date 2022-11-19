@@ -8,4 +8,5 @@
       '(("Python" black)
         ("Go" goimports)
         ("Haskell" brittany)
+        ("C++" clang-format)
         ))
