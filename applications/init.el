@@ -30,4 +30,14 @@
              (cond
               ((not url) (message "No link under point"))
               (t (funcall browse-url-secondary-browser-function url))))))
+     (defun do-eww-rename-buffer ()
+       "Rename EWW buffer using page title or URL. To be used by `eww-after-render-hook'."
+       (let ((name (if (eq "" (plist-get eww-data :title))
+                       (plist-get eww-data :url)
+                     (plist-get eww-data :title))))
+         (rename-buffer (format "*%s # eww*" name) t)))
+
+     (add-hook 'eww-after-render-hook #'do-eww-rename-buffer)
+     (advice-add 'eww-back-url :after #'do-eww-rename-buffer)
+     (advice-add 'eww-forward-url :after #'do-eww-rename-buffer)
      ))
