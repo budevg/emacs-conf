@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: tormain
+# key: tormain
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  http_proxy = "http://127.0.0.1:8118";
+  https_proxy = "http://127.0.0.1:8118";
+  # docker run --rm -it -p 8118:8118 dperson/torproxy
+}

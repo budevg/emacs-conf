@@ -2,4 +2,4 @@
 # name: dx
 # key: dx
 # --
-d run -v /tmp/.X11-unix:/tmp/.X11-unix --device /dev/snd:/dev/snd -e DISPLAY=unix$DISPLAY $0
+docker run --rm -it -v \`pwd\`:\`pwd\` -w \`pwd\` ${1:nixos/nix}$0
