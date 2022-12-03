@@ -56,14 +56,7 @@
 
 
 
-(global-set-key [(super down)] 'markers-add-head)
-(global-set-key [(super up)] 'markers-remove-head)
-(global-set-key [(super right)] 'markers-switch-right)
-(global-set-key [(super left)] 'markers-switch-left)
-
 (global-set-key [(control next)] 'markers-add-head)
 (global-set-key [(control prior)] 'markers-remove-head)
 (global-set-key [(meta prior)] 'markers-switch-right)
 (global-set-key [(meta next)] 'markers-switch-left)
-
-;; latitude E6530 disable
