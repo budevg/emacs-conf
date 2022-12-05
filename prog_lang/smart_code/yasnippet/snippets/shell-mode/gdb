@@ -2,4 +2,4 @@
 # name: gdb
 # key: gdb
 # --
-gdb -ex 'set confirm off' -ex 'set pagination off' -ex 'set print pretty on'$0
+gdb -iex 'set confirm off' -iex 'set pagination off' -iex 'set print pretty on'$0
