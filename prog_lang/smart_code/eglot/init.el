@@ -9,6 +9,7 @@
      (setq eglot-autoshutdown t
            eglot-stay-out-of '(eldoc flymake company imenu)
            eglot-extend-to-xref t
+           eglot-ignored-server-capabilities '(:completionProvider)
            )
 
      (add-to-list 'eglot-server-programs
