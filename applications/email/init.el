@@ -5,7 +5,7 @@
 
 (setq auth-source-cache-expiry nil
       auth-source-save-behavior nil
-      auth-sources '("~/.authinfo.gpg")
+      auth-sources '("~/.authinfo" "~/.authinfo.gpg")
       )
 (when (executable-find "mu")
   (let* ((mu-dir (file-truename (file-name-directory (executable-find "mu"))))
