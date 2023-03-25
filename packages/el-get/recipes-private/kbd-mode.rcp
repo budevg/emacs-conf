@@ -1,0 +1,8 @@
+(:name kbd-mode
+       :description "Emacs mode for syntax highlighting kmonad's .kbd files."
+       :type github
+       :pkgname "kmonad/kbd-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/kmonad")))
+
+       )
