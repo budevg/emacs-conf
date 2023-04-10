@@ -1,0 +1,47 @@
+diff --git a/src/frame.c b/src/frame.c
+index 38a6583605c..859937d2f97 100644
+--- a/src/frame.c
++++ b/src/frame.c
+@@ -4917,7 +4917,7 @@ gui_set_vertical_scroll_bars (struct frame *f, Lisp_Object arg, Lisp_Object oldv
+ 	 However, if the window hasn't been created yet, we shouldn't
+ 	 call set_window_size_hook.  */
+       if (FRAME_NATIVE_WINDOW (f))
+-	adjust_frame_size (f, -1, -1, 3, 0, Qvertical_scroll_bars);
++	adjust_frame_size (f, -1, -1, 3, 0, Qnil);
+ 
+       SET_FRAME_GARBAGED (f);
+     }
+@@ -6437,7 +6437,7 @@ syms_of_frame (void)
+ Setting this variable directly does not take effect;
+ either customize it (see the info node `Easy Customization')
+ or call the function `menu-bar-mode'.  */);
+-  Vmenu_bar_mode = Qt;
++  Vmenu_bar_mode = Qnil;
+ 
+   DEFVAR_LISP ("tab-bar-mode", Vtab_bar_mode,
+                doc: /* Non-nil if Tab-Bar mode is enabled.
+@@ -6454,7 +6454,7 @@ syms_of_frame (void)
+ either customize it (see the info node `Easy Customization')
+ or call the function `tool-bar-mode'.  */);
+ #ifdef HAVE_WINDOW_SYSTEM
+-  Vtool_bar_mode = Qt;
++  Vtool_bar_mode = Qnil;
+ #else
+   Vtool_bar_mode = Qnil;
+ #endif
+diff --git a/src/xfns.c b/src/xfns.c
+index 528ae61ca32..dfc2fb4e630 100644
+--- a/src/xfns.c
++++ b/src/xfns.c
+@@ -4894,9 +4894,9 @@ DEFUN ("x-create-frame", Fx_create_frame, Sx_create_frame,
+                          NULL, NULL, RES_TYPE_NUMBER);
+   gui_default_parameter (f, parms, Qvertical_scroll_bars,
+ #if defined (USE_GTK) && defined (USE_TOOLKIT_SCROLL_BARS)
+-                         Qright,
++                         Qnil,
+ #else
+-                         Qleft,
++                         Qnil,
+ #endif
+                          "verticalScrollBars", "ScrollBars",
+                          RES_TYPE_SYMBOL);
