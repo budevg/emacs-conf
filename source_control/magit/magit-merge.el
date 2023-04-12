@@ -1,19 +1,16 @@
-;;; magit-merge.el --- merge functionality  -*- lexical-binding: t -*-
+;;; magit-merge.el --- Merge functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2010-2021  The Magit Project Contributors
-;;
-;; You should have received a copy of the AUTHORS.md file which
-;; lists all contributors.  If not, see http://magit.vc/authors.
+;; Copyright (C) 2008-2023 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
-;; Magit is free software; you can redistribute it and/or modify it
+;; Magit is free software: you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 3, or (at your option)
-;; any later version.
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 ;;
 ;; Magit is distributed in the hope that it will be useful, but WITHOUT
 ;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
@@ -21,7 +18,7 @@
 ;; License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with Magit.  If not, see http://www.gnu.org/licenses.
+;; along with Magit.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -146,7 +143,7 @@ then also remove the respective remote branch."
                   (or (magit-get-current-branch)
                       (magit-rev-parse "HEAD")))
           nil
-          (when-let ((upstream (magit-get-upstream-branch))
+          (and-let* ((upstream (magit-get-upstream-branch))
                      (upstream (cdr (magit-split-branch-name upstream))))
             (and (magit-branch-p upstream) upstream)))
          (magit-merge-arguments)))
@@ -235,7 +232,7 @@ then also remove the respective remote branch."
   "Abort the current merge operation.
 \n(git merge --abort)"
   (interactive)
-  (unless (file-exists-p (magit-git-dir "MERGE_HEAD"))
+  (unless (file-exists-p (expand-file-name "MERGE_HEAD" (magit-gitdir)))
     (user-error "No merge in progress"))
   (magit-confirm 'abort-merge)
   (magit-run-git-async "merge" "--abort"))
@@ -255,7 +252,9 @@ then also remove the respective remote branch."
             (user-error "Quit")))))
   (pcase (cons arg (cddr (car (magit-file-status file))))
     ((or `("--ours"   ?D ,_)
-         `("--theirs" ,_ ?D))
+         '("--ours"   ?U ?A)
+         `("--theirs" ,_ ?D)
+         '("--theirs" ?A ?U))
      (magit-run-git "rm" "--" file))
     (_ (if (equal arg "--merge")
            ;; This fails if the file was deleted on one
@@ -267,12 +266,13 @@ then also remove the respective remote branch."
 ;;; Utilities
 
 (defun magit-merge-in-progress-p ()
-  (file-exists-p (magit-git-dir "MERGE_HEAD")))
+  (file-exists-p (expand-file-name "MERGE_HEAD" (magit-gitdir))))
 
 (defun magit--merge-range (&optional head)
   (unless head
     (setq head (magit-get-shortname
-                (car (magit-file-lines (magit-git-dir "MERGE_HEAD"))))))
+                (car (magit-file-lines
+                      (expand-file-name "MERGE_HEAD" (magit-gitdir)))))))
   (and head
        (concat (magit-git-string "merge-base" "--octopus" "HEAD" head)
                ".." head)))
@@ -290,11 +290,9 @@ then also remove the respective remote branch."
 
 ;;; Sections
 
-(defvar magit-unmerged-section-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [remap magit-visit-thing] 'magit-diff-dwim)
-    map)
-  "Keymap for `unmerged' sections.")
+(defvar-keymap magit-unmerged-section-map
+  :doc "Keymap for `unmerged' sections."
+  :parent magit-log-section-map)
 
 (defun magit-insert-merge-log ()
   "Insert section for the on-going merge.
@@ -302,17 +300,18 @@ Display the heads that are being merged.
 If no merge is in progress, do nothing."
   (when (magit-merge-in-progress-p)
     (let* ((heads (mapcar #'magit-get-shortname
-                          (magit-file-lines (magit-git-dir "MERGE_HEAD"))))
+                          (magit-file-lines
+                           (expand-file-name "MERGE_HEAD" (magit-gitdir)))))
            (range (magit--merge-range (car heads))))
       (magit-insert-section (unmerged range)
         (magit-insert-heading
           (format "Merging %s:" (mapconcat #'identity heads ", ")))
-        (magit-insert-log
-         range
-         (let ((args magit-buffer-log-args))
-           (unless (member "--decorate=full" magit-buffer-log-args)
-             (push "--decorate=full" args))
-           args))))))
+        (magit--insert-log nil
+          range
+          (let ((args magit-buffer-log-args))
+            (unless (member "--decorate=full" magit-buffer-log-args)
+              (push "--decorate=full" args))
+            args))))))
 
 ;;; _
 (provide 'magit-merge)

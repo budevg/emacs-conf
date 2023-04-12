@@ -1,19 +1,16 @@
-;;; magit-files.el --- finding files  -*- lexical-binding: t -*-
+;;; magit-files.el --- Finding files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2010-2021  The Magit Project Contributors
-;;
-;; You should have received a copy of the AUTHORS.md file which
-;; lists all contributors.  If not, see http://magit.vc/authors.
+;; Copyright (C) 2008-2023 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
-;; Magit is free software; you can redistribute it and/or modify it
+;; Magit is free software: you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 3, or (at your option)
-;; any later version.
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 ;;
 ;; Magit is distributed in the hope that it will be useful, but WITHOUT
 ;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
@@ -21,7 +18,7 @@
 ;; License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with Magit.  If not, see http://www.gnu.org/licenses.
+;; along with Magit.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -154,7 +151,7 @@ then only after asking.  A non-nil value for REVERT is ignored if REV is
   (magit-get-revision-buffer rev file t))
 
 (defun magit-get-revision-buffer (rev file &optional create)
-  (funcall (if create 'get-buffer-create 'get-buffer)
+  (funcall (if create #'get-buffer-create #'get-buffer)
            (format "%s.~%s~" file (subst-char-in-string ?/ ?_ rev))))
 
 (defun magit-revert-rev-file-buffer (_ignore-auto noconfirm)
@@ -182,7 +179,8 @@ then only after asking.  A non-nil value for REVERT is ignored if REV is
           (after-change-major-mode-hook
            (remq 'global-diff-hl-mode-enable-in-buffers
                  after-change-major-mode-hook)))
-      (normal-mode t))
+      (delay-mode-hooks
+        (normal-mode t)))
     (setq buffer-read-only t)
     (set-buffer-modified-p nil)
     (goto-char (point-min))))
@@ -205,7 +203,8 @@ is done using `magit-find-index-noselect'."
     (unless (equal magit-buffer-refname "{index}")
       (user-error "%s isn't visiting the index" file))
     (if (y-or-n-p (format "Update index with contents of %s" (buffer-name)))
-        (let ((index (make-temp-name (magit-git-dir "magit-update-index-")))
+        (let ((index (make-temp-name
+                      (expand-file-name "magit-update-index-" (magit-gitdir))))
               (buffer (current-buffer)))
           (when magit-wip-before-change-mode
             (magit-wip-commit-before-change (list file) " before un-/stage"))
@@ -245,7 +244,7 @@ This command is like `find-file', except that it temporarily
 binds `default-directory' to the actual git directory, while
 reading the FILENAME."
   (interactive
-   (let ((default-directory (magit-git-dir)))
+   (let ((default-directory (magit-gitdir)))
      (find-file-read-args "Find file: "
                           (confirm-nonexistent-file-or-buffer))))
   (find-file filename wildcards))
@@ -261,7 +260,7 @@ This command is like `find-file-other-window', except that it
 temporarily binds `default-directory' to the actual git
 directory, while reading the FILENAME."
   (interactive
-   (let ((default-directory (magit-git-dir)))
+   (let ((default-directory (magit-gitdir)))
      (find-file-read-args "Find file in other window: "
                           (confirm-nonexistent-file-or-buffer))))
   (find-file-other-window filename wildcards))
@@ -277,7 +276,7 @@ This command is like `find-file-other-frame', except that it
 temporarily binds `default-directory' to the actual git
 directory, while reading the FILENAME."
   (interactive
-   (let ((default-directory (magit-git-dir)))
+   (let ((default-directory (magit-gitdir)))
      (find-file-read-args "Find file in other frame: "
                           (confirm-nonexistent-file-or-buffer))))
   (find-file-other-frame filename wildcards))
@@ -324,16 +323,14 @@ to `magit-dispatch'."
 
 ;;; Blob Mode
 
-(defvar magit-blob-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "p" 'magit-blob-previous)
-    (define-key map "n" 'magit-blob-next)
-    (define-key map "b" 'magit-blame-addition)
-    (define-key map "r" 'magit-blame-removal)
-    (define-key map "f" 'magit-blame-reverse)
-    (define-key map "q" 'magit-kill-this-buffer)
-    map)
-  "Keymap for `magit-blob-mode'.")
+(defvar-keymap magit-blob-mode-map
+  :doc "Keymap for `magit-blob-mode'."
+  "p" #'magit-blob-previous
+  "n" #'magit-blob-next
+  "b" #'magit-blame-addition
+  "r" #'magit-blame-removal
+  "f" #'magit-blame-reverse
+  "q" #'magit-kill-this-buffer)
 
 (define-minor-mode magit-blob-mode
   "Enable some Magit features in blob-visiting buffers.
@@ -406,11 +403,10 @@ NEWNAME may be a file or directory name.  If FILE isn't tracked in
 Git, fallback to using `rename-file'."
   (interactive
    (let* ((file (magit-read-file "Rename file"))
-          (dir (file-name-directory file))
-          (newname (read-file-name (format "Move %s to destination: " file)
-                                   (and dir (expand-file-name dir)))))
-     (list (expand-file-name file (magit-toplevel))
-           (expand-file-name newname))))
+          (path (expand-file-name file (magit-toplevel))))
+     (list path (expand-file-name
+                 (read-file-name (format "Move %s to destination: " file)
+                                 (file-name-directory path))))))
   (let ((oldbuf (get-file-buffer file))
         (dstdir (file-name-directory newname))
         (dstfile (if (directory-name-p newname)
@@ -500,6 +496,15 @@ Git, then fallback to using `delete-file'."
 
 (defun magit-read-tracked-file (prompt)
   (magit-read-file prompt t))
+
+(defun magit-read-unmerged-file (&optional prompt)
+  (let ((current  (magit-current-file))
+        (unmerged (magit-unmerged-files)))
+    (unless unmerged
+      (user-error "There are no unresolved conflicts"))
+    (magit-completing-read (or prompt "Resolve file")
+                           unmerged nil t nil nil
+                           (car (member current unmerged)))))
 
 (defun magit-read-file-choice (prompt files &optional error default)
   "Read file from FILES.

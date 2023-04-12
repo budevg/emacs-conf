@@ -1,19 +1,16 @@
-;;; magit-bundle.el --- bundle support for Magit   -*- lexical-binding: t -*-
+;;; magit-bundle.el --- Bundle support for Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2021  The Magit Project Contributors
-;;
-;; You should have received a copy of the AUTHORS.md file which
-;; lists all contributors.  If not, see http://magit.vc/authors.
+;; Copyright (C) 2008-2023 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <jonas@bernoul.li>
 ;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
-;; Magit is free software; you can redistribute it and/or modify it
+;; Magit is free software: you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 3, or (at your option)
-;; any later version.
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 ;;
 ;; Magit is distributed in the hope that it will be useful, but WITHOUT
 ;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
@@ -21,7 +18,7 @@
 ;; License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with Magit.  If not, see http://www.gnu.org/licenses.
+;; along with Magit.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -62,8 +59,8 @@
                               (concat (file-name-nondirectory
                                        (directory-file-name (magit-toplevel)))
                                       ".bundle"))
-              (magit-completing-read-multiple* "Refnames (zero or more): "
-                                               (magit-list-refnames))
+              (magit-completing-read-multiple "Refnames (zero or more): "
+                                              (magit-list-refnames))
               (transient-args 'magit-bundle-create))))
   (if file
       (magit-git-bundle "create" file refs args)
@@ -75,7 +72,7 @@
   (interactive
    (let ((tag    (magit-read-tag "Track bundle using tag"))
          (branch (magit-read-branch "Bundle branch"))
-         (refs   (magit-completing-read-multiple*
+         (refs   (magit-completing-read-multiple
                   "Additional refnames (zero or more): "
                   (magit-list-refnames))))
      (list (read-file-name "File: " nil nil nil (concat tag ".bundle"))
