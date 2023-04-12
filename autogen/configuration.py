@@ -9,6 +9,8 @@ class Node(object):
 
 lisp_lib = [Node(path = "lisp_lib/init.el",
                  msg  = "Misc elisp function"),
+            Node(path = "lisp_lib/compat",
+                 msg  = ""),
             Node(path = "lisp_lib/idle-require.el",
                  msg  = "Load packages when emacs idle"),
             ]

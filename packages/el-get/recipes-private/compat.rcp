@@ -1,0 +1,8 @@
+(:name ag
+       :description "COMPATibility Library for Emacs Lisp"
+       :type github
+       :pkgname "emacs-compat/compat"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib/compat")))
+
+       )
