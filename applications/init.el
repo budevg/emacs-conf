@@ -19,7 +19,8 @@
   '(progn
      (setq eww-download-directory temporary-file-directory
            shr-inhibit-images t
-           shr-use-fonts nil)
+           shr-use-fonts nil
+           shr-max-image-proportion 0.6)
      (define-key eww-mode-map (kbd ",") 'eww-back-url)
      (define-key eww-mode-map (kbd ".") 'eww-forward-url)
      (define-key eww-mode-map (kbd "/") 'eww-follow-link)
