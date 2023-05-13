@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import argparse
+from contextlib import contextmanager
 from configuration import Node, PACKAGES, FRAME
 
 def out(msg):
@@ -23,13 +24,21 @@ class ConfigBuilder(object):
         self._action = action
         self._packages = packages
         self._frame = frame
-        self._data = []
+        self._init_data = []
+        self._early_init_data = []
+        self._data = self._init_data
 
     def build(self):
         if self._action == "create":
             self._create()
         if self._action == "skeleton":
             self._skeleton()
+
+    @contextmanager
+    def _early_config(self):
+        self._data = self._early_init_data
+        yield
+        self._data = self._init_data
 
     def _skeleton(self):
         for pkg_dir in self._enum_dirs():
@@ -40,31 +49,58 @@ class ConfigBuilder(object):
         self._data.append("")
 
     def _create(self):
-        self._native_compilation_flags()
-        self._optimize_startup_time_start()
-        self._gen_config_path()
-        self._newline()
-        self._gen_exec_path()
-        self._newline()
-        self._gen_tmpdir()
-        self._newline()
-        self._gen_env()
+        with self._early_config():
+            self._set_load_early_init()
+            self._optimize_startup_time()
+            self._native_compilation_flags()
+            self._newline()
+            self._gen_config_path()
+            self._newline()
+            self._gen_exec_path()
+            self._newline()
+            self._gen_tmpdir()
+            self._newline()
+            self._gen_env()
+            self._newline()
+            self._gen_frame_config()
+
+        self._ensure_load_early_init()
         self._gen_load_packages()
-        self._gen_frame_config()
-        self._optimize_startup_time_end()
         self._newline()
-        self._write_init_file()
+        self._write_init_files()
 
     def _native_compilation_flags(self):
         self._data.append('''
 (setq comp-enable-subr-trampolines nil)''')
 
-    def _optimize_startup_time_start(self):
+    def _set_load_early_init(self):
         self._data.append('''
-(setq gc-cons-threshold 10000000)
-(let ((file-name-handler-alist nil))''')
-    def _optimize_startup_time_end(self):
-        self._data.append(''')''')
+        (setq early-init-loaded t)
+        '''.lstrip())
+
+    def _ensure_load_early_init(self):
+        self._data.append('''
+        (if (not (boundp 'early-init-loaded)) (load-file (concat user-emacs-directory "early-init.el")))
+        '''.lstrip())
+
+    def _optimize_startup_time(self):
+        self._data.append('''
+(setq gc-cons-threshold most-positive-fixnum ; 2^61 bytes
+      gc-cons-percentage 0.6
+      file-name-handler-alist-save file-name-handler-alist
+      file-name-handler-alist nil)
+
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (with-current-buffer "*scratch*"
+              (insert (format ";; Emacs loaded in %.3f sec with %d garbage collections\\n"
+                              (float-time (time-subtract after-init-time before-init-time))
+                              gcs-done)))
+            (setq gc-cons-threshold 16777216 ; 16mb
+                  gc-cons-percentage 0.1
+                  file-name-handler-alist file-name-handler-alist-save)
+            ))
+'''.lstrip())
 
     def _gen_config_path(self):
         config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -168,10 +204,20 @@ class ConfigBuilder(object):
                '(font . "%(font)s"))
 ; (maximize-frame)
   ))''' % self._frame())
+        self._data.append('''
+(tool-bar-mode -1)
+(scroll-bar-mode -1)
+(menu-bar-mode -1)
+(blink-cursor-mode -1)
+(setq inhibit-splash-screen t
+      make-pointer-invisible t)
+''')
 
-    def _write_init_file(self):
+    def _write_init_files(self):
         with open("init.el", "w") as f:
-            f.write("\n".join(self._data))
+            f.write("\n".join(self._init_data))
+        with open("early-init.el", "w") as f:
+            f.write("\n".join(self._early_init_data))
 
 
 

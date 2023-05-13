@@ -1,5 +1,5 @@
 (setq initial-scratch-message
-      (format ";;\n;; The time is %s\n;; Welcome root !!!\n;;\n\n"
+      (format ";;\n;; The time is %s\n;; Welcome root !!!\n;;\n"
               (format-time-string "%Y-%m-%d, %T")))
 (setq frame-title-format
   '((:eval (if (buffer-file-name)

@@ -10,3 +10,4 @@ skeleton:
 
 clean:
 	echo Cleaninig emacs configuration
+	rm -f init.el early-init.el

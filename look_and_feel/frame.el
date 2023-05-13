@@ -1,19 +1,3 @@
-
-(tool-bar-mode -1)
-(scroll-bar-mode -1)
-(menu-bar-mode -1)
-(setq inhibit-splash-screen t)
-
-;; Prevent the annoying beep on errors
-(setq visible-bell t)
-
-;; Annoying cursor blinking
-(blink-cursor-mode -1)
-
-(setq make-pointer-invisible t)
-
-;; zoom in/out
-
 (autoload 'zoom-frm-in "zoom-frm" nil t)
 (autoload 'zoom-frm-out "zoom-frm" nil t)
 (autoload 'zoom-frm-unzoom "zoom-frm" nil t)
