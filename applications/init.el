@@ -12,7 +12,7 @@
 ;; remember to run
 ;; >> cd ~/tools/bin; ln -s /usr/bin/google-chrome chromium
 (setq browse-url-browser-function 'browse-url-chromium
-      url-privacy-level 'paranoid)
+      url-privacy-level 'high)
 (global-set-key (kbd "C-f /") 'eww)
 
 (eval-after-load "eww"
