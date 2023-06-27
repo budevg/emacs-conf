@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from configuration import Node, PACKAGES, FRAME
 
 def out(msg):
-    print msg
+    print(msg)
 
 def unique(key):
     def wrap(f):
@@ -43,7 +43,7 @@ class ConfigBuilder(object):
     def _skeleton(self):
         for pkg_dir in self._enum_dirs():
             if not os.path.exists(pkg_dir.dir):
-                print pkg_dir.dir
+                print(pkg_dir.dir)
                 os.makedirs(pkg_dir.dir)
     def _newline(self):
         self._data.append("")
@@ -146,7 +146,7 @@ class ConfigBuilder(object):
                 self._data.append('(setenv "TMPDIR" "%s")' % tmpdir)
 
     def _gen_env(self):
-        for k, v in {"PAGER" : "cat"}.iteritems():
+        for k, v in {"PAGER" : "cat"}.items():
             self._data.append('(setenv "%s" "%s")' %
                               (k, v))
             self._data.append("")
