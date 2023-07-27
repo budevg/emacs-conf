@@ -1,8 +1,8 @@
 diff --git a/src/frame.c b/src/frame.c
-index 38a6583605c..859937d2f97 100644
+index fc6a3459482..6130f4da5c8 100644
 --- a/src/frame.c
 +++ b/src/frame.c
-@@ -4917,7 +4917,7 @@ gui_set_vertical_scroll_bars (struct frame *f, Lisp_Object arg, Lisp_Object oldv
+@@ -4959,7 +4959,7 @@ gui_set_vertical_scroll_bars (struct frame *f, Lisp_Object arg, Lisp_Object oldv
  	 However, if the window hasn't been created yet, we shouldn't
  	 call set_window_size_hook.  */
        if (FRAME_NATIVE_WINDOW (f))
@@ -11,7 +11,7 @@ index 38a6583605c..859937d2f97 100644
  
        SET_FRAME_GARBAGED (f);
      }
-@@ -6437,7 +6437,7 @@ syms_of_frame (void)
+@@ -6479,7 +6479,7 @@ syms_of_frame (void)
  Setting this variable directly does not take effect;
  either customize it (see the info node `Easy Customization')
  or call the function `menu-bar-mode'.  */);
@@ -20,7 +20,7 @@ index 38a6583605c..859937d2f97 100644
  
    DEFVAR_LISP ("tab-bar-mode", Vtab_bar_mode,
                 doc: /* Non-nil if Tab-Bar mode is enabled.
-@@ -6454,7 +6454,7 @@ syms_of_frame (void)
+@@ -6496,7 +6496,7 @@ syms_of_frame (void)
  either customize it (see the info node `Easy Customization')
  or call the function `tool-bar-mode'.  */);
  #ifdef HAVE_WINDOW_SYSTEM
