@@ -1,7 +1,6 @@
 
-;; empty backends for vc
-;; since that introduces overhead in opening file
-(setq vc-handled-backends '())
+(global-set-key (kbd "M-M") (lambda () (interactive) (vc-dir default-directory)))
+(remove-hook 'find-file-hooks 'vc-refresh-state)
 
 (defun dot-gitconfig ()
   (interactive)
