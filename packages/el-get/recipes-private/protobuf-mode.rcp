@@ -1,0 +1,8 @@
+(:name protobuf-mode
+       :website "https://developers.google.com/protocol-buffers/"
+       :description "Major mode for editing protocol buffers."
+       :type http
+       :url "https://raw.githubusercontent.com/protocolbuffers/protobuf/main/editors/protobuf-mode.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/protobuf")))
+       )

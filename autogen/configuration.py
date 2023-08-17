@@ -167,6 +167,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "Hashicorp Configuration Language mode"),
              Node(path = "prog_lang/kmonad/init.el",
                   msg = "kmonad mode"),
+             Node(path = "prog_lang/protobuf/init.el",
+                  msg = "protobuf mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",
