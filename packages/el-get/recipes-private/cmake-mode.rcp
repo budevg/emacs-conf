@@ -1,0 +1,9 @@
+(:name cmake-mode
+       :website "https://gitlab.kitware.com/cmake/community/-/wikis/doc/editors/Emacs"
+       :description "Provides syntax highlighting and indentation for CMakeLists.txt and *.cmake source files."
+       :type http
+       :url "https://gitlab.kitware.com/cmake/cmake/-/raw/master/Auxiliary/cmake-mode.el?inline=false"
+       :localname "cmake-mode.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "build_system")))
+       )
