@@ -1,13 +1,6 @@
 (autoload 'magit-status "magit" nil t)
 (global-set-key [(meta m)] 'magit-status)
 
-(defun magit-section-toggle-new ()
-  (interactive)
-  (let ((file (ffap-file-at-point)))
-    (if file
-        (magit-diff "HEAD" '() (list file))
-      (magit-section-toggle (magit-current-section)))))
-
 (setq magit-version "3.1.0")
 
 (eval-after-load "magit"
@@ -63,7 +56,6 @@
 
      (setq git-commit-finish-query-functions '())
 
-     (define-key magit-mode-map "\t" 'magit-section-toggle-new)
      (define-key magit-mode-map [C-tab] nil)
      (define-key magit-mode-map "q"
        (lambda ()
