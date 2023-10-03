@@ -169,6 +169,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "kmonad mode"),
              Node(path = "prog_lang/protobuf/init.el",
                   msg = "protobuf mode"),
+             Node(path = "prog_lang/bpftrace/init.el",
+                  msg = "bpftrace mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",

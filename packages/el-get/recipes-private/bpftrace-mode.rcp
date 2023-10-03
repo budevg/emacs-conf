@@ -1,0 +1,6 @@
+(:name bpftrace-mode
+       :type git
+       :url "https://gitlab.com/jgkamat/bpftrace-mode.git"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/bpftrace")))
+       )
