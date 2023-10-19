@@ -171,6 +171,8 @@ prog_lang = [Node(path = "prog_lang/comments.el",
                   msg = "protobuf mode"),
              Node(path = "prog_lang/bpftrace/init.el",
                   msg = "bpftrace mode"),
+             Node(path = "prog_lang/kotlin/init.el",
+                  msg = "kotlin mode"),
              ]
 
 build_system = [Node(path = "build_system/init.el",
