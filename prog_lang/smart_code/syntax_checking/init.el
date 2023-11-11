@@ -9,4 +9,5 @@
         ("Go" goimports)
         ("Haskell" brittany)
         ("C++" clang-format)
+        ("C" clang-format)
         ))

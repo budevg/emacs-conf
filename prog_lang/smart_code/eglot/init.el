@@ -22,4 +22,5 @@
      (define-key eglot-mode-map (kbd "C-?") 'xref-pop-marker-stack)
      (define-key eglot-mode-map (kbd "C-.")  'xref-find-references)
      (define-key eglot-mode-map (kbd "C-c P")  'eglot-format)
+     (defun eglot--post-self-insert-hook ())
      ))
