@@ -126,6 +126,14 @@ set and deleted as if they were real tabs."
   "Return t if this is a literate Haskell buffer in bird style, NIL otherwise."
   (eq haskell-literate 'bird))
 
+(defun haskell-indentation-tex-p ()
+  "Return t if this is a literate Haskell buffer in tex style, NIL otherwise."
+  (eq haskell-literate 'tex))
+
+(defun haskell-indentation-literate-p ()
+  "Return t if this is a literate Haskell buffer, NIL otherwise."
+  (or (haskell-indentation-bird-p) (haskell-indentation-tex-p)))
+
 ;;----------------------------------------------------------------------------
 ;; UI starts here
 
@@ -179,12 +187,25 @@ negative ARG.  Handles bird style literate Haskell too."
              (beginning-of-line)
              (not (eq (char-after) ?>))))))
 
+(defun haskell-indentation-tex-outside-code-p ()
+  "Non-NIL if we are in tex literate mode, but outside of code."
+  (and (haskell-indentation-tex-p)
+       (not (and (save-excursion
+                   (re-search-backward "\\\\end{code}\\|\\\\begin{code}\\(\\)"
+                                       nil t))
+                 (match-end 1)))))
+
+(defun haskell-indentation-literate-outside-code-p ()
+  "Non-NIL if we are in literate mode, but outside of code."
+  (or (haskell-indentation-bird-outside-code-p)
+      (haskell-indentation-tex-outside-code-p)))
+
 (defun haskell-indentation-newline-and-indent ()
   "Insert newline and indent."
   (interactive "*")
   ;; On RET (or C-j), we:
   ;;   - just jump to the next line if literate haskell, but outside code
-  (if (haskell-indentation-bird-outside-code-p)
+  (if (haskell-indentation-literate-outside-code-p)
       (progn
         (delete-horizontal-space)
         (newline))
@@ -793,7 +814,7 @@ For example
          (throw 'parse-end nil))))))
 
 (defun haskell-indentation-toplevel-where ()
-  "Parse 'where' that we may hit as a standalone in module declaration."
+  "Parse \\='where\\=' that we may hit as a standalone in module declaration."
   (haskell-indentation-read-next-token)
 
   (when (eq current-token 'end-tokens)
@@ -1160,13 +1181,13 @@ yet. Keep the list in ascending order."
 
 The following symbols are used as pseudo tokens:
 
-'layout-item: A new item in a layout list.  The next token
+\\='layout-item: A new item in a layout list.  The next token
               will be the first token from the item.
 
-'layout-end:  the end of a layout list.  Next token will be
+\\='layout-end:  the end of a layout list.  Next token will be
               the first token after the layout list.
 
-'end-tokens:  back at point where we started, following-token
+\\='end-tokens:  back at point where we started, following-token
               will be set to the next token.
 
 Pseudo tokens are used only when implicit-layout-active is

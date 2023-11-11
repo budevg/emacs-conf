@@ -6,6 +6,7 @@
 (add-to-list 'auto-mode-alist '("\\.lhs\\'" . literate-haskell-mode))
 (add-to-list 'auto-mode-alist '("\\.cabal\\'" . haskell-cabal-mode))
 
+(autoload 'interactive-haskell-mode "haskell" nil t)
 (autoload 'haskell-interactive-bring "haskell" nil t)
 (autoload 'haskell-mode-tag-find "haskell" nil t)
 (autoload 'haskell-mode-jump-to-def-or-tag "haskell-commands" nil t)
