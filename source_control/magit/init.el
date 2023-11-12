@@ -72,5 +72,5 @@
        (let ((root (magit-toplevel dir)))
          (and root (cons 'transient root))))
      (with-eval-after-load 'project
-       (add-to-list 'project-find-functions 'magit-project-find-function))
+       (add-to-list 'project-find-functions 'magit-project-find-function t))
      ))
