@@ -7,7 +7,7 @@
 (setq format-all-formatters
       '(("Python" black)
         ("Go" goimports)
-        ("Haskell" brittany)
+        ("Haskell" fourmolu)
         ("C++" clang-format)
         ("C" clang-format)
         ))

@@ -27,10 +27,12 @@
 ;; - ATS (atsfmt)
 ;; - Awk (gawk)
 ;; - Bazel Starlark (buildifier)
+;; - Beancount (bean-format)
 ;; - BibTeX (Emacs)
 ;; - C/C++/Objective-C (clang-format, astyle)
-;; - C# (clang-format, astyle)
+;; - C# (clang-format, astyle, csharpier)
 ;; - Cabal (cabal-fmt)
+;; - Caddyfile (caddy fmt)
 ;; - Clojure/ClojureScript (zprint, node-cljfmt)
 ;; - CMake (cmake-format)
 ;; - Crystal (crystal tool format)
@@ -53,15 +55,18 @@
 ;; - Go (gofmt, goimports)
 ;; - GraphQL (prettier, prettierd)
 ;; - Haskell (brittany, fourmolu, hindent, ormolu, stylish-haskell)
+;; - HCL (hclfmt)
 ;; - HTML/XHTML/XML (tidy)
+;; - Hy (Emacs)
 ;; - Java (clang-format, astyle)
-;; - JavaScript/JSON/JSX (prettier, standard, prettierd)
+;; - JavaScript/JSON/JSX (prettier, standard, prettierd, deno)
 ;; - Jsonnet (jsonnetfmt)
 ;; - Kotlin (ktlint)
 ;; - LaTeX (latexindent, auctex)
 ;; - Ledger (ledger-mode)
 ;; - Lua (lua-fmt, stylua, prettier plugin)
-;; - Markdown (prettier, prettierd)
+;; - Markdown (prettier, prettierd, deno)
+;; - Meson (muon fmt)
 ;; - Nginx (nginxfmt)
 ;; - Nix (nixpkgs-fmt, nixfmt, alejandra)
 ;; - OCaml (ocp-indent, ocamlformat)
@@ -69,12 +74,12 @@
 ;; - PHP (prettier plugin)
 ;; - Protocol Buffers (clang-format)
 ;; - PureScript (purty, purs-tidy)
-;; - Python (black, yapf, isort)
+;; - Python (black, isort, ruff format, yapf)
 ;; - R (styler)
 ;; - Racket (raco-fmt)
 ;; - Reason (bsrefmt)
 ;; - ReScript (rescript)
-;; - Ruby (rubocop, rufo, standardrb)
+;; - Ruby (rubocop, rufo, standardrb, stree)
 ;; - Rust (rustfmt)
 ;; - Scala (scalafmt)
 ;; - Shell script (beautysh, shfmt)
@@ -85,7 +90,7 @@
 ;; - Swift (swiftformat)
 ;; - Terraform (terraform fmt)
 ;; - TOML (prettier plugin, taplo fmt)
-;; - TypeScript/TSX (prettier, ts-standard, prettierd)
+;; - TypeScript/TSX (prettier, ts-standard, prettierd, deno)
 ;; - V (v fmt)
 ;; - Vue (prettier, prettierd)
 ;; - Verilog (iStyle, Verible)
@@ -126,7 +131,7 @@
     ("Bazel" buildifier)
     ("BibTeX" emacs-bibtex)
     ("C" clang-format)
-    ("C#" clang-format)
+    ("C#" csharpier)
     ("C++" clang-format)
     ("Cabal Config" cabal-fmt)
     ("Clojure" zprint)
@@ -149,8 +154,11 @@
     ("Go" gofmt)
     ("GraphQL" prettier)
     ("Haskell" brittany)
+    ("HCL" hclfmt)
     ("HTML" html-tidy)
+    ("HTML+EEX" mix-format)
     ("HTML+ERB" erb-format)
+    ("Hy" emacs-hy)
     ("Java" clang-format)
     ("JavaScript" prettier)
     ("JSON" prettier)
@@ -163,6 +171,7 @@
     ("Literate Haskell" brittany)
     ("Lua" lua-fmt)
     ("Markdown" prettier)
+    ("Meson" muon-fmt)
     ("Nix" nixpkgs-fmt)
     ("Objective-C" clang-format)
     ("OCaml" ocp-indent)
@@ -195,6 +204,8 @@
     ("Zig" zig)
 
     ("_Angular" prettier)
+    ("_Beancount" bean-format)
+    ("_Caddyfile" caddy-fmt)
     ("_Flow" prettier)
     ("_Gleam" gleam)
     ("_Ledger" ledger-mode)
@@ -520,11 +531,13 @@ need to be shell-quoted."
 
 Returns t if GEM-NAME is listed in the current project's
 Gemfile.lock, nil otherwise."
-  (let* ((lockfile "Gemfile.lock")
-         (dir (locate-dominating-file (buffer-file-name) lockfile)))
-    (and dir
+  (let* ((file (buffer-file-name))
+         (lockfile "Gemfile.lock")
+         (lockdir (and file (locate-dominating-file file lockfile)))
+         (lockfile (and lockdir (expand-file-name lockfile lockdir))))
+    (and lockfile
          (with-temp-buffer
-           (insert-file-contents (expand-file-name lockfile dir))
+           (insert-file-contents lockfile)
            (re-search-forward (format "^    %s " (regexp-quote gem-name))
                               nil t))
          t)))
@@ -585,6 +598,7 @@ FORMATTER is a symbol naming the formatter.  The name of the
 command used to run the formatter is usually a good choice.
 
 Consult the existing formatters for examples of BODY."
+  (declare (indent 1))
   (let (executable install languages features format)
     (cl-assert
      (equal (mapcar 'car body)
@@ -662,6 +676,13 @@ Consult the existing formatters for examples of BODY."
               (let ((f (symbol-function 'LaTeX-fill-buffer)))
                 (when f (funcall f nil)))))))
 
+(define-format-all-formatter bean-format
+  (:executable "bean-format")
+  (:install "pip install beancount")
+  (:languages "_Beancount")
+  (:features)
+  (:format (format-all--buffer-easy executable)))
+
 (define-format-all-formatter beautysh
   (:executable "beautysh")
   (:install "pip install beautysh")
@@ -709,12 +730,22 @@ Consult the existing formatters for examples of BODY."
   (:features)
   (:format (format-all--buffer-easy executable)))
 
+(define-format-all-formatter caddy-fmt
+  (:executable "caddy")
+  (:install
+   (macos "brew install caddy")
+   (windows "scoop install caddy"))
+  (:languages "_Caddyfile")
+  (:features)
+  (:format (format-all--buffer-easy executable "fmt" "-")))
+
 (define-format-all-formatter clang-format
   (:executable "clang-format")
   (:install
    (macos "brew install clang-format")
    (windows "scoop install llvm"))
-  (:languages "C" "C#" "C++" "Cuda" "GLSL" "Java" "Objective-C" "Protocol Buffer")
+  (:languages
+   "C" "C#" "C++" "Cuda" "GLSL" "Java" "Objective-C" "Protocol Buffer")
   (:features region)
   (:format
    (format-all--buffer-easy
@@ -755,6 +786,13 @@ Consult the existing formatters for examples of BODY."
   (:features)
   (:format (format-all--buffer-easy executable "tool" "format" "-")))
 
+(define-format-all-formatter csharpier
+  (:executable "dotnet-csharpier")
+  (:install "dotnet install -g csharpier")
+  (:languages "C#")
+  (:features)
+  (:format (format-all--buffer-easy executable "--write-stdout")))
+
 (define-format-all-formatter dart-format
   (:executable "dart")
   (:install (macos "brew tap dart-lang/dart && brew install dart"))
@@ -773,6 +811,27 @@ Consult the existing formatters for examples of BODY."
     executable
     (when (buffer-file-name)
       (list "--stdin-name" (buffer-file-name))))))
+
+(define-format-all-formatter deno
+  (:executable "deno")
+  (:install (macos "brew install deno"))
+  (:languages
+   "JavaScript" "JSX"
+   "TypeScript" "TSX"
+   "JSON" "JSON5"
+   "Markdown")
+  (:features)
+  (:format
+   (format-all--buffer-easy
+    executable
+    "fmt"
+    "--ext" (let ((pair (assoc language
+                               '(("JavaScript" . "js")
+                                 ("TypeScript" . "ts")
+                                 ("JSON5" . "jsonc")
+                                 ("Markdown" . "md")))))
+              (if pair (cdr pair) (downcase language)))
+    "-")))
 
 (define-format-all-formatter dfmt
   (:executable "dfmt")
@@ -829,6 +888,18 @@ Consult the existing formatters for examples of BODY."
   (:features)
   (:format (format-all--buffer-native 'bibtex-mode 'bibtex-sort-buffer)))
 
+(define-format-all-formatter emacs-hy
+  (:executable)
+  (:install)
+  (:languages "Hy")
+  (:features region)
+  (:format
+   (format-all--buffer-native
+    'hy-mode
+    (if region
+        (lambda () (indent-region (car region) (cdr region)))
+      (lambda () (indent-region (point-min) (point-max)))))))
+
 (define-format-all-formatter emacs-lisp
   (:executable)
   (:install)
@@ -839,7 +910,7 @@ Consult the existing formatters for examples of BODY."
     'emacs-lisp-mode
     (if region
         (lambda () (indent-region (car region) (cdr region)))
-        (lambda () (indent-region (point-min) (point-max)))))))
+      (lambda () (indent-region (point-min) (point-max)))))))
 
 (define-format-all-formatter erb-format
   (:executable "erb-format")
@@ -867,7 +938,11 @@ Consult the existing formatters for examples of BODY."
   (:install "stack install fourmolu")
   (:languages "Haskell" "Literate Haskell")
   (:features)
-  (:format (format-all--buffer-easy executable "--stdin-input-file" (buffer-file-name))))
+  (:format
+   (format-all--buffer-easy
+    executable
+    (when (buffer-file-name)
+      (list "--stdin-input-file" (buffer-file-name))))))
 
 (define-format-all-formatter fprettify
   (:executable "fprettify")
@@ -903,6 +978,13 @@ Consult the existing formatters for examples of BODY."
   (:executable "goimports")
   (:install "go get golang.org/x/tools/cmd/goimports")
   (:languages "Go")
+  (:features)
+  (:format (format-all--buffer-easy executable)))
+
+(define-format-all-formatter hclfmt
+  (:executable "hclfmt")
+  (:install "go install github.com/hashicorp/hcl/v2/cmd/hclfmt@latest")
+  (:languages "HCL")
   (:features)
   (:format (format-all--buffer-easy executable)))
 
@@ -955,7 +1037,7 @@ Consult the existing formatters for examples of BODY."
   (:install (macos "brew install ktlint"))
   (:languages "Kotlin")
   (:features)
-  (:format (format-all--buffer-easy executable "--format" "--stdin")))
+  (:format (format-all--buffer-easy executable "--log-level=none" "--format" "--stdin")))
 
 (define-format-all-formatter latexindent
   (:executable "latexindent")
@@ -982,7 +1064,7 @@ Consult the existing formatters for examples of BODY."
 (define-format-all-formatter mix-format
   (:executable "mix")
   (:install (macos "brew install elixir"))
-  (:languages "Elixir")
+  (:languages "Elixir" "HTML+EEX")
   (:features)
   (:format
    (format-all--buffer-hard
@@ -991,7 +1073,20 @@ Consult the existing formatters for examples of BODY."
     "format"
     (let ((config-file (format-all--locate-file ".formatter.exs")))
       (when config-file (list "--dot-formatter" config-file)))
+    (cond ((buffer-file-name)
+           (list "--stdin-filename" (buffer-file-name)))
+          ((equal language "HTML+EEX")
+           (list "--stdin-filename" "stdin.heex"))
+          (t
+           (list)))
     "-")))
+
+(define-format-all-formatter muon-fmt
+  (:executable "muon")
+  (:install (macos "brew install muon"))
+  (:languages "Meson")
+  (:features)
+  (:format (format-all--buffer-easy executable "fmt" "-")))
 
 (define-format-all-formatter nginxfmt
   (:executable "nginxfmt")
@@ -1037,14 +1132,25 @@ Consult the existing formatters for examples of BODY."
   (:install "stack install ormolu")
   (:languages "Haskell" "Literate Haskell")
   (:features)
-  (:format (format-all--buffer-easy executable)))
+  (:format
+   (format-all--buffer-easy
+    executable
+    (when (buffer-file-name)
+      (list "--stdin-input-file" (buffer-file-name))))))
 
 (define-format-all-formatter perltidy
   (:executable "perltidy")
   (:install "cpan install Perl::Tidy")
   (:languages "Perl")
-  (:features)
-  (:format (format-all--buffer-easy executable)))
+  (:features region)
+  (:format
+   (format-all--buffer-easy
+    executable
+    "--standard-error-output"
+    (when region
+      (format "--line-range-tidy=%d:%d"
+              (line-number-at-pos (car region))
+              (line-number-at-pos (cdr region)))))))
 
 (define-format-all-formatter pgformatter
   (:executable "pg_format")
@@ -1139,7 +1245,7 @@ Consult the existing formatters for examples of BODY."
    (format-all--buffer-easy
     executable "format" "-stdin"
     (let ((ext (if (not (buffer-file-name)) ""
-                   (file-name-extension (buffer-file-name)))))
+                 (file-name-extension (buffer-file-name)))))
       (concat "." (if (equal ext "") "res" ext))))))
 
 (define-format-all-formatter rubocop
@@ -1155,6 +1261,17 @@ Consult the existing formatters for examples of BODY."
     "--format" "quiet"
     "--stderr"
     "--stdin" (or (buffer-file-name) (buffer-name)))))
+
+(define-format-all-formatter ruff
+  (:executable "ruff")
+  (:install "pip install ruff")
+  (:languages "Python")
+  (:features)
+  (:format (format-all--buffer-easy
+            executable "format"
+            "--silent"
+            "--stdin-filename" (or (buffer-file-name) (buffer-name))
+            "-")))
 
 (define-format-all-formatter rufo
   (:executable "rufo")
@@ -1183,7 +1300,7 @@ Consult the existing formatters for examples of BODY."
   (:features)
   (:format
    (format-all--buffer-easy
-    executable "--stdin" "--non-interactive" "--quiet")))
+    executable "--stdin" "--non-interactive" "--quiet" "--stdout")))
 
 (define-format-all-formatter shfmt
   (:executable "shfmt")
@@ -1254,6 +1371,17 @@ Consult the existing formatters for examples of BODY."
     "--stderr"
     "--fix"
     "--stdin" (or (buffer-file-name) (buffer-name)))))
+
+(define-format-all-formatter stree
+  (:executable "stree")
+  (:install "gem install syntax_tree:'>=2.0.1'")
+  (:languages "Ruby")
+  (:features)
+  (:format
+   (format-all--buffer-hard-ruby
+    "stree" '(0 1) nil '(".streerc")
+    executable
+    "format")))
 
 (define-format-all-formatter styler
   (:executable "Rscript")
@@ -1331,19 +1459,19 @@ Consult the existing formatters for examples of BODY."
     (when (buffer-file-name)
       (list "--stdin-filename" (buffer-file-name))))))
 
-(define-format-all-formatter verible 
-  (:executable "verible-verilog-format")
-  (:install)
-  (:languages "Verilog" "SystemVerilog")
-  (:features)
-  (:format (format-all--buffer-easy executable "-")))
-
 (define-format-all-formatter v-fmt
   (:executable "v")
   (:install)
   (:languages "V")
   (:features)
   (:format (format-all--buffer-easy executable "fmt")))
+
+(define-format-all-formatter verible
+  (:executable "verible-verilog-format")
+  (:install)
+  (:languages "Verilog" "SystemVerilog")
+  (:features)
+  (:format (format-all--buffer-easy executable "-")))
 
 (define-format-all-formatter yapf
   (:executable "yapf")
@@ -1383,6 +1511,8 @@ unofficial languages IDs are prefixed with \"_\"."
            (boundp 'flow-minor-mode)
            (not (null (symbol-value 'flow-minor-mode)))
            "_Flow")
+      (and (equal major-mode 'beancount-mode) "_Beancount")
+      (and (equal major-mode 'caddyfile-mode) "_Caddyfile")
       (and (equal major-mode 'gleam-mode) "_Gleam")
       (and (equal major-mode 'ledger-mode) "_Ledger")
       (and (equal major-mode 'nginx-mode) "_Nginx")
@@ -1405,19 +1535,16 @@ unofficial languages IDs are prefixed with \"_\"."
                          executable
                          (gethash formatter format-all--install-table))))))))
 
-(defun format-all--show-errors-buffer (error-output show-errors-p)
-  "Internal shorthand function to update and show error output.
-
-ERROR-OUTPUT come from the formatter.  SHOW-ERRORS-P determines
-whether or not to display the errors buffer."
-  (save-selected-window
-    (with-current-buffer (get-buffer-create "*format-all-errors*")
-      (erase-buffer)
-      (insert error-output)
-      (if show-errors-p
-          (display-buffer (current-buffer))
-        (let ((error-window (get-buffer-window (current-buffer))))
-          (when error-window (quit-window nil error-window)))))))
+(defun format-all--hide-errors-buffer ()
+  "Internal helper function to update *format-all-errors*."
+  (let ((buffer (get-buffer "*format-all-errors*")))
+    (when buffer
+      (with-current-buffer buffer
+        (let ((inhibit-read-only t))
+          (erase-buffer)))
+      (let ((window (get-buffer-window buffer)))
+        (when window
+          (quit-window nil window))))))
 
 (defun format-all--update-errors-buffer (status error-output)
   "Internal helper function to update *format-all-errors*.
@@ -1430,17 +1557,37 @@ STATUS and ERROR-OUTPUT come from the formatter."
                           ((always) t)
                           ((warnings) (or has-errors-p has-warnings-p))
                           ((errors) has-errors-p))))
-    (format-all--show-errors-buffer error-output show-errors-p)))
+    (if show-errors-p
+        (with-help-window "*format-all-errors*"
+          (princ error-output))
+      (format-all--hide-errors-buffer))))
 
 (defun format-all--save-line-number (thunk)
   "Internal helper function to run THUNK and go back to the same line."
   (let ((old-line-number (line-number-at-pos))
-        (old-column (current-column)))
+        ;; NOTE: Not the same as what's returned by `current-column'.
+        ;; Column refers to the width of the character, and point
+        ;; refers to actual character.  For example, if you go over a
+        ;; tab character, point will increase by 1, but the column
+        ;; with increase by 8 (assuming the width of tab is set to 8).
+        (old-line-position (- (point) (line-beginning-position)))
+
+        (old-window (selected-window))
+        (old-window-start (window-start)))
     (funcall thunk)
     (goto-char (point-min))
     (forward-line (1- old-line-number))
-    (let ((line-length (- (point-at-eol) (point-at-bol))))
-      (goto-char (+ (point) (min old-column line-length))))))
+    (let ((line-length (- (line-end-position) (line-beginning-position))))
+      (goto-char (+ (point) (min old-line-position line-length))))
+    (set-window-start old-window old-window-start)))
+
+(defun format-all--save-mark-ring (thunk)
+  "Internal helper function to run THUNK and restore the mark ring."
+  (let ((old-mark-ring (mapcar #'marker-position mark-ring))
+        (old-mark (marker-position (mark-marker))))
+    (funcall thunk)
+    (set-marker (mark-marker) old-mark (current-buffer))
+    (setq mark-ring (mapcar #'copy-marker old-mark-ring))))
 
 (defun format-all--run-chain (language chain region)
   "Internal function to run a formatter CHAIN on the current buffer.
@@ -1463,45 +1610,47 @@ entire buffer."
       (when unsupported
         (error "The format-all-region command is not supported for %s"
                (string-join (mapcar #'symbol-name unsupported) ", "))))
-    (format-all--save-line-number
+    (format-all--save-mark-ring
      (lambda ()
-       (cl-loop
-        (unless (and chain-tail (= 0 (length error-output)))
-          (cl-return))
-        (let* ((formatter (car chain-tail))
-               (f-name (car formatter))
-               (f-args (cdr formatter))
-               (f-function (gethash f-name format-all--format-table))
-               (f-executable (format-all--formatter-executable f-name)))
-          (when format-all-debug
-            (message
-             "Format-All: Formatting %s as %s using %S%s"
-             (buffer-name) language f-name
-             (with-temp-buffer
-               (dolist (arg f-args) (insert " " (shell-quote-argument arg)))
-               (buffer-string))))
-          (cl-destructuring-bind (f-output f-error-output)
-              (let ((format-all--user-args f-args))
-                (funcall f-function f-executable language region))
-            (let ((f-status :already-formatted))
-              (cond ((null f-output)
-                     (setq error-output f-error-output)
-                     (setq f-status :error))
-                    ((not (equal f-output t))
-                     (setq reformatted-by
-                           (append reformatted-by (list f-name)))
-                     (let ((inhibit-read-only t))
-                       (erase-buffer)
-                       (insert f-output))
-                     (setq f-status :reformatted)))
-              (run-hook-with-args 'format-all-after-format-functions
-                                  f-name f-status)
-              (format-all--update-errors-buffer f-status f-error-output))))
-        (setq chain-tail (cdr chain-tail)))
-       (message "%s"
-                (cond ((not (= 0 (length error-output))) "Formatting error")
-                      ((not reformatted-by) "Already formatted")
-                      (t "Reformatted!")))))))
+       (format-all--save-line-number
+        (lambda ()
+          (cl-loop
+           (unless (and chain-tail (= 0 (length error-output)))
+             (cl-return))
+           (let* ((formatter (car chain-tail))
+                  (f-name (car formatter))
+                  (f-args (cdr formatter))
+                  (f-function (gethash f-name format-all--format-table))
+                  (f-executable (format-all--formatter-executable f-name)))
+             (when format-all-debug
+               (message
+                "Format-All: Formatting %s as %s using %S%s"
+                (buffer-name) language f-name
+                (with-temp-buffer
+                  (dolist (arg f-args) (insert " " (shell-quote-argument arg)))
+                  (buffer-string))))
+             (cl-destructuring-bind (f-output f-error-output)
+                 (let ((format-all--user-args f-args))
+                   (funcall f-function f-executable language region))
+               (let ((f-status :already-formatted))
+                 (cond ((null f-output)
+                        (setq error-output f-error-output)
+                        (setq f-status :error))
+                       ((not (equal f-output t))
+                        (setq reformatted-by
+                              (append reformatted-by (list f-name)))
+                        (let ((inhibit-read-only t))
+                          (erase-buffer)
+                          (insert f-output))
+                        (setq f-status :reformatted)))
+                 (run-hook-with-args 'format-all-after-format-functions
+                                     f-name f-status)
+                 (format-all--update-errors-buffer f-status f-error-output))))
+           (setq chain-tail (cdr chain-tail)))
+          (message "%s"
+                   (cond ((not (= 0 (length error-output))) "Formatting error")
+                         ((not reformatted-by) "Already formatted")
+                         (t "Reformatted!")))))))))
 
 (defun format-all--get-default-chain (language)
   "Internal function to get the default formatter chain for LANGUAGE."
@@ -1564,6 +1713,18 @@ If REGION is non-nil, it is a (START . END) pair passed to the formatter."
     (format-all--run-chain language chain region)))
 
 ;;;###autoload
+(defun format-all-region-or-buffer (&optional prompt)
+  "Auto-format the source code in the current region or buffer.
+In Transient Mark mode when the mark is active, call `format-all-region'.
+Otherwise, call `format-all-buffer'.
+
+The PROMPT argument works as for `format-all-buffer'."
+  (interactive (list (if current-prefix-arg 'always t)))
+  (if (use-region-p)
+      (format-all-region (region-beginning) (region-end) prompt)
+    (format-all-buffer prompt)))
+
+;;;###autoload
 (defun format-all-buffer (&optional prompt)
   "Auto-format the source code in the current buffer.
 
@@ -1607,7 +1768,7 @@ The PROMPT argument works as for `format-all-buffer'."
    (let ((prompt (if current-prefix-arg 'always t)))
      (if (use-region-p)
          (list (region-beginning) (region-end) prompt)
-         (error "The region is not active now"))))
+       (error "The region is not active now"))))
   (format-all--buffer-or-region prompt (cons start end)))
 
 ;;;###autoload
