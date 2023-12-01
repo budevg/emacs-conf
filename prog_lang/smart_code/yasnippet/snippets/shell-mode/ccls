@@ -1,0 +1,4 @@
+# key: ccls
+# name: ccls
+# --
+ccls -v=-3 --index=. --init='{"index":{"threads":2}}'$0
