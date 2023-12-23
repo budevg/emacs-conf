@@ -17,7 +17,10 @@
        (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
        (define-key dired-mode-map "^"
          (function
-          (lambda nil (interactive) (dired-single-buffer "..")))))
+          (lambda nil (interactive) (dired-single-buffer ".."))))
+       (define-key dired-mode-map "e"
+         (lambda () (interactive) (eww-open-file (dired-get-file-for-visit))))
+       )
 
      (defun dired-visit-file-with-less ()
        (interactive)
