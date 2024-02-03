@@ -1,0 +1,8 @@
+(:name markdown-mode
+       :description "Major mode to edit Markdown files in Emacs"
+       :website "http://jblevins.org/projects/markdown-mode/"
+       :type github
+       :pkgname "jrblevin/markdown-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/markdown")))
+       )
