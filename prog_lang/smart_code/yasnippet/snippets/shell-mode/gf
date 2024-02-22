@@ -2,4 +2,4 @@
 # name: gf
 # key: gf
 # --
-git fetch origin && git checkout -f origin/${1:master}$0
+git fetch origin --prune && git checkout -f origin/${1:main}$0
