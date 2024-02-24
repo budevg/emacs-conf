@@ -15,7 +15,7 @@
 (autoload 'ggtags-find-other-symbol "ggtags" nil t)
 (define-key global-map [(meta f9)]  'ggtags-find-other-symbol)
 (define-key global-map [(control /)]  'ggtags-find-definition)
-(define-key global-map [(control \?)]  'xref-pop-marker-stack)
+(define-key global-map [(control \?)]  'xref-go-back)
 (define-key global-map [(control \.)]  'ggtags-find-reference)
 
 (eval-after-load "ggtags"
