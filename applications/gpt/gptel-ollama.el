@@ -26,6 +26,9 @@
 (require 'gptel)
 (require 'cl-generic)
 
+(declare-function json-read "json" ())
+(defvar json-object-type)
+
 ;;; Ollama
 (cl-defstruct (gptel-ollama (:constructor gptel--make-ollama)
                             (:copier nil)
@@ -42,15 +45,14 @@ Ollama models.")
   (when (bobp)
     (re-search-forward "^{")
     (forward-line 0))
-  (let* ((json-object-type 'plist)
-         (content-strs)
+  (let* ((content-strs)
          (content))
     (condition-case nil
-        (while (setq content (json-read))
+        (while (setq content (gptel--json-read))
           (let ((done (map-elt content :done))
                 (response (map-elt content :response)))
             (push response content-strs)
-            (unless (eq done json-false)
+            (unless (eq done :json-false)
               (with-current-buffer (plist-get info :buffer)
                 (setq gptel--ollama-context (map-elt content :context)))
               (goto-char (point-max)))))
@@ -64,7 +66,7 @@ Ollama models.")
   (map-elt response :response))
 
 (cl-defmethod gptel--request-data ((_backend gptel-ollama) prompts)
-  "JSON encode PROMPTS for sending to ChatGPT."
+  "JSON encode PROMPTS for Ollama."
   (let ((prompts-plist
          `(:model ,gptel-model
            ,@prompts
@@ -101,14 +103,17 @@ Ollama models.")
 
 ;;;###autoload
 (cl-defun gptel-make-ollama
-    (name &key host header key models stream
+    (name &key curl-args header key models stream
+          (host "localhost:11434")
           (protocol "http")
           (endpoint "/api/generate"))
   "Register an Ollama backend for gptel with NAME.
 
 Keyword arguments:
 
-HOST is where Ollama runs (with port), typically localhost:11434
+CURL-ARGS (optional) is a list of additional Curl arguments.
+
+HOST is where Ollama runs (with port), defaults to localhost:11434
 
 MODELS is a list of available model names.
 
@@ -137,7 +142,9 @@ Example:
   :host \"localhost:11434\"
   :models \\='(\"mistral:latest\")
   :stream t)"
+  (declare (indent 1))
   (let ((backend (gptel--make-ollama
+                  :curl-args curl-args
                   :name name
                   :host host
                   :header header
