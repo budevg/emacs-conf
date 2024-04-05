@@ -1,0 +1,6 @@
+(:name elfeed-org
+       :description "Feed summary interface for elfeed"
+       :type github
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/elfeed")))
+       :pkgname "SqrtMinusOne/elfeed-summary")
