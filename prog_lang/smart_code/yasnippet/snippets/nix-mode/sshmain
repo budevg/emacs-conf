@@ -1,0 +1,14 @@
+# -*- mode: snippet -*-
+# name: sshmain
+# key: sshmain
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ ];
+  shellHook = ''
+    pkill ssh-agent
+    eval \`ssh-agent\`
+  '';
+}
+$0
