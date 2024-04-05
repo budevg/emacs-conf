@@ -1,4 +1,4 @@
-(:name ag
+(:name gptel
        :description "A simple ChatGPT client for Emacs"
        :type github
        :pkgname "karthink/gptel"

@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur
-;; Version: 0.7.0
+;; Version: 0.8.5
 ;; Package-Requires: ((emacs "27.1") (transient "0.4.0") (compat "29.1.4.1"))
 ;; Keywords: convenience
 ;; URL: https://github.com/karthink/gptel
@@ -108,20 +108,20 @@
 (declare-function markdown-mode "markdown-mode")
 (declare-function gptel-curl-get-response "gptel-curl")
 (declare-function gptel-menu "gptel-transient")
+(declare-function gptel-system-prompt "gptel-transient")
 (declare-function pulse-momentary-highlight-region "pulse")
 
-;; Functions used for saving/restoring gptel state in Org buffers
-(defvar org-entry-property-inherited-from)
-(declare-function org-entry-get "org")
-(declare-function org-entry-put "org")
-(declare-function org-with-wide-buffer "org-macs")
-(declare-function org-set-property "org")
-(declare-function org-property-values "org")
-(declare-function org-open-line "org")
-(declare-function org-at-heading-p "org")
-(declare-function org-get-heading "org")
 (declare-function ediff-make-cloned-buffer "ediff-util")
 (declare-function ediff-regions-internal "ediff")
+
+(declare-function gptel-org--create-prompt "gptel-org")
+(declare-function gptel-org-set-topic "gptel-org")
+(declare-function gptel-org--save-state "gptel-org")
+(declare-function gptel-org--restore-state "gptel-org")
+(declare-function gptel--stream-convert-markdown->org "gptel-org")
+(declare-function gptel--convert-markdown->org "gptel-org")
+(define-obsolete-function-alias
+  'gptel-set-topic 'gptel-org-set-topic "0.7.5")
 
 (eval-when-compile
   (require 'subr-x)
@@ -132,6 +132,9 @@
 (require 'text-property-search)
 (require 'cl-generic)
 (require 'gptel-openai)
+
+(with-eval-after-load 'org
+  (require 'gptel-org))
 
 
 ;; User options
@@ -244,8 +247,8 @@ start and end buffer positions of the response.")
 (defcustom gptel-post-response-functions nil
   "Abnormal hook run after inserting the LLM response into the current buffer.
 
-This hook is called in the buffer from which the prompt was sent
-to the LLM, and after the full response has been inserted.  Each
+This hook is called in the buffer to which the LLM response is
+sent, and after the full response has been inserted.  Each
 function is called with two arguments: the response beginning and
 end positions.
 
@@ -369,7 +372,8 @@ interactively call `gptel-send' with a prefix argument."
   :safe #'always
   :type '(alist :key-type symbol :value-type string))
 
-(defvar-local gptel--system-message (alist-get 'default gptel-directives))
+(defvar gptel--system-message (alist-get 'default gptel-directives)
+  "The system message used by gptel.")
 (put 'gptel--system-message 'safe-local-variable #'always)
 
 (defcustom gptel-max-tokens nil
@@ -381,7 +385,6 @@ responses.
 
 To set the target token count for a chat session interactively
 call `gptel-send' with a prefix argument."
-  :local t
   :safe #'always
   :group 'gptel
   :type '(choice (integer :tag "Specify Token count")
@@ -401,7 +404,6 @@ The current options for ChatGPT are
  
 To set the model for a chat session interactively call
 `gptel-send' with a prefix argument."
-  :local t
   :safe #'always
   :group 'gptel
   :type '(choice
@@ -421,7 +423,6 @@ of the response, with 2.0 being the most random.
 
 To set the temperature for a chat session interactively call
 `gptel-send' with a prefix argument."
-  :local t
   :safe #'always
   :group 'gptel
   :type 'number)
@@ -461,7 +462,6 @@ one of the available backend creation functions:
 - `gptel-make-gemini'
 See their documentation for more information and the package
 README for examples."
-  :local t
   :safe #'always
   :group 'gptel
   :type `(choice
@@ -477,7 +477,7 @@ This opens up advanced options in `gptel-menu'.")
 (defvar-local gptel--bounds nil)
 (put 'gptel--bounds 'safe-local-variable #'always)
 
-(defvar-local gptel--num-messages-to-send nil)
+(defvar gptel--num-messages-to-send nil)
 (put 'gptel--num-messages-to-send 'safe-local-variable #'always)
 
 (defcustom gptel-log-level nil
@@ -560,6 +560,7 @@ Note: This will move the cursor."
   "Move point to the end of the LLM response ARG times."
   (interactive (list nil nil
                      (prefix-numeric-value current-prefix-arg)))
+  (unless arg (setq arg 1))
   (let ((search (if (> arg 0)
                     #'text-property-search-forward
                   #'text-property-search-backward)))
@@ -653,48 +654,30 @@ Valid JSON unless NO-JSON is t."
 
 ;; Saving and restoring state
 
-(defun gptel--restore-backend (name)
-  "Activate gptel backend with NAME in current buffer.
-
-If no backend with this name exists, inform the user.  Intended
-for when gptel restores chat metadata."
-  (when name
-    (if-let ((backend (alist-get name gptel--known-backends
-                                 nil nil #'equal)))
-        (setq-local gptel-backend backend)
-      (message
-       (substitute-command-keys
-        "Could not activate gptel backend \"%s\"!  Switch backends with \\[universal-argument] \\[gptel-send] before using gptel.")
-       name))))
-
 (defun gptel--restore-state ()
   "Restore gptel state when turning on `gptel-mode'."
   (when (buffer-file-name)
     (pcase major-mode
       ('org-mode
-       (save-restriction
-         (widen)
-         (condition-case-unless-debug nil
-             (progn
-               (when-let ((bounds (org-entry-get (point-min) "GPTEL_BOUNDS")))
-                 (mapc (pcase-lambda (`(,beg . ,end))
-                         (put-text-property beg end 'gptel 'response))
-                       (read bounds))
-                 (message "gptel chat restored."))
-               (when-let ((model (org-entry-get (point-min) "GPTEL_MODEL")))
-                 (setq-local gptel-model model))
-               (gptel--restore-backend (org-entry-get (point-min) "GPTEL_BACKEND"))
-               (when-let ((system (org-entry-get (point-min) "GPTEL_SYSTEM")))
-                 (setq-local gptel--system-message (string-replace "\\n" "\n" system)))
-               (when-let ((temp (org-entry-get (point-min) "GPTEL_TEMPERATURE")))
-                 (setq-local gptel-temperature (gptel--numberize temp))))
-           (error (message "Could not restore gptel state, sorry!")))))
+       (require 'gptel-org)
+       (gptel-org--restore-state))
       (_ (when gptel--bounds
            (mapc (pcase-lambda (`(,beg . ,end))
                          (put-text-property beg end 'gptel 'response))
                  gptel--bounds)
            (message "gptel chat restored."))
-         (gptel--restore-backend gptel--backend-name)))))
+         (when gptel--backend-name
+           (if-let ((backend (alist-get
+                              gptel--backend-name gptel--known-backends
+                              nil nil #'equal)))
+               (setq-local gptel-backend backend)
+             (message
+               (substitute-command-keys
+                (concat
+                 "Could not activate gptel backend \"%s\"!  "
+                 "Switch backends with \\[universal-argument] \\[gptel-send]"
+                 " before using gptel."))
+               gptel--backend-name)))))))
 
 (defun gptel--save-state ()
   "Write the gptel state to the buffer.
@@ -704,34 +687,8 @@ restore a chat session, turn on `gptel-mode' after opening the
 file."
   (pcase major-mode
     ('org-mode
-     (org-with-wide-buffer
-      (goto-char (point-min))
-      (when (org-at-heading-p)
-        (org-open-line 1))
-      (org-entry-put (point-min) "GPTEL_MODEL" gptel-model)
-      (org-entry-put (point-min) "GPTEL_BACKEND" (gptel-backend-name gptel-backend))
-      (unless (equal (default-value 'gptel-temperature) gptel-temperature)
-        (org-entry-put (point-min) "GPTEL_TEMPERATURE"
-                       (number-to-string gptel-temperature)))
-      (unless (string= (default-value 'gptel--system-message)
-                       gptel--system-message)
-        (org-entry-put (point-min) "GPTEL_SYSTEM"
-                       (string-replace "\n" "\\n" gptel--system-message)))
-      (when gptel-max-tokens
-        (org-entry-put
-         (point-min) "GPTEL_MAX_TOKENS" gptel-max-tokens))
-      ;; Save response boundaries
-      (letrec ((write-bounds
-                (lambda (attempts)
-                  (let* ((bounds (gptel--get-buffer-bounds))
-                         (offset (caar bounds))
-                         (offset-marker (set-marker (make-marker) offset)))
-                    (org-entry-put (point-min) "GPTEL_BOUNDS"
-                                   (prin1-to-string (gptel--get-buffer-bounds)))
-                    (when (and (not (= (marker-position offset-marker) offset))
-                               (> attempts 0))
-                      (funcall write-bounds (1- attempts)))))))
-        (funcall write-bounds 6))))
+     (require 'gptel-org)
+     (gptel-org--save-state))
     (_ (let ((print-escape-newlines t))
          (save-excursion
            (save-restriction
@@ -775,21 +732,20 @@ file."
                                (format "%s" (gptel-backend-name gptel-backend))))
                       (propertize " Ready" 'face 'success)
                       '(:eval
-                        (let* ((l1 (length gptel-model))
-                               (num-exchanges
-                                (if gptel--num-messages-to-send
-                                    (format "[Send: %s exchanges]" gptel--num-messages-to-send)
-                                  "[Send: buffer]"))
-                               (l2 (length num-exchanges)))
+                        (let ((system
+                               (format "[Prompt: %s]"
+                                (or (car-safe (rassoc gptel--system-message gptel-directives))
+                                 (truncate-string-to-width gptel--system-message 15 nil nil t)))))
                          (concat
                           (propertize
-                           " " 'display `(space :align-to ,(max 1 (- (window-width) (+ 2 l1 l2)))))
+                           " " 'display
+                           `(space :align-to (- right ,(+ 2 (length gptel-model) (length system)))))
                           (propertize
-                           (buttonize num-exchanges
-                            (lambda (&rest _) (gptel-menu)))
+                           (buttonize system
+                            (lambda (&rest _) (gptel-system-prompt)))
                            'mouse-face 'highlight
                            'help-echo
-                           "Number of past exchanges to include with each request")
+                           "System message for buffer")
                           " "
                           (propertize
                            (buttonize (concat "[" gptel-model "]")
@@ -916,7 +872,8 @@ query data as usual, but do not send the request.
 
 Model parameters can be let-bound around calls to this function."
   (declare (indent 1))
-  (let* ((gptel-stream stream)
+  (let* ((gptel--system-message system)
+         (gptel-stream stream)
          (start-marker
           (cond
            ((null position)
@@ -928,14 +885,11 @@ Model parameters can be let-bound around calls to this function."
             (set-marker (make-marker) position buffer))))
          (full-prompt
           (cond
-           ((null prompt)
-            (let ((gptel--system-message system))
-              (gptel--create-prompt start-marker)))
+           ((null prompt) (gptel--create-prompt start-marker))
            ((stringp prompt)
             ;; FIXME Dear reader, welcome to Jank City:
             (with-temp-buffer
-              (let ((gptel--system-message system)
-                    (gptel-model (buffer-local-value 'gptel-model buffer))
+              (let ((gptel-model (buffer-local-value 'gptel-model buffer))
                     (gptel-backend (buffer-local-value 'gptel-backend buffer)))
                 (insert prompt)
                 (gptel--create-prompt))))
@@ -977,29 +931,27 @@ waiting for the response."
   (gptel--update-status " Waiting..." 'warning)))
 
 (declare-function json-pretty-print-buffer "json")
-(defun gptel--inspect-query (&optional arg)
-  "Show the full LLM query to be sent in a new buffer.
+(defun gptel--inspect-query (request-data &optional arg)
+  "Show REQUEST-DATA, the full LLM query to be sent, in a buffer.
 
-This functions as a dry run of `gptel-send'.  If prefix ARG is
+This functions as a dry run of `gptel-send'.  If ARG is
 the symbol json, show the encoded JSON query instead of the lisp
 structure gptel uses."
-  (let* ((request-data
-          (gptel-request nil :stream gptel-stream :dry-run t)))
-    (with-current-buffer (get-buffer-create "*gptel-query*")
-      (let ((standard-output (current-buffer))
-            (inhibit-read-only t))
-        (buffer-disable-undo)
-        (erase-buffer)
-        (if (eq arg 'json)
-            (progn (fundamental-mode)
-                   (insert (gptel--json-encode request-data))
-                   (json-pretty-print-buffer))
-          (lisp-data-mode)
-          (prin1 request-data)
-          (pp-buffer))
-        (goto-char (point-min))
-        (view-mode 1)
-        (display-buffer (current-buffer) gptel-display-buffer-action)))))
+  (with-current-buffer (get-buffer-create "*gptel-query*")
+    (let ((standard-output (current-buffer))
+          (inhibit-read-only t))
+      (buffer-disable-undo)
+      (erase-buffer)
+      (if (eq arg 'json)
+          (progn (fundamental-mode)
+                 (insert (gptel--json-encode request-data))
+                 (json-pretty-print-buffer))
+        (lisp-data-mode)
+        (prin1 request-data)
+        (pp-buffer))
+      (goto-char (point-min))
+      (view-mode 1)
+      (display-buffer (current-buffer) gptel-display-buffer-action))))
 
 (defun gptel--insert-response (response info)
   "Insert the LLM RESPONSE into the gptel buffer.
@@ -1049,39 +1001,13 @@ See `gptel--url-get-response' for details."
         (gptel--update-status
          (format " Response Error: %s" status-str) 'error)
         (message "gptel response error: (%s) %s"
-                 status-str (plist-get info :error)))
-      (run-hook-with-args 'gptel-post-response-functions response-beg response-end))))
-
-(defun gptel-set-topic ()
-  "Set a topic and limit this conversation to the current heading.
-
-This limits the context sent to the LLM to the text between the
-current heading and the cursor position."
-  (interactive)
-  (pcase major-mode
-    ('org-mode
-     (org-set-property
-      "GPTEL_TOPIC"
-      (completing-read "Set topic as: "
-                       (org-property-values "GPTEL_TOPIC")
-                       nil nil (downcase
-                                (truncate-string-to-width
-                                 (substring-no-properties
-                                  (replace-regexp-in-string
-                                   "\\s-+" "-"
-                                   (org-get-heading)))
-                                 50)))))
-    ('markdown-mode
-     (message
-      "Support for multiple topics per buffer is not implemented for `markdown-mode'."))))
-
-(defun gptel--get-topic-start ()
-  "If a conversation topic is set, return it."
-  (pcase major-mode
-    ('org-mode
-     (when (org-entry-get (point) "GPTEL_TOPIC" 'inherit)
-         (marker-position org-entry-property-inherited-from)))
-    ('markdown-mode nil)))
+                 status-str (plist-get info :error))))
+    ;; Run hook in visible window to set window-point, BUG #269
+    (if-let ((gptel-window (get-buffer-window gptel-buffer 'visible)))
+        (with-selected-window gptel-window
+          (run-hook-with-args 'gptel-post-response-functions response-beg response-end))
+      (with-current-buffer gptel-buffer
+        (run-hook-with-args 'gptel-post-response-functions response-beg response-end)))))
 
 (defun gptel--create-prompt (&optional prompt-end)
   "Return a full conversation prompt from the contents of this buffer.
@@ -1096,19 +1022,19 @@ If PROMPT-END (a marker) is provided, end the prompt contents
 there."
   (save-excursion
     (save-restriction
-      (cond
-       ((use-region-p)
-        ;; Narrow to region
-        (narrow-to-region (region-beginning) (region-end))
-        (goto-char (point-max)))
-       ((when-let ((topic-start (gptel--get-topic-start)))
-          ;; Narrow to topic
-          (narrow-to-region topic-start (or prompt-end (point-max)))
-          (goto-char (point-max))))
-       (t (goto-char (or prompt-end (point-max)))))
       (let ((max-entries (and gptel--num-messages-to-send
                               (* 2 gptel--num-messages-to-send))))
-        (gptel--parse-buffer gptel-backend max-entries)))))
+        (cond
+         ((use-region-p)
+          ;; Narrow to region
+          (narrow-to-region (region-beginning) (region-end))
+          (goto-char (point-max))
+          (gptel--parse-buffer gptel-backend max-entries))
+         ((derived-mode-p 'org-mode)
+          (require 'gptel-org)
+          (gptel-org--create-prompt (or prompt-end (point-max))))
+         (t (goto-char (or prompt-end (point-max)))
+            (gptel--parse-buffer gptel-backend max-entries)))))))
 
 (cl-defgeneric gptel--parse-buffer (backend max-entries)
   "Parse current buffer backwards from point and return a list of prompts.
@@ -1320,152 +1246,6 @@ INTERACTIVEP is t when gptel is called interactively."
       (message "Send your query with %s!"
                (substitute-command-keys "\\[gptel-send]")))
     (current-buffer)))
-
-(defun gptel--convert-markdown->org (str)
-  "Convert string STR from markdown to org markup.
-
-This is a very basic converter that handles only a few markup
-elements."
-  (interactive)
-  (with-temp-buffer
-    (insert str)
-    (goto-char (point-min))
-    (while (re-search-forward "`\\|\\*\\{1,2\\}\\|_" nil t)
-      (pcase (match-string 0)
-        ("`" (if (looking-at "``")
-                 (progn (backward-char)
-                        (delete-char 3)
-                        (insert "#+begin_src ")
-                        (when (re-search-forward "^```" nil t)
-                          (replace-match "#+end_src")))
-               (replace-match "=")))
-        ("**" (cond
-               ((looking-at "\\*\\(?:[[:word:]]\\|\s\\)")
-                (delete-char 1))
-               ((looking-back "\\(?:[[:word:]]\\|\s\\)\\*\\{2\\}"
-                              (max (- (point) 3) (point-min)))
-                (delete-char -1))))
-        ("*"
-         (cond
-          ((save-match-data
-             (and (looking-back "\\(?:[[:space:]]\\|\s\\)\\(?:_\\|\\*\\)"
-                                (max (- (point) 2) (point-min)))
-                  (not (looking-at "[[:space:]]\\|\s"))))
-           ;; Possible beginning of emphasis
-           (and
-            (save-excursion
-              (when (and (re-search-forward (regexp-quote (match-string 0))
-                                            (line-end-position) t)
-                         (looking-at "[[:space]]\\|\s")
-                         (not (looking-back "\\(?:[[:space]]\\|\s\\)\\(?:_\\|\\*\\)"
-                                            (max (- (point) 2) (point-min)))))
-                (delete-char -1) (insert "/") t))
-            (progn (delete-char -1) (insert "/"))))
-          ((save-excursion
-             (ignore-errors (backward-char 2))
-             (looking-at "\\(?:$\\|\\`\\)\n\\*[[:space:]]"))
-           ;; Bullet point, replace with hyphen
-           (delete-char -1) (insert "-"))))))
-    (buffer-string)))
-
-(defun gptel--replace-source-marker (num-ticks &optional end)
-  "Replace markdown style backticks with Org equivalents.
-
-NUM-TICKS is the number of backticks being replaced.  If END is
-true these are \"ending\" backticks.
-
-This is intended for use in the markdown to org stream converter."
-  (let ((from (match-beginning 0)))
-    (delete-region from (point))
-    (if (and (= num-ticks 3)
-             (save-excursion (beginning-of-line)
-                             (skip-chars-forward " \t")
-                             (eq (point) from)))
-        (insert (if end "#+end_src" "#+begin_src "))
-      (insert "="))))
-
-(defun gptel--stream-convert-markdown->org ()
-  "Return a Markdown to Org converter.
-
-This function parses a stream of Markdown text to Org
-continuously when it is called with successive chunks of the
-text stream."
-  (letrec ((in-src-block nil)           ;explicit nil to address BUG #183
-           (temp-buf (generate-new-buffer-name "*gptel-temp*"))
-           (start-pt (make-marker))
-           (ticks-total 0)
-           (cleanup-fn
-            (lambda (&rest _)
-              (when (buffer-live-p (get-buffer temp-buf))
-                (set-marker start-pt nil)
-                (kill-buffer temp-buf))
-              (remove-hook 'gptel-post-response-functions cleanup-fn))))
-    (add-hook 'gptel-post-response-functions cleanup-fn)
-    (lambda (str)
-      (let ((noop-p) (ticks 0))
-        (with-current-buffer (get-buffer-create temp-buf)
-          (save-excursion (goto-char (point-max)) (insert str))
-          (when (marker-position start-pt) (goto-char start-pt))
-          (when in-src-block (setq ticks ticks-total))
-          (save-excursion
-            (while (re-search-forward "`\\|\\*\\{1,2\\}\\|_" nil t)
-              (pcase (match-string 0)
-                ("`"
-                 ;; Count number of consecutive backticks
-                 (backward-char)
-                 (while (and (char-after) (eq (char-after) ?`))
-                   (forward-char)
-                   (if in-src-block (cl-decf ticks) (cl-incf ticks)))
-                 ;; Set the verbatim state of the parser
-                 (if (and (eobp)
-                          ;; Special case heuristic: If the response ends with
-                          ;; ^``` we don't wait for more input.
-                          ;; FIXME: This can have false positives.
-                          (not (save-excursion (beginning-of-line)
-                                               (looking-at "^```$"))))
-                     ;; End of input => there could be more backticks coming,
-                     ;; so we wait for more input
-                     (progn (setq noop-p t) (set-marker start-pt (match-beginning 0)))
-                   ;; We reached a character other than a backtick
-                   (cond
-                    ;; Ticks balanced, end src block
-                    ((= ticks 0)
-                     (progn (setq in-src-block nil)
-                            (gptel--replace-source-marker ticks-total 'end)))
-                    ;; Positive number of ticks, start an src block
-                    ((and (> ticks 0) (not in-src-block))
-                     (setq ticks-total ticks
-                           in-src-block t)
-                     (gptel--replace-source-marker ticks-total))
-                    ;; Negative number of ticks or in a src block already,
-                    ;; reset ticks
-                    (t (setq ticks ticks-total)))))
-                ;; Handle other chars: emphasis, bold and bullet items
-                ((and "**" (guard (not in-src-block)))
-                 (cond
-                  ((looking-at "\\*\\(?:[[:word:]]\\|\s\\)")
-                   (delete-char 1))
-                  ((looking-back "\\(?:[[:word:]]\\|\s\\)\\*\\{2\\}"
-                                 (max (- (point) 3) (point-min)))
-                   (delete-char -1))))
-                ((and "*" (guard (not in-src-block)))
-                 (save-match-data
-                   (save-excursion
-                     (ignore-errors (backward-char 2))
-                     (cond
-                      ((or (looking-at
-                            "[^[:space:][:punct:]\n]\\(?:_\\|\\*\\)\\(?:[[:space:][:punct:]]\\|$\\)")
-                           (looking-at
-                            "\\(?:[[:space:][:punct:]]\\)\\(?:_\\|\\*\\)\\([^[:space:][:punct:]]\\|$\\)"))
-                       ;; Emphasis, replace with slashes
-                       (forward-char 2) (delete-char -1) (insert "/"))
-                      ((looking-at "\\(?:$\\|\\`\\)\n\\*[[:space:]]")
-                       ;; Bullet point, replace with hyphen
-                       (forward-char 2) (delete-char -1) (insert "-")))))))))
-          (if noop-p
-              (buffer-substring (point) start-pt)
-            (prog1 (buffer-substring (point) (point-max))
-                   (set-marker start-pt (point-max)))))))))
 
 
 ;; Response tweaking commands
