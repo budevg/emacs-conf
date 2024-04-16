@@ -13,5 +13,5 @@
      :stream t
      ))
   (setq-default gptel-backend gptel--gemini
-                gptel-model "gemini-pro")
+                gptel-model "gemini-1.5-pro-latest")
   )
