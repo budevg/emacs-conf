@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: nixmain
+# key: nixmain
+# --
+#! /usr/bin/env nix-shell
+#! nix-shell -i bash -p bash
+
+$0
