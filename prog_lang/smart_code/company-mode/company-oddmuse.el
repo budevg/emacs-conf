@@ -1,6 +1,6 @@
-;;; company-oddmuse.el --- company-mode completion back-end for oddmuse-mode
+;;; company-oddmuse.el --- company-mode completion backend for oddmuse-mode  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2009-2011, 2014  Free Software Foundation, Inc.
+;; Copyright (C) 2009-2011, 2013-2016, 2022, 2023  Free Software Foundation, Inc.
 
 ;; Author: Nikolaj Schumacher
 
@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 
 ;;; Commentary:
@@ -27,7 +27,7 @@
 
 (require 'company)
 (require 'cl-lib)
-(eval-when-compile (require 'yaooddmuse nil t))
+(eval-when-compile (require 'yaoddmuse nil t))
 (eval-when-compile (require 'oddmuse nil t))
 
 (defvar company-oddmuse-link-regexp
@@ -41,14 +41,14 @@
                     (oddmuse-make-completion-table oddmuse-wiki)))))
 
 ;;;###autoload
-(defun company-oddmuse (command &optional arg &rest ignored)
-  "`company-mode' completion back-end for `oddmuse-mode'."
+(defun company-oddmuse (command &optional arg &rest _ignored)
+  "`company-mode' completion backend for `oddmuse-mode'."
   (interactive (list 'interactive))
   (cl-case command
     (interactive (company-begin-backend 'company-oddmuse))
     (prefix (let ((case-fold-search nil))
               (and (memq major-mode '(oddmuse-mode yaoddmuse-mode))
-                   (looking-back company-oddmuse-link-regexp (point-at-bol))
+                   (looking-back company-oddmuse-link-regexp (line-beginning-position))
                    (or (match-string 1)
                        (match-string 2)))))
     (candidates (all-completions arg (company-oddmuse-get-page-table)))))

@@ -1,6 +1,6 @@
-;;; company-bbdb.el --- company-mode completion back-end for BBDB in message-mode
+;;; company-bbdb.el --- company-mode completion backend for BBDB in message-mode  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2013-2014  Free Software Foundation, Inc.
+;; Copyright (C) 2013-2016, 2020, 2023  Free Software Foundation, Inc.
 
 ;; Author: Jan Tatarik <jan.tatarik@gmail.com>
 
@@ -17,31 +17,45 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 (require 'company)
 (require 'cl-lib)
 
 (declare-function bbdb-record-get-field "bbdb")
-(declare-function bbdb-records "bbdb")
 (declare-function bbdb-dwim-mail "bbdb-com")
-(declare-function bbdb-search "bbdb-com")
+
+(defgroup company-bbdb nil
+  "Completion backend for BBDB."
+  :group 'company)
+
+(defcustom company-bbdb-modes '(message-mode)
+  "Major modes in which `company-bbdb' may complete."
+  :type '(repeat (symbol :tag "Major mode"))
+  :package-version '(company . "0.8.8"))
+
+(defun company-bbdb--candidates (arg)
+  (cl-mapcan (lambda (record)
+               (mapcar (lambda (mail) (bbdb-dwim-mail record mail))
+                       (bbdb-record-get-field record 'mail)))
+             (eval `(let ((arg ,arg))
+                      (bbdb-search (bbdb-records) :all-names arg :mail arg))
+                   t)))
 
 ;;;###autoload
-(defun company-bbdb (command &optional arg &rest ignore)
-  "`company-mode' completion back-end for `bbdb'."
+(defun company-bbdb (command &optional arg &rest _ignore)
+  "`company-mode' completion backend for BBDB."
   (interactive (list 'interactive))
   (cl-case command
     (interactive (company-begin-backend 'company-bbdb))
-    (prefix (and (eq major-mode 'message-mode)
+    (prefix (and (memq major-mode company-bbdb-modes)
                  (featurep 'bbdb-com)
-                 (looking-back "^\\(To\\|Cc\\|Bcc\\):.*"
-                               (line-beginning-position))
-                 (company-grab-symbol)))
-    (candidates (cl-mapcan (lambda (record)
-                             (mapcar (lambda (mail) (bbdb-dwim-mail record mail))
-                                     (bbdb-record-get-field record 'mail)))
-                           (bbdb-search (bbdb-records) arg nil arg)))
+                 (let ((case-fold-search t))
+                   (looking-back
+                    "^\\([^ :]*-\\)?\\(To\\|B?Cc\\|From\\):.*? *\\([^,;]*\\)"
+                    (line-beginning-position)))
+                 (match-string-no-properties 3)))
+    (candidates (company-bbdb--candidates arg))
     (sorted t)
     (no-cache t)))
 

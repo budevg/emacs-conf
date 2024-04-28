@@ -1,6 +1,6 @@
-;;; company-css.el --- company-mode completion back-end for css-mode  -*- lexical-binding: t -*-
+;;; company-css.el --- company-mode completion backend for css-mode  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2009, 2011, 2014  Free Software Foundation, Inc.
+;; Copyright (C) 2009-2011, 2013-2015, 2018  Free Software Foundation, Inc.
 
 ;; Author: Nikolaj Schumacher
 
@@ -17,14 +17,18 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+;;
+;; In Emacs >= 26, company-capf is used instead.
 
 ;;; Code:
 
 (require 'company)
 (require 'cl-lib)
+
+(declare-function web-mode-language-at-pos "web-mode" (&optional pos))
 
 (defconst company-css-property-alist
   ;; see http://www.w3.org/TR/CSS21/propidx.html
@@ -410,15 +414,18 @@ Returns \"\" if no property found, but feasible at this position."
   "A regular expression matching CSS tags.")
 
 ;;;###autoload
-(defun company-css (command &optional arg &rest ignored)
-  "`company-mode' completion back-end for `css-mode'."
+(defun company-css (command &optional arg &rest _ignored)
+  "`company-mode' completion backend for `css-mode'."
   (interactive (list 'interactive))
   (cl-case command
     (interactive (company-begin-backend 'company-css))
-    (prefix (and (derived-mode-p 'css-mode)
+    (prefix (and (or (derived-mode-p 'css-mode)
+                     (and (derived-mode-p 'web-mode)
+                          (string= (web-mode-language-at-pos) "css")))
                  (or (company-grab company-css-tag-regexp 1)
                      (company-grab company-css-pseudo-regexp 1)
-                     (company-grab company-css-property-value-regexp 2)
+                     (company-grab company-css-property-value-regexp 2
+                                   (line-beginning-position))
                      (company-css-grab-property))))
     (candidates
      (cond
@@ -426,7 +433,8 @@ Returns \"\" if no property found, but feasible at this position."
        (all-completions arg company-css-html-tags))
       ((company-grab company-css-pseudo-regexp 1)
        (all-completions arg company-css-pseudo-classes))
-      ((company-grab company-css-property-value-regexp 2)
+      ((company-grab company-css-property-value-regexp 2
+                     (line-beginning-position))
        (all-completions arg
                         (company-css-property-values
                          (company-grab company-css-property-value-regexp 1))))

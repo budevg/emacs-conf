@@ -1,6 +1,6 @@
-;;; company-nxml.el --- company-mode completion back-end for nxml-mode
+;;; company-nxml.el --- company-mode completion backend for nxml-mode  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2009-2011, 2013  Free Software Foundation, Inc.
+;; Copyright (C) 2009-2011, 2013-2015, 2017-2018, 2023  Free Software Foundation, Inc.
 
 ;; Author: Nikolaj Schumacher
 
@@ -17,11 +17,12 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 
 ;;; Commentary:
 ;;
+;; In Emacs >= 26, company-capf is used instead.
 
 ;;; Code:
 
@@ -70,12 +71,11 @@
 
 (defmacro company-nxml-prepared (&rest body)
   (declare (indent 0) (debug t))
-  `(let ((lt-pos (save-excursion (search-backward "<" nil t)))
-         xmltok-dtd)
+  `(let ((lt-pos (save-excursion (search-backward "<" nil t))))
      (when (and lt-pos (= (rng-set-state-after lt-pos) lt-pos))
        ,@body)))
 
-(defun company-nxml-tag (command &optional arg &rest ignored)
+(defun company-nxml-tag (command &optional arg &rest _ignored)
   (cl-case command
     (prefix (and (derived-mode-p 'nxml-mode)
                  rng-validate-mode
@@ -85,7 +85,7 @@
                   arg (rng-match-possible-start-tag-names))))
     (sorted t)))
 
-(defun company-nxml-attribute (command &optional arg &rest ignored)
+(defun company-nxml-attribute (command &optional arg &rest _ignored)
   (cl-case command
     (prefix (and (derived-mode-p 'nxml-mode)
                  rng-validate-mode
@@ -98,12 +98,12 @@
                        arg (rng-match-possible-attribute-names)))))
     (sorted t)))
 
-(defun company-nxml-attribute-value (command &optional arg &rest ignored)
+(defun company-nxml-attribute-value (command &optional arg &rest _ignored)
   (cl-case command
     (prefix (and (derived-mode-p 'nxml-mode)
                  rng-validate-mode
                  (and (memq (char-after) '(?' ?\" ?\  ?\t ?\n)) ;; outside word
-                      (looking-back company-nxml-in-attribute-value-regexp)
+                      (looking-back company-nxml-in-attribute-value-regexp nil)
                       (or (match-string-no-properties 4)
                           (match-string-no-properties 5)
                           ""))))
@@ -120,8 +120,8 @@
                          arg (rng-match-possible-value-strings))))))))
 
 ;;;###autoload
-(defun company-nxml (command &optional arg &rest ignored)
-  "`company-mode' completion back-end for `nxml-mode'."
+(defun company-nxml (command &optional arg &rest _ignored)
+  "`company-mode' completion backend for `nxml-mode'."
   (interactive (list 'interactive))
   (cl-case command
     (interactive (company-begin-backend 'company-nxml))
