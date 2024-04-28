@@ -10,3 +10,9 @@
 
 (if (fboundp 'global-eldoc-mode)
     (global-eldoc-mode 0))
+
+(use-package nov
+  :mode ("\\.epub\\'" . nov-mode)
+  :config
+  (setq nov-variable-pitch nil)
+  )

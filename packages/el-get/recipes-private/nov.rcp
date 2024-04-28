@@ -1,0 +1,7 @@
+(:name nov
+       :description "Major mode for reading EPUBs in Emacs"
+       :type git
+       :url "https://depp.brause.cc/nov.el.git"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "doc_lang")))
+       )
