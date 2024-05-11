@@ -431,6 +431,7 @@ Each alist item consists of the identifier and full path."
     (define-key map (kbd "t") 'nov-goto-toc)
     (define-key map (kbd "l") 'nov-history-back)
     (define-key map (kbd "r") 'nov-history-forward)
+    (define-key map (kbd "M-I") 'nov-toggle-images)
     (define-key map (kbd "TAB") 'shr-next-link)
     (define-key map (kbd "M-TAB") 'shr-previous-link)
     (define-key map (kbd "<backtab>") 'shr-previous-link)
@@ -513,7 +514,7 @@ This function honors `shr-max-image-proportion' if possible."
                       (not (fboundp 'imagemagick-types)))
                   nil
                 'imagemagick)))
-    (if (not (display-graphic-p))
+    (if (or (not (display-graphic-p)) shr-inhibit-images)
         (insert alt)
       (seq-let (x1 y1 x2 y2) (window-inside-pixel-edges
                               (get-buffer-window (current-buffer)))
@@ -1035,6 +1036,14 @@ See also `nov-bookmark-make-record'."
 (defun nov-misearch-setup ()
   (setq-local multi-isearch-next-buffer-function #'nov-misearch-next-buffer))
 (add-hook 'nov-mode-hook #'nov-misearch-setup)
+
+(defun nov-toggle-images ()
+  "Toggle whether or not to display images."
+  (interactive nil nov-mode)
+  (setq shr-inhibit-images (not shr-inhibit-images))
+  (nov-render-document)
+  (message "Images are now %s"
+           (if shr-inhibit-images "off" "on")))
 
 (provide 'nov)
 ;;; nov.el ends here
