@@ -15,4 +15,6 @@
   :mode ("\\.epub\\'" . nov-mode)
   :config
   (setq nov-variable-pitch nil)
-  )
+  :bind (:map nov-mode-map
+              ("<home>" . nil)
+              ("<end>" . nil)))
