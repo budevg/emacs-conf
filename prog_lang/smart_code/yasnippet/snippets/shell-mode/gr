@@ -2,4 +2,4 @@
 # name: gr
 # key: gr
 # --
-rsync -avR \`git ls-files -m\` ${1:host}:${2:dst}$0
+rsync --progress -avR \`git ls-files -m\` ${1:host}:${2:dst}$0

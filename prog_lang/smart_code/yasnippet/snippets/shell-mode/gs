@@ -2,4 +2,4 @@
 # name: gs
 # key: gs
 # --
-rsync -avR \`git diff --name-only\` \`git diff --name-only --cached\` $0
+rsync --progress -avR \`git diff --name-only\` \`git diff --name-only --cached\` $0
