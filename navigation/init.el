@@ -228,10 +228,15 @@ Fall back to `completing-read' otherwise."
          )
   )
 
-(autoload 'engine/search-google "engine-mode.el" nil t)
-(eval-after-load "engine-mode"
-  '(progn
-     (defengine google
-       "http://www.google.com/search?ie=utf-8&oe=utf-8&q=%s")
-     ))
-(global-set-key (kbd "C-x s") 'engine/search-google)
+(use-package engine-mode
+  :config
+  (defengine github
+             "https://github.com/search?q=%s"
+             :browser 'browse-url-chromium)
+  (defengine youtube
+             "https://vid.puffyan.us/search?q=%s&date=year&type=video&duration=long&sort=relevance"
+             :browser 'eww-browse-url)
+  :bind (("C-f v v" . engine/search-youtube)
+         ("C-f v g" . engine/search-github)
+         )
+  )
