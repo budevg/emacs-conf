@@ -45,49 +45,43 @@ Fall back to `completing-read' otherwise."
   (let ((new-name (read-from-minibuffer "Rename frame (to new name): ")))
     (setq frame-title-format new-name)))
 
+(use-package perspective
+  :custom
+  (persp-mode-prefix-key (kbd "M-z"))
+  :config
+  (setq persp-initial-frame-name "0"
+        persp-modestring-short t
+        )
 
-(autoload 'elscreen-start "elscreen" nil t)
-(eval-after-load "elscreen"
-  '(progn
-     (defun elscreen-get-screen-numbers-with-emphasis ()
-       ""
-       (interactive)
-       (let ((elscreens (sort (elscreen-get-screen-list) '<))
-             (emphased ""))
+  (defun persp-emph ()
+    (interactive)
+    (let* ((names (persp-names))
+           (msg (string-join (mapcar (lambda (s)
+                                       (if (string= s (persp-current-name))
+                                           (propertize s 'face 'font-lock-warning-face)
+                                         s))
+                                     names)
+                             " ")))
+      (message msg)
+      ))
 
-         (dolist (s elscreens)
-           (setq emphased
-                 (concat emphased (if (= (elscreen-get-current-screen) s)
-                                      (propertize (number-to-string s)
-                                                  ;;'face 'custom-variable-tag) " ")
-                                                  ;;'face 'info-title-3)
-                                                  'face 'font-lock-warning-face)
-                                    ;;'face 'secondary-selection)
-                                    (number-to-string s))
-                         " ")))
-         (message "screens: %s" emphased)))
+  (defun persp-emph-prev ()
+    (interactive)
+    (persp-prev)
+    (persp-emph))
+
+  (defun persp-emph-next ()
+    (interactive)
+    (persp-next)
+    (persp-emph))
 
 
-     (defun elscreen-emph-prev ()
-       (interactive)
-       (elscreen-previous)
-       (elscreen-get-screen-numbers-with-emphasis))
+  (persp-mode)
+  :bind (("M-[" . persp-emph-prev)
+         ("M-]" . persp-emph-next)
+         )
 
-     (defun elscreen-emph-next ()
-       (interactive)
-       (elscreen-next)
-       (elscreen-get-screen-numbers-with-emphasis))
-
-     (setq elscreen-display-tab nil)
-     (setq elscreen-prefix-key "\M-z")
-
-     (global-set-key (kbd "M-[") 'elscreen-emph-prev)
-     (global-set-key (kbd "M-]") 'elscreen-emph-next)
-     ))
-
-(global-set-key (kbd "M-[") (lambda () (interactive) (elscreen-start)))
-(global-set-key (kbd "M-]") (lambda () (interactive) (elscreen-start)))
-
+  )
 
 (autoload 'nav "nav" nil t)
 (global-set-key "\M-`" 'nav)
@@ -125,12 +119,12 @@ Fall back to `completing-read' otherwise."
 (defun app-open-file-at-point ()
   (interactive)
   (let* ((file-path (ffap-file-at-point))
-        (open-exec (or (executable-find "xdg-open")
-                       (executable-find "gnome-open")
-                       (executable-find "nautilus")
-                       (executable-find "thunar")
-                       ))
-        (url-path (ffap-url-at-point)))
+         (open-exec (or (executable-find "xdg-open")
+                        (executable-find "gnome-open")
+                        (executable-find "nautilus")
+                        (executable-find "thunar")
+                        ))
+         (url-path (ffap-url-at-point)))
     (cond
      (url-path (browse-url url-path))
      (file-path (call-process-shell-command
@@ -147,15 +141,15 @@ Fall back to `completing-read' otherwise."
   (call-process (in-emacs-d "navigation/pycscope.py") nil nil nil "-R"))
 
 
-; ace-jump - quickly navigate to any character
+                                        ; ace-jump - quickly navigate to any character
 (autoload 'ace-jump-char-mode "ace-jump-mode.el" nil t)
 (setq ace-jump-mode-case-sensitive-search nil)
 (global-set-key (kbd "C-x j") 'ace-jump-char-mode)
-;   only use lowercase letters for lookup
+                                        ;   only use lowercase letters for lookup
 (setq ace-jump-mode-move-keys
-  (nconc (cl-loop for i from ?a to ?z collect i)))
+      (nconc (cl-loop for i from ?a to ?z collect i)))
 
-; find file in projects
+                                        ; find file in projects
 (autoload 'find-file-in-project "find-file-in-project.el" nil t)
 ;; Function to create new functions that look for a specific pattern
 (defun ffip-create-pattern-file-finder (&rest patterns)
@@ -200,8 +194,8 @@ Fall back to `completing-read' otherwise."
            ag-arg-filesearch "--color never --smart-case --files -g"
            )
      (define-key ag-mode-map (kbd "q")
-       (lambda () (interactive)
-         (let (kill-buffer-query-functions) (kill-buffer))))))
+                 (lambda () (interactive)
+                   (let (kill-buffer-query-functions) (kill-buffer))))))
 
 (defun ag-here (string)
   (interactive (list (read-from-minibuffer "Search string: " (ag/dwim-at-point))))

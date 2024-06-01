@@ -1,0 +1,6 @@
+(:name perspective
+       :type github
+       :description "switch between named perspectives of the editor"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+       :pkgname "nex3/perspective-el")
