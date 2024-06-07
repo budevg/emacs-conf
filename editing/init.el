@@ -11,6 +11,18 @@
 (size-indication-mode t)
 
 (set-default 'fill-column 80)
+(defun unfill-toggle ()
+  "Toggle filling/unfilling of the current region.
+Operates on the current paragraph if no region is active."
+  (interactive)
+  (let (deactivate-mark
+        (fill-column
+         (if (eq last-command this-command)
+             (progn (setq this-command nil)
+                    most-positive-fixnum)
+           fill-column)))
+    (call-interactively 'fill-paragraph)))
+(define-key esc-map "q" 'unfill-toggle)
 
 (global-hi-lock-mode 1)
 

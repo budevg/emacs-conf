@@ -29,6 +29,7 @@
       ido-use-virtual-buffers t
       ido-handle-duplicate-virtual-buffers 2
       ;;ido-max-prospects 10
+      use-short-answers t
       )
 (icomplete-mode t)
 
@@ -38,8 +39,6 @@
 (global-set-key [(meta pause)] 'delete-window)
 (global-set-key [f5]  'delete-other-windows)
 (global-set-key [(control f5)]  'make-frame-command)
-
-(fset 'yes-or-no-p 'y-or-n-p)
 
 (autoload 'buf-move-up "buffer-move" nil t)
 (autoload 'buf-move-down "buffer-move" nil t)
