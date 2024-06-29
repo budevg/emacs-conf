@@ -3,5 +3,5 @@
        :type github
        :pkgname "abrochard/kubel"
        :build `(,(concat "cp *.el "
-                         (in-emacs-d "applications/kubernetes-el")))
+                         (in-emacs-d "applications/kubernetes")))
        )
