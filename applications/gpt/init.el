@@ -6,12 +6,13 @@
   (autoload 'gptel-curl-get-response "gptel-curl" nil t)
   (autoload 'gptel-make-gemini "gptel-gemini" nil t)
   (autoload 'gptel-menu "gptel-transient" nil t)
-  (defvar gptel--gemini
+  (setq gptel-gemini-backend
     (gptel-make-gemini
      "Gemini"
      :key 'gptel-api-key
      :stream t
+     :models '("gemini-1.5-pro-latest" "gemini-1.5-flash-latest")
      ))
-  (setq-default gptel-backend gptel--gemini
+  (setq-default gptel-backend gptel-gemini-backend
                 gptel-model "gemini-1.5-pro-latest")
   )
