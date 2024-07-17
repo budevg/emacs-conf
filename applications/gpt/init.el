@@ -1,11 +1,12 @@
 (use-package gptel
-  :commands (gptel gptel-send)
+  :commands (gptel gptel-send gptel-menu)
   :bind (("C-f g" . gptel-send)
          ("C-f G" . gptel-menu))
   :config
-  (autoload 'gptel-curl-get-response "gptel-curl" nil t)
-  (autoload 'gptel-make-gemini "gptel-gemini" nil t)
-  (autoload 'gptel-menu "gptel-transient" nil t)
+  (require 'gptel-curl)
+  (require 'gptel-gemini)
+  (require 'gptel-transient)
+  (require 'gptel-context)
   (setq gptel-gemini-backend
     (gptel-make-gemini
      "Gemini"

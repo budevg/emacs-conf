@@ -101,9 +101,7 @@ Or is it the other way around?"
   "Set a generic refactor/rewrite message for the buffer."
   (if (derived-mode-p 'prog-mode)
       (format "You are a %s programmer. Refactor the following code. Generate only code, no explanation."
-              (thread-last (symbol-name major-mode)
-                           (string-remove-suffix "-mode")
-                           (string-remove-suffix "-ts")))
+              (gptel--strip-mode-suffix major-mode))
     (format "You are a prose editor. Rewrite the following text to be more professional.")))
 
 (defvar gptel--crowdsourced-prompts-url
@@ -164,9 +162,30 @@ which see."
 
 ;; * Transient classes and methods for gptel
 
-(defclass gptel--switches (transient-lisp-variable)
-  ((display-if-true :initarg :display-if-true :initform "for this buffer")
-   (display-if-false :initarg :display-if-false :initform "globally"))
+(defclass gptel-lisp-variable (transient-lisp-variable)
+  ((display-nil :initarg :display-nil)  ;String to display if value if nil
+   (display-map :initarg :display-map :initform nil)) ;Display string from alist display-map
+  "Lisp variables that show :display-nil instead of nil.")
+
+(cl-defmethod transient-format-value ((obj gptel-lisp-variable))
+  (let ((display-value
+         (with-slots (value display-nil display-map) obj
+           (cond ((null value) display-nil)
+                 (display-map (cdr (assoc value display-map)))
+                 (t value)))))
+    (propertize
+     (if (stringp display-value) display-value (prin1-to-string display-value))
+     'face 'transient-value)))
+
+(cl-defmethod transient-infix-set ((obj gptel-lisp-variable) value)
+  (funcall (oref obj set-value)
+           (oref obj variable)
+           (oset obj value value)
+           gptel--set-buffer-locally))
+
+(defclass gptel--switches (gptel-lisp-variable)
+  ((display-if-true :initarg :display-if-true :initform "True")
+   (display-if-false :initarg :display-if-false :initform "False"))
   "Boolean lisp variable class for gptel-transient.")
 
 (cl-defmethod transient-infix-read ((obj gptel--switches))
@@ -184,21 +203,17 @@ which see."
         (propertize display-if-true
                     'face (if value 'transient-value 'transient-inactive-value))))))
 
-(defclass gptel-lisp-variable (transient-lisp-variable)
-  ((display-nil :initarg :display-nil))
-  "Lisp variables that show :display-nil instead of nil.")
+(defclass gptel--scope (gptel--switches)
+  ((display-if-true :initarg :display-if-true :initform "for this buffer")
+   (display-if-false :initarg :display-if-false :initform "globally"))
+  "Singleton lisp variable class for `gptel--set-buffer-locally'.
 
-(cl-defmethod transient-format-value
-  ((obj gptel-lisp-variable))
-  (propertize (prin1-to-string (or (oref obj value)
-                                   (oref obj display-nil)))
-              'face 'transient-value))
+This is used only for setting this variable via `gptel-menu'.")
 
-(cl-defmethod transient-infix-set ((obj gptel-lisp-variable) value)
+(cl-defmethod transient-infix-set ((obj gptel--scope) value)
   (funcall (oref obj set-value)
            (oref obj variable)
-           (oset obj value value)
-           gptel--set-buffer-locally))
+           (oset obj value value)))
 
 (defclass gptel-provider-variable (transient-lisp-variable)
   ((model       :initarg :model)
@@ -274,14 +289,24 @@ Also format its value in the Transient menu."
    [""
     "Instructions"
     ("s" "Set system message" gptel-system-prompt :transient t)
-    (gptel--infix-add-directive)]]
-  [["Model Parameters"
+    (gptel--infix-add-directive)]
+   [""
+    "Context"
+    (gptel--infix-context-add-region)
+    (gptel--infix-context-add-buffer)
+    (gptel--infix-context-add-file)
+    (gptel--suffix-context-buffer)]]
+  [["Request Parameters"
     :pad-keys t
     (gptel--infix-variable-scope)
     (gptel--infix-provider)
     (gptel--infix-max-tokens)
-    (gptel--infix-num-messages-to-send)
-    (gptel--infix-temperature :if (lambda () gptel-expert-commands))]
+    (gptel--infix-num-messages-to-send
+     :if (lambda () (or gptel-mode gptel-track-response)))
+    (gptel--infix-temperature :if (lambda () gptel-expert-commands))
+    (gptel--infix-use-context)
+    (gptel--infix-track-response
+     :if (lambda () (and gptel-expert-commands (not gptel-mode))))]
    ["Prompt from"
     ("m" "Minibuffer instead" "m")
     ("y" "Kill-ring instead" "y")
@@ -452,13 +477,41 @@ Customize `gptel-directives' for task-specific prompts."
 
 ;; * Transient Infixes
 
+;; ** Infixes for context aggregation
+
+(transient-define-infix gptel--infix-use-context ()
+  "Describe target destination for context injection.
+
+gptel will include with the LLM request any additional context
+added with `gptel-add'.  This context can be ignored, included
+with the system message or included with the user prompt.
+
+Where in the request this context is included depends on the
+value of `gptel-use-context', set from here."
+  :description "Include context"
+  :class 'gptel-lisp-variable
+  :variable 'gptel-use-context
+  :format " %k %d %v"
+  :set-value #'gptel--set-with-scope
+  :display-nil "No"
+  :display-map '((nil    . "No")
+                 (system . "with system message")
+                 (user   . "with user prompt"))
+  :key "-i"
+  :reader (lambda (prompt &rest _)
+            (let* ((choices '(("No"                  . nil)
+                              ("with system message" . system)
+                              ("with user prompt"    . user)))
+                   (destination (completing-read prompt choices nil t)))
+              (cdr (assoc destination choices)))))
+
 ;; ** Infixes for model parameters
 
 (transient-define-infix gptel--infix-variable-scope ()
   "Set gptel's model parameters and system message in this buffer or globally."
   :argument "scope"
   :variable 'gptel--set-buffer-locally
-  :class 'gptel--switches
+  :class 'gptel--scope
   :format "  %k %d %v"
   :key "="
   :description (propertize "Set" 'face 'transient-inactive-argument))
@@ -522,6 +575,68 @@ responses."
   :key "-t"
   :prompt "Temperature controls the response randomness (0.0-2.0, leave empty for default): "
   :reader 'gptel--transient-read-variable)
+
+(transient-define-infix gptel--infix-track-response ()
+  "Distinguish between user messages and LLM responses.
+
+When creating a prompt to send to the LLM, gptel distinguishes
+between text entered by the user and past LLM responses.  This is
+required for multi-turn conversations, and is always the case in
+dedicated chat buffers (in `gptel-mode').
+
+In regular buffers, you can toggle this behavior here or by
+customizing `gptel-track-response'.  When response tracking is
+turned off, all text will be assigned the \"user\" role when
+querying the LLM."
+  :description "Track LLM responses"
+  :class 'gptel--switches
+  :variable 'gptel-track-response
+  :set-value #'gptel--set-with-scope
+  :display-if-true "Yes"
+  :display-if-false "No"
+  :key "-d")
+
+;; ** Infixes for adding and removing context
+
+(declare-function gptel-context--at-point "gptel-context")
+(declare-function gptel-add "gptel-context")
+
+(transient-define-suffix gptel--infix-context-add-region ()
+  "Add current region to gptel's context."
+  :transient 'transient--do-stay
+  :key "-r"
+  :if (lambda () (or (use-region-p)
+                (and (fboundp 'gptel-context--at-point)
+                     (gptel-context--at-point))))
+  :description
+  (lambda ()
+    (if (and (fboundp 'gptel-context--at-point)
+             (gptel-context--at-point))
+        "Remove context at point"
+      "Add region to context"))
+  (interactive)
+  (gptel-add)
+  (transient-setup))
+
+(transient-define-suffix gptel--infix-context-add-buffer ()
+  "Add a buffer to gptel's context."
+  :transient 'transient--do-stay
+  :key "-b"
+  :description "Add a buffer to context"
+  (interactive)
+  (gptel-add '(4))
+  (transient-setup))
+
+(declare-function gptel-add-file "gptel-context")
+
+(transient-define-suffix gptel--infix-context-add-file ()
+  "Add a file to gptel's context."
+  :transient 'transient--do-stay
+  :key "-f"
+  :description "Add a file to context"
+  (interactive)
+  (call-interactively #'gptel-add-file)
+  (transient-setup))
 
 ;; ** Infix for the refactor/rewrite system message
 
@@ -845,6 +960,49 @@ When LOCAL is non-nil, set the system message only in the current buffer."
                                                     gptel--set-buffer-locally)))
                          (funcall quit-to-menu)))
         (local-set-key (kbd "C-c C-k") quit-to-menu)))))
+
+;; ** Suffix for displaying and removing context
+(declare-function gptel-context--buffer-setup "gptel-context")
+(declare-function gptel-context--collect "gptel-context")
+
+(transient-define-suffix gptel--suffix-context-buffer ()
+  "Display all contexts from all buffers & files."
+  :transient 'transient--do-exit
+  :key " C"
+  :if (lambda () gptel-context--alist)
+  :description
+  (lambda ()
+    (pcase-let*
+        ((contexts (and gptel-context--alist (gptel-context--collect)))
+         (buffer-count (length contexts))
+         (`(,file-count ,ov-count)
+          (if (> buffer-count 0)
+              (cl-loop for (buf-file . ovs) in contexts
+                       if (bufferp buf-file)
+                       sum (length ovs) into ov-count
+                       else count (stringp buf-file) into file-count
+                       finally return (list file-count ov-count))
+            (list 0 0))))
+      (concat "Inspect "
+              (format
+               (propertize "(%s)" 'face 'transient-delimiter)
+               (propertize
+                (concat
+                 (and (> ov-count 0)
+                      (format "%d region%s in %d buffer%s"
+                              ov-count (if (> ov-count 1) "s" "")
+                              (- buffer-count file-count)
+                              (if (> ( - buffer-count file-count) 1) "s" "")))
+                 (and (> file-count 0)
+                      (propertize
+                       (format "%s%d file%s"
+                               (if (> ov-count 0) ", " "") file-count
+                               (if (> file-count 1) "s" "")))))
+                'face (if (zerop (length contexts))
+                          'transient-inactive-value
+                        'transient-value))))))
+  (interactive)
+  (gptel-context--buffer-setup))
 
 ;; ** Suffixes for rewriting/refactoring
 

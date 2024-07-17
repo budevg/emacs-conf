@@ -28,6 +28,8 @@
 (eval-when-compile
   (require 'cl-lib))
 
+(declare-function gptel-context--wrap "gptel-context")
+
 ;;; Kagi
 (cl-defstruct (gptel-kagi (:constructor gptel--make-kagi)
                             (:copier nil)
@@ -87,17 +89,20 @@
                  t))))
     (if (and url (string-prefix-p "summarize" gptel-model))
         (list :url url)
-      (if (and (prop-match-p prop)
+      (if (and (or gptel-mode gptel-track-response)
+               (prop-match-p prop)
                (prop-match-value prop))
           (user-error "No user prompt found!")
         (let ((prompts
-               (string-trim
-                (buffer-substring-no-properties (prop-match-beginning prop)
-                                                (prop-match-end prop))
-                (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
-                        (regexp-quote (gptel-prompt-prefix-string)))
-                (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
-                        (regexp-quote (gptel-response-prefix-string))))))
+               (if (or gptel-mode gptel-track-response)
+                   (string-trim
+                    (buffer-substring-no-properties (prop-match-beginning prop)
+                                                    (prop-match-end prop))
+                    (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
+                            (regexp-quote (gptel-prompt-prefix-string)))
+                    (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
+                            (regexp-quote (gptel-response-prefix-string))))
+                 (string-trim (buffer-substring-no-properties (point-min) (point-max))))))
           (pcase-exhaustive gptel-model
             ("fastgpt"
              (setq prompts (list
@@ -117,6 +122,15 @@
                        (list :text prompts)
                      ""))))
           prompts)))))
+
+(cl-defmethod gptel--wrap-user-prompt ((_backend gptel-kagi) prompts)
+  (cond
+   ((plist-get prompts :url)
+    (message "Ignoring gptel context for URL summary request."))
+   ((plist-get prompts :query)
+    (cl-callf gptel-context--wrap (plist-get prompts :query)))
+   ((plist-get prompts :text)
+    (cl-callf gptel-context--wrap (plist-get prompts :text)))))
 
 ;;;###autoload
 (cl-defun gptel-make-kagi

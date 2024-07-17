@@ -27,6 +27,7 @@
 (require 'cl-generic)
 
 (declare-function json-read "json" ())
+(declare-function gptel-context--wrap "gptel-context")
 (defvar json-object-type)
 
 ;;; Ollama
@@ -94,27 +95,36 @@ Intended for internal use only.")
 
 (cl-defmethod gptel--parse-buffer ((_backend gptel-ollama) &optional max-entries)
   (let ((prompts) (prop))
-    (while (and
-            (or (not max-entries) (>= max-entries 0))
-            (setq prop (text-property-search-backward
-                        'gptel 'response
-                        (when (get-char-property (max (point-min) (1- (point)))
-                                                 'gptel)
-                          t))))
-      (push (list :role (if (prop-match-value prop) "assistant" "user")
+    (if (or gptel-mode gptel-track-response)
+        (while (and
+                (or (not max-entries) (>= max-entries 0))
+                (setq prop (text-property-search-backward
+                            'gptel 'response
+                            (when (get-char-property (max (point-min) (1- (point)))
+                                                     'gptel)
+                              t))))
+          (push (list :role (if (prop-match-value prop) "assistant" "user")
+                      :content
+                      (string-trim
+                       (buffer-substring-no-properties (prop-match-beginning prop)
+                                                       (prop-match-end prop))
+                       (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
+                               (regexp-quote (gptel-prompt-prefix-string)))
+                       (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
+                               (regexp-quote (gptel-response-prefix-string)))))
+                prompts)
+          (and max-entries (cl-decf max-entries)))
+      (push (list :role "user"
                   :content
-                  (string-trim
-                   (buffer-substring-no-properties (prop-match-beginning prop)
-                                                   (prop-match-end prop))
-                   (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
-                           (regexp-quote (gptel-prompt-prefix-string)))
-                   (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
-                           (regexp-quote (gptel-response-prefix-string)))))
-            prompts)
-      (and max-entries (cl-decf max-entries)))
+                  (string-trim (buffer-substring-no-properties (point-min) (point-max))))
+            prompts))
     (cons (list :role "system"
                 :content gptel--system-message)
           prompts)))
+
+(cl-defmethod gptel--wrap-user-prompt ((_backend gptel-ollama) prompts)
+  "Wrap the last user prompt in PROMPTS with the context string."
+  (cl-callf gptel-context--wrap (plist-get (car (last prompts)) :content)))
 
 ;;;###autoload
 (cl-defun gptel-make-ollama
