@@ -8,4 +8,6 @@ mkShell {
   buildInputs = [
   ];
   ENV_VAR = "env_var";
+  shellHook = ''
+  '';
 }

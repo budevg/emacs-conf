@@ -1,5 +1,7 @@
 # -*- mode: snippet -*-
 # name: rand
 # key: rand
+# type: command
 # --
-openssl rand -base64 128$0
+(let ((chars "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))
+  (insert (apply 'string (mapcar (lambda (_) (aref chars (random (length chars)))) (number-sequence 1 64)))))
