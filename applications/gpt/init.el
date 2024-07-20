@@ -5,15 +5,28 @@
   :config
   (require 'gptel-curl)
   (require 'gptel-gemini)
+  (require 'gptel-openai)
   (require 'gptel-transient)
   (require 'gptel-context)
-  (setq gptel-gemini-backend
-    (gptel-make-gemini
-     "Gemini"
+
+  (assoc-delete-all "ChatGPT" gptel--known-backends #'equal)
+
+  (gptel-make-gemini
+     "gemini"
      :key 'gptel-api-key
      :stream t
-     :models '("gemini-1.5-pro-latest" "gemini-1.5-flash-latest")
-     ))
-  (setq-default gptel-backend gptel-gemini-backend
+     :models '("gemini-1.5-pro-latest"
+               "gemini-1.5-flash-latest"))
+
+  (gptel-make-openai "open-router"
+  :host "openrouter.ai"
+  :endpoint "/api/v1/chat/completions"
+  :key 'gptel-api-key
+  :stream t
+  :models '("meta-llama/llama-3-8b-instruct:free"
+            "google/gemma-2-9b-it:free"
+            "google/gemma-7b-it:free"))
+
+  (setq-default gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
                 gptel-model "gemini-1.5-pro-latest")
   )
