@@ -9,8 +9,6 @@
   (require 'gptel-transient)
   (require 'gptel-context)
 
-  (assoc-delete-all "ChatGPT" gptel--known-backends #'equal)
-
   (gptel-make-gemini
      "gemini"
      :key 'gptel-api-key
@@ -26,6 +24,8 @@
   :models '("meta-llama/llama-3-8b-instruct:free"
             "google/gemma-2-9b-it:free"
             "google/gemma-7b-it:free"))
+
+  (assoc-delete-all "ChatGPT" gptel--known-backends #'equal)
 
   (setq-default gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
                 gptel-model "gemini-1.5-pro-latest")
