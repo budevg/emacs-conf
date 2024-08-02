@@ -234,3 +234,9 @@ Fall back to `completing-read' otherwise."
          ("C-f v g" . engine/search-github)
          )
   )
+
+(use-package hideshow-org
+  :commands (hs-org/minor-mode)
+  :hook
+  ((prog-mode . hs-org/minor-mode))
+  )
