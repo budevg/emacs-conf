@@ -89,16 +89,10 @@ doc_lang = [Node(path = "doc_lang/init.el",
             ]
 
 
-prog_lang = [Node(path = "prog_lang/comments.el",
-                  msg = "provides comments shortcuts for all programming languages modes"),
-             Node(path = "prog_lang/compiler.el",
-                  msg = "compiler definitions"),
+prog_lang = [Node(path = "prog_lang/init.el",
+                  msg = "init programming languages common stuff"),
              Node(path = "prog_lang/debug/init.el",
                   msg = "debugging definitions"),
-             Node(path = "prog_lang/source-code.el",
-                  msg = "general source code configuration"),
-             Node(path = "prog_lang/scratch.el",
-                  msg = "scratch buffer for each mode"),
              Node(path = "prog_lang/documentation/init.el",
                   msg = "initialize documentation modules"),
              Node(path = "prog_lang/smart_code/syntax_checking/init.el",
