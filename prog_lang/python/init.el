@@ -43,26 +43,6 @@
       (lambda ()
         (define-key yaml-mode-map "\C-m" 'newline-and-indent)))))
 
-(defun flymake-pylint-init ()
-  (let* ((temp-file (flymake-init-create-temp-buffer-copy
-                     'flymake-create-temp-inplace))
-         (local-file (file-relative-name
-                      temp-file
-                      (file-name-directory buffer-file-name))))
-    (list "epylint" (list local-file))))
-
-(eval-after-load "flymake"
-  '(progn
-     (defun flymake-pylint-init ()
-       (let* ((temp-file (flymake-init-create-temp-buffer-copy
-                          'flymake-create-temp-inplace))
-              (local-file (file-relative-name
-                           temp-file
-                           (file-name-directory buffer-file-name))))
-         (list "epylint" (list local-file))))
-     (add-to-list 'flymake-allowed-file-name-masks
-                  '("\\.py\\'" flymake-pylint-init))))
-
 (defun py-pdb-pm ()
   (interactive)
   (end-of-buffer)
