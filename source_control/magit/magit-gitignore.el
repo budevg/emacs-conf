@@ -1,9 +1,9 @@
 ;;; magit-gitignore.el --- Intentionally untracked files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -126,10 +126,10 @@ Rules that are defined in that file affect all local repositories."
                    ;; The untracked section of the status buffer lists
                    ;; directories containing only untracked files.
                    ;; Add those as candidates.
-                   (-filter #'directory-name-p
-                            (magit-list-files
-                             "--other" "--exclude-standard" "--directory"
-                             "--no-empty-directory" "--" base)))
+                   (seq-filter #'directory-name-p
+                               (magit-list-files
+                                "--other" "--exclude-standard" "--directory"
+                                "--no-empty-directory" "--" base)))
                   #'string-lessp)))))
     (when default
       (setq default (concat "/" default))

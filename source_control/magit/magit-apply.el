@@ -1,9 +1,9 @@
 ;;; magit-apply.el --- Apply Git diffs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -48,11 +48,6 @@
 (declare-function magit-submodule-read-name-for-path "magit-submodule"
                   (path &optional prefer-short))
 (defvar borg-user-emacs-directory)
-
-(cl-eval-when (compile load)
-  (when (< emacs-major-version 26)
-    (defalias 'smerge-keep-upper 'smerge-keep-mine)
-    (defalias 'smerge-keep-lower 'smerge-keep-other)))
 
 ;;; Options
 
@@ -119,19 +114,19 @@ is a member of `magit-post-unstage-hook-commands'."
 With a prefix argument fallback to a 3-way merge.  Doing
 so causes the change to be applied to the index as well."
   (interactive (and current-prefix-arg (list "--3way")))
-  (--when-let (magit-apply--get-selection)
+  (when-let ((s (magit-apply--get-selection)))
     (pcase (list (magit-diff-type) (magit-diff-scope))
       (`(,(or 'unstaged 'staged) ,_)
        (user-error "Change is already in the working tree"))
       (`(untracked ,(or 'file 'files))
        (call-interactively #'magit-am))
-      (`(,_ region) (magit-apply-region it args))
-      (`(,_   hunk) (magit-apply-hunk   it args))
-      (`(,_  hunks) (magit-apply-hunks  it args))
+      (`(,_ region) (magit-apply-region s args))
+      (`(,_   hunk) (magit-apply-hunk   s args))
+      (`(,_  hunks) (magit-apply-hunks  s args))
       (`(rebase-sequence file)
        (call-interactively #'magit-patch-apply))
-      (`(,_   file) (magit-apply-diff   it args))
-      (`(,_  files) (magit-apply-diffs  it args)))))
+      (`(,_   file) (magit-apply-diff   s args))
+      (`(,_  files) (magit-apply-diffs  s args)))))
 
 (defun magit-apply--section-content (section)
   (buffer-substring-no-properties (if (magit-hunk-section-p section)
@@ -185,38 +180,39 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
 (defun magit-apply--adjust-hunk-new-start (hunk)
   (car (magit-apply--adjust-hunk-new-starts (list hunk))))
 
-(defun magit-apply-hunks (sections &rest args)
-  (let ((section (oref (car sections) parent)))
-    (when (string-match "^diff --cc" (oref section value))
+(defun magit-apply-hunks (hunks &rest args)
+  (let ((file (oref (car hunks) parent)))
+    (when (magit-diff--combined-p file)
       (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
     (magit-apply-patch
-     section args
-     (concat (oref section header)
-             (mapconcat #'identity
-                        (magit-apply--adjust-hunk-new-starts
-                         (mapcar #'magit-apply--section-content sections))
-                        "")))))
+     file args
+     (concat (oref file header)
+             (string-join (magit-apply--adjust-hunk-new-starts
+                           (mapcar #'magit-apply--section-content hunks)))))))
 
-(defun magit-apply-hunk (section &rest args)
-  (when (string-match "^diff --cc" (magit-section-parent-value section))
-    (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
-  (let* ((header (car (oref section value)))
-         (header (and (symbolp header) header))
-         (content (magit-apply--section-content section)))
+(defun magit-apply-hunk (hunk &rest args)
+  (let ((file (oref hunk parent)))
+    (when (magit-diff--combined-p file)
+      (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
+    (let* ((header (car (oref hunk value)))
+           (header (and (symbolp header) header))
+           (content (magit-apply--section-content hunk)))
+      (magit-apply-patch
+       file args
+       (concat (magit-diff-file-header hunk (not (eq header 'rename)))
+               (if header
+                   content
+                 (magit-apply--adjust-hunk-new-start content)))))))
+
+(defun magit-apply-region (hunk &rest args)
+  (let ((file (oref hunk parent)))
+    (when (magit-diff--combined-p file)
+      (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
     (magit-apply-patch
-     (oref section parent) args
-     (concat (magit-diff-file-header section (not (eq header 'rename)))
-             (if header
-                 content
-               (magit-apply--adjust-hunk-new-start content))))))
-
-(defun magit-apply-region (section &rest args)
-  (when (string-match "^diff --cc" (magit-section-parent-value section))
-    (user-error "Cannot un-/stage resolution hunks.  Stage the whole file"))
-  (magit-apply-patch (oref section parent) args
-                     (concat (magit-diff-file-header section)
-                             (magit-apply--adjust-hunk-new-start
-                              (magit-diff-hunk-region-patch section args)))))
+     file args
+     (concat (magit-diff-file-header hunk)
+             (magit-apply--adjust-hunk-new-start
+              (magit-diff-hunk-region-patch hunk args))))))
 
 (defun magit-apply-patch (section:s args patch)
   (let* ((files (if (atom section:s)
@@ -262,14 +258,23 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
             sections))
     (t sections)))
 
-(defun magit-apply--diff-ignores-whitespace-p ()
-  (and (cl-intersection magit-buffer-diff-args
-                        '("--ignore-space-at-eol"
-                          "--ignore-space-change"
-                          "--ignore-all-space"
-                          "--ignore-blank-lines")
-                        :test #'equal)
-       t))
+(defun magit-apply--ignore-whitespace-p (selection type scope)
+  "Return t if it is necessary and possible to ignore whitespace.
+It is necessary to do so when the diff ignores whitespace changes
+and whole files are being applied.  It is possible when no binary
+files are involved.  If it is both necessary and impossible, then
+return nil, possibly causing whitespace changes to be applied."
+  (and (memq type  '(unstaged staged))
+       (memq scope '(file files list))
+       (cl-find-if (lambda (arg)
+                     (member arg '("--ignore-space-at-eol"
+                                   "--ignore-space-change"
+                                   "--ignore-all-space"
+                                   "--ignore-blank-lines")))
+                   magit-buffer-diff-args)
+       (not (cl-find-if (lambda (section)
+                          (oref section binary))
+                        (ensure-list selection)))))
 
 ;;;; Stage
 
@@ -278,18 +283,20 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
 With a prefix argument, INTENT, and an untracked file (or files)
 at point, stage the file but not its content."
   (interactive "P")
-  (--if-let (and (derived-mode-p 'magit-mode) (magit-apply--get-selection))
-      (pcase (list (magit-diff-type)
-                   (magit-diff-scope)
-                   (magit-apply--diff-ignores-whitespace-p))
+  (if-let ((s (and (derived-mode-p 'magit-mode)
+                   (magit-apply--get-selection)))
+           (type (magit-diff-type))
+           (scope (magit-diff-scope)))
+      (pcase (list type scope
+                   (magit-apply--ignore-whitespace-p s type scope))
         (`(untracked     ,_  ,_) (magit-stage-untracked intent))
-        (`(unstaged  region  ,_) (magit-apply-region it "--cached"))
-        (`(unstaged    hunk  ,_) (magit-apply-hunk   it "--cached"))
-        (`(unstaged   hunks  ,_) (magit-apply-hunks  it "--cached"))
-        ('(unstaged    file   t) (magit-apply-diff   it "--cached"))
-        ('(unstaged   files   t) (magit-apply-diffs  it "--cached"))
-        ('(unstaged    list   t) (magit-apply-diffs  it "--cached"))
-        ('(unstaged    file nil) (magit-stage-1 "-u" (list (oref it value))))
+        (`(unstaged  region  ,_) (magit-apply-region s "--cached"))
+        (`(unstaged    hunk  ,_) (magit-apply-hunk   s "--cached"))
+        (`(unstaged   hunks  ,_) (magit-apply-hunks  s "--cached"))
+        ('(unstaged    file   t) (magit-apply-diff   s "--cached"))
+        ('(unstaged   files   t) (magit-apply-diffs  s "--cached"))
+        ('(unstaged    list   t) (magit-apply-diffs  s "--cached"))
+        ('(unstaged    file nil) (magit-stage-1 "-u" (list (oref s value))))
         ('(unstaged   files nil) (magit-stage-1 "-u" (magit-region-values nil t)))
         ('(unstaged    list nil) (magit-stage-modified))
         (`(staged        ,_  ,_) (user-error "Already staged"))
@@ -298,23 +305,39 @@ at point, stage the file but not its content."
     (call-interactively #'magit-stage-file)))
 
 ;;;###autoload
-(defun magit-stage-file (file)
-  "Stage all changes to FILE.
-With a prefix argument or when there is no file at point ask for
-the file to be staged.  Otherwise stage the file at point without
-requiring confirmation."
-  (interactive
-   (let* ((atpoint (magit-section-value-if 'file))
-          (current (magit-file-relative-name))
-          (choices (nconc (magit-unstaged-files)
-                          (magit-untracked-files)))
-          (default (car (member (or atpoint current) choices))))
-     (list (if (or current-prefix-arg (not default))
-               (magit-completing-read "Stage file" choices
-                                      nil t nil nil default)
-             default))))
+(defun magit-stage-buffer-file ()
+  "Stage all changes to the file being visited in the current buffer."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Not visiting a file"))
   (magit-with-toplevel
-    (magit-stage-1 nil (list file))))
+    (magit-stage-1 (and (magit-file-ignored-p buffer-file-name)
+                        (if (y-or-n-p "Visited file is ignored; stage anyway?")
+                            "--force"
+                          (user-error "Abort")))
+                   (list (magit-file-relative-name)))))
+
+;;;###autoload
+(defun magit-stage-file (files &optional force)
+  "Read one or more files and stage all changes in those files.
+With prefix argument FORCE, offer ignored files for completion."
+  (interactive
+   (let* ((choices (if current-prefix-arg
+                       (magit-ignored-files)
+                     (nconc (magit-unstaged-files)
+                            (magit-untracked-files))))
+          (default (or (magit-section-value-if 'file)
+                       (magit-file-relative-name)))
+          (default (car (member default choices))))
+     (list (magit-completing-read-multiple
+            (if current-prefix-arg "Stage ignored file,s: " "Stage file,s: ")
+            choices nil t nil nil default)
+           current-prefix-arg)))
+  (magit-with-toplevel
+    ;; For backward compatibility, and because of
+    ;; the function's name, don't require a list.
+    (magit-stage-1 (and force "--force")
+                   (if (listp files) files (list files)))))
 
 ;;;###autoload
 (defun magit-stage-modified (&optional all)
@@ -383,7 +406,10 @@ ignored) files."
     (magit-wip-commit-after-apply files " after stage")))
 
 (defvar magit-post-stage-hook-commands
-  '(magit-stage magit-stage-file magit-stage-modified))
+  '(magit-stage
+    magit-stage-buffer-file
+    magit-stage-file
+    magit-stage-modified))
 
 (defun magit-run-post-stage-hook ()
   (when (memq this-command magit-post-stage-hook-commands)
@@ -394,21 +420,22 @@ ignored) files."
 (defun magit-unstage ()
   "Remove the change at point from the staging area."
   (interactive)
-  (--when-let (magit-apply--get-selection)
-    (pcase (list (magit-diff-type)
-                 (magit-diff-scope)
-                 (magit-apply--diff-ignores-whitespace-p))
+  (when-let ((s (magit-apply--get-selection))
+             (type (magit-diff-type))
+             (scope (magit-diff-scope)))
+    (pcase (list type scope
+                 (magit-apply--ignore-whitespace-p s type scope))
       (`(untracked     ,_  ,_) (user-error "Cannot unstage untracked changes"))
-      (`(unstaged    file  ,_) (magit-unstage-intent (list (oref it value))))
+      (`(unstaged    file  ,_) (magit-unstage-intent (list (oref s value))))
       (`(unstaged   files  ,_) (magit-unstage-intent (magit-region-values nil t)))
       (`(unstaged      ,_  ,_) (user-error "Already unstaged"))
-      (`(staged    region  ,_) (magit-apply-region it "--reverse" "--cached"))
-      (`(staged      hunk  ,_) (magit-apply-hunk   it "--reverse" "--cached"))
-      (`(staged     hunks  ,_) (magit-apply-hunks  it "--reverse" "--cached"))
-      ('(staged      file   t) (magit-apply-diff   it "--reverse" "--cached"))
-      ('(staged     files   t) (magit-apply-diffs  it "--reverse" "--cached"))
-      ('(staged      list   t) (magit-apply-diffs  it "--reverse" "--cached"))
-      ('(staged      file nil) (magit-unstage-1 (list (oref it value))))
+      (`(staged    region  ,_) (magit-apply-region s "--reverse" "--cached"))
+      (`(staged      hunk  ,_) (magit-apply-hunk   s "--reverse" "--cached"))
+      (`(staged     hunks  ,_) (magit-apply-hunks  s "--reverse" "--cached"))
+      ('(staged      file   t) (magit-apply-diff   s "--reverse" "--cached"))
+      ('(staged     files   t) (magit-apply-diffs  s "--reverse" "--cached"))
+      ('(staged      list   t) (magit-apply-diffs  s "--reverse" "--cached"))
+      ('(staged      file nil) (magit-unstage-1 (list (oref s value))))
       ('(staged     files nil) (magit-unstage-1 (magit-region-values nil t)))
       ('(staged      list nil) (magit-unstage-all))
       (`(committed     ,_  ,_) (if magit-unstage-committed
@@ -417,22 +444,28 @@ ignored) files."
       (`(undefined     ,_  ,_) (user-error "Cannot unstage this change")))))
 
 ;;;###autoload
-(defun magit-unstage-file (file)
-  "Unstage all changes to FILE.
-With a prefix argument or when there is no file at point ask for
-the file to be unstaged.  Otherwise unstage the file at point
-without requiring confirmation."
-  (interactive
-   (let* ((atpoint (magit-section-value-if 'file))
-          (current (magit-file-relative-name))
-          (choices (magit-staged-files))
-          (default (car (member (or atpoint current) choices))))
-     (list (if (or current-prefix-arg (not default))
-               (magit-completing-read "Unstage file" choices
-                                      nil t nil nil default)
-             default))))
+(defun magit-unstage-buffer-file ()
+  "Unstage all changes to the file being visited in the current buffer."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Not visiting a file"))
   (magit-with-toplevel
-    (magit-unstage-1 (list file))))
+    (magit-unstage-1 (list (magit-file-relative-name)))))
+
+;;;###autoload
+(defun magit-unstage-file (files)
+  "Read one or more files and unstage all changes to those files."
+  (interactive
+   (let* ((choices (magit-staged-files))
+          (default (or (magit-section-value-if 'file)
+                       (magit-file-relative-name)))
+          (default (car (member default choices))))
+     (list (magit-completing-read-multiple "Unstage file,s: " choices
+                                           nil t nil nil default))))
+  (magit-with-toplevel
+    ;; For backward compatibility, and because of
+    ;; the function's name, don't require a list.
+    (magit-unstage-1 (if (listp files) files (list files)))))
 
 (defun magit-unstage-1 (files)
   (magit-wip-commit-before-change files " before unstage")
@@ -461,7 +494,10 @@ without requiring confirmation."
   (magit-wip-commit-after-apply nil " after unstage"))
 
 (defvar magit-post-unstage-hook-commands
-  '(magit-unstage magit-unstage-file magit-unstage-all))
+  '(magit-unstage
+    magit-unstage-buffer-file
+    magit-unstage-file
+    magit-unstage-all))
 
 (defun magit-run-post-unstage-hook ()
   (when (memq this-command magit-post-unstage-hook-commands)
@@ -476,16 +512,16 @@ On a hunk or file with unresolved conflicts prompt which side to
 keep (while discarding the other).  If point is within the text
 of a side, then keep that side without prompting."
   (interactive)
-  (--when-let (magit-apply--get-selection)
+  (when-let ((s (magit-apply--get-selection)))
     (pcase (list (magit-diff-type) (magit-diff-scope))
       (`(committed ,_) (user-error "Cannot discard committed changes"))
       (`(undefined ,_) (user-error "Cannot discard this change"))
-      (`(,_    region) (magit-discard-region it))
-      (`(,_      hunk) (magit-discard-hunk   it))
-      (`(,_     hunks) (magit-discard-hunks  it))
-      (`(,_      file) (magit-discard-file   it))
-      (`(,_     files) (magit-discard-files  it))
-      (`(,_      list) (magit-discard-files  it)))))
+      (`(,_    region) (magit-discard-region s))
+      (`(,_      hunk) (magit-discard-hunk   s))
+      (`(,_     hunks) (magit-discard-hunks  s))
+      (`(,_      file) (magit-discard-file   s))
+      (`(,_     files) (magit-discard-files  s))
+      (`(,_      list) (magit-discard-files  s)))))
 
 (defun magit-discard-region (section)
   (magit-confirm 'discard "Discard region")
@@ -512,9 +548,10 @@ of a side, then keep that side without prompting."
       (funcall apply section "--reverse" "--index"))))
 
 (defun magit-discard-hunks (sections)
-  (magit-confirm 'discard (format "Discard %s hunks from %s"
-                                  (length sections)
-                                  (magit-section-parent-value (car sections))))
+  (magit-confirm 'discard
+    (list "Discard %d hunks from %s"
+          (length sections)
+          (magit-section-parent-value (car sections))))
   (magit-discard-apply-n sections #'magit-apply-hunks))
 
 (defun magit-discard-apply-n (sections apply)
@@ -639,8 +676,8 @@ of a side, then keep that side without prompting."
     (let ((orig (cadr (assoc file status))))
       (if (file-exists-p file)
           (progn
-            (--when-let (file-name-directory orig)
-              (make-directory it t))
+            (when-let ((path (file-name-directory orig)))
+              (make-directory path t))
             (magit-call-git "mv" file orig))
         (magit-call-git "rm" "--cached" "--" file)
         (magit-call-git "reset" "--" orig)))))
@@ -681,16 +718,16 @@ of a side, then keep that side without prompting."
 With a prefix argument fallback to a 3-way merge.  Doing
 so causes the change to be applied to the index as well."
   (interactive (and current-prefix-arg (list "--3way")))
-  (--when-let (magit-apply--get-selection)
+  (when-let ((s (magit-apply--get-selection)))
     (pcase (list (magit-diff-type) (magit-diff-scope))
       (`(untracked ,_) (user-error "Cannot reverse untracked changes"))
       (`(unstaged  ,_) (user-error "Cannot reverse unstaged changes"))
-      (`(,_    region) (magit-reverse-region it args))
-      (`(,_      hunk) (magit-reverse-hunk   it args))
-      (`(,_     hunks) (magit-reverse-hunks  it args))
-      (`(,_      file) (magit-reverse-file   it args))
-      (`(,_     files) (magit-reverse-files  it args))
-      (`(,_      list) (magit-reverse-files  it args)))))
+      (`(,_    region) (magit-reverse-region s args))
+      (`(,_      hunk) (magit-reverse-hunk   s args))
+      (`(,_     hunks) (magit-reverse-hunks  s args))
+      (`(,_      file) (magit-reverse-file   s args))
+      (`(,_     files) (magit-reverse-files  s args))
+      (`(,_      list) (magit-reverse-files  s args)))))
 
 (defun magit-reverse-region (section args)
   (magit-confirm 'reverse "Reverse region")
@@ -702,9 +739,9 @@ so causes the change to be applied to the index as well."
 
 (defun magit-reverse-hunks (sections args)
   (magit-confirm 'reverse
-    (format "Reverse %s hunks from %s"
-            (length sections)
-            (magit-section-parent-value (car sections))))
+    (list "Reverse %d hunks from %s"
+          (length sections)
+          (magit-section-parent-value (car sections))))
   (magit-reverse-apply sections #'magit-apply-hunks args))
 
 (defun magit-reverse-file (section args)
@@ -746,7 +783,7 @@ a separate commit.  A typical workflow would be:
 1. Visit the `HEAD' commit and navigate to the change that should
    not have been included in that commit.
 2. Type \"u\" (`magit-unstage') to reverse it in the index.
-   This assumes that `magit-unstage-committed-changes' is non-nil.
+   This assumes that `magit-unstage-committed' is non-nil.
 3. Type \"c e\" to extend `HEAD' with the staged changes,
    including those that were already staged before.
 4. Optionally stage the remaining changes using \"s\" or \"S\"

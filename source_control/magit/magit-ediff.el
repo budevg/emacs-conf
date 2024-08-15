@@ -1,9 +1,9 @@
 ;;; magit-ediff.el --- Ediff extension for Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -382,8 +382,8 @@ range)."
   (let ((input (or arg (magit-diff-read-range-or-commit
                         "Compare range or commit"
                         nil mbase))))
-    (--if-let (magit-split-range input)
-        (-cons-to-list it)
+    (if-let ((range (magit-split-range input)))
+        (list (car range) (cdr range))
       (list input nil))))
 
 (defun magit-ediff-read-files (revA revB &optional fileB)

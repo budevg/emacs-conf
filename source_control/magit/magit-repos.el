@@ -1,9 +1,9 @@
 ;;; magit-repos.el --- Listing repositories  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -93,12 +93,12 @@ The `:sort' function has a weird interface described in the
 docstring of `tabulated-list--get-sort'.  Alternatively `<' and
 `magit-repolist-version<' can be used as those functions are
 automatically replaced with functions that satisfy the interface.
-Set `:sort' to nil to inhibit sorting; if unspecifed, then the
+Set `:sort' to nil to inhibit sorting; if unspecified, then the
 column is sortable using the default sorter.
 
 You may wish to display a range of numeric columns using just one
 character per column and without any padding between columns, in
-which case you should use an appropriat HEADER, set WIDTH to 1,
+which case you should use an appropriate HEADER, set WIDTH to 1,
 and set `:pad-right' to 0.  \"+\" is substituted for numbers higher
 than 9."
   :package-version '(magit . "2.12.0")
@@ -149,7 +149,7 @@ non-nil, means to invert the resulting sort."
 (defun magit-list-repositories ()
   "Display a list of repositories.
 
-Use the options `magit-repository-directories' to control which
+Use the option `magit-repository-directories' to control which
 repositories are displayed."
   (interactive)
   (magit-repolist-setup (default-value 'magit-repolist-columns)))
@@ -159,8 +159,8 @@ repositories are displayed."
 (defun magit-repolist-status (&optional _button)
   "Show the status for the repository at point."
   (interactive)
-  (--if-let (tabulated-list-get-id)
-      (magit-status-setup-buffer (expand-file-name it))
+  (if-let ((id (tabulated-list-get-id)))
+      (magit-status-setup-buffer (expand-file-name id))
     (user-error "There is no repository at point")))
 
 (defun magit-repolist-mark ()
@@ -265,8 +265,10 @@ If it contains \"%s\" then the directory is substituted for that."
 
 (define-derived-mode magit-repolist-mode tabulated-list-mode "Repos"
   "Major mode for browsing a list of Git repositories."
-  (setq-local x-stretch-cursor  nil)
-  (setq tabulated-list-padding  0)
+  :interactive nil
+  :group 'magit-repolist
+  (setq-local x-stretch-cursor nil)
+  (setq tabulated-list-padding 0)
   (add-hook 'tabulated-list-revert-hook #'magit-repolist-refresh nil t)
   (setq imenu-prev-index-position-function
         #'magit-repolist--imenu-prev-index-position)
@@ -291,8 +293,8 @@ If it contains \"%s\" then the directory is substituted for that."
                       (caar magit-repolist-columns))
                   flip))))
   (setq tabulated-list-format
-        (vconcat (-map-indexed
-                  (lambda (idx column)
+        (vconcat (seq-map-indexed
+                  (lambda (column idx)
                     (pcase-let* ((`(,title ,width ,_fn ,props) column)
                                  (sort-set (assoc :sort props))
                                  (sort-fn (cadr sort-set)))
@@ -342,8 +344,8 @@ If it contains \"%s\" then the directory is substituted for that."
 See `tabulated-list--get-sorter'.  Given a more reasonable API
 this would not be necessary and one could just use SORT-PREDICATE
 directly.  CONVERT-CELL can be used to turn the cell value, which
-is always a string back into e.g. a number.  COLUMN-IDX has to be
-the index of the column that uses the returned sorter function."
+is always a string back into, e.g., a number.  COLUMN-IDX has to
+be the index of the column that uses the returned sorter function."
   (lambda (a b)
     (funcall sort-predicate
              (funcall convert-cell (aref (cadr a) column-idx))
@@ -379,7 +381,8 @@ Usually this is just its basename."
         (when (match-end 2)
           (magit--put-face (match-beginning 2) (match-end 2) 'bold v))
         (when (match-end 4)
-          (magit--put-face (match-beginning 4) (match-end 4) 'error v))
+          (magit--put-face (or (match-beginning 3) (match-beginning 4))
+                           (match-end 4) 'error v))
         (when (and (equal (match-string 2 v) "1")
                    (string-match-p magit-repolist-column-version-resume-regexp
                                    (magit-rev-format "%s")))
@@ -504,7 +507,7 @@ instead."
 (defun magit-list-repos-1 (directory depth)
   (cond ((file-readable-p (expand-file-name ".git" directory))
          (list (file-name-as-directory directory)))
-        ((and (> depth 0) (magit-file-accessible-directory-p directory))
+        ((and (> depth 0) (file-accessible-directory-p directory))
          (--mapcat (and (file-directory-p it)
                         (magit-list-repos-1 it (1- depth)))
                    (directory-files directory t

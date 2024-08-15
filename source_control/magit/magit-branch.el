@@ -1,9 +1,9 @@
 ;;; magit-branch.el --- Branch support  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -77,7 +77,7 @@ have to match exactly unless they contain a character that makes
 them invalid as a branch name.  Recommended characters to use
 to trigger interpretation as a regexp are \"*\" and \"^\".  Some
 other characters which you might expect to be invalid, actually
-are not, e.g. \".+$\" are all perfectly valid.  More precisely,
+are not, e.g., \".+$\" are all perfectly valid.  More precisely,
 if `git check-ref-format --branch STRING' exits with a non-zero
 status, then treat STRING as a regexp.
 
@@ -101,7 +101,7 @@ prefer the former, then you should add branches such as \"master\",
   "Alist of upstreams to be used when branching from remote branches.
 
 When creating a local branch from an ephemeral branch located
-on a remote, e.g. a feature or hotfix branch, then that remote
+on a remote, e.g., a feature or hotfix branch, then that remote
 branch should usually not be used as the upstream branch, since
 the push-remote already allows accessing it and having both the
 upstream and the push-remote reference the same related branch
@@ -208,18 +208,28 @@ has to be used to view and change branch related variables."
 (transient-define-prefix magit-branch (branch)
   "Add, configure or remove a branch."
   :man-page "git-branch"
-  ["Arguments"
-   (7 "-r" "Recurse submodules when checking out an existing branch"
-      "--recurse-submodules"
-      :if (lambda () (magit-git-version>= "2.13")))]
-  ["Variables"
-   :if (lambda ()
+  [:if (lambda ()
          (and magit-branch-direct-configure
-              (oref transient--prefix scope)))
+              (oref (transient-prefix-object) scope)))
+   :description
+   (lambda ()
+     (concat (propertize "Configure " 'face 'transient-heading)
+             (propertize (oref (transient-prefix-object) scope)
+                         'face 'magit-branch-local)))
    ("d" magit-branch.<branch>.description)
    ("u" magit-branch.<branch>.merge/remote)
    ("r" magit-branch.<branch>.rebase)
    ("p" magit-branch.<branch>.pushRemote)]
+  [:if-non-nil magit-branch-direct-configure
+   :description "Configure repository defaults"
+   ("R" magit-pull.rebase)
+   ("P" magit-remote.pushDefault)
+   ("B" "Update default branch" magit-update-default-branch
+    :inapt-if-not magit-get-some-remote)]
+  ["Arguments"
+   (7 "-r" "Recurse submodules when checking out an existing branch"
+      "--recurse-submodules"
+      :if (lambda () (magit-git-version>= "2.13")))]
   [["Checkout"
     ("b" "branch/revision"   magit-checkout)
     ("l" "local branch"      magit-branch-checkout)
@@ -254,30 +264,46 @@ branch.  If it is something else, then `HEAD' becomes detached.
 Checkout fails if the working tree or the staging area contain
 changes.
 \n(git checkout REVISION)."
+  (declare (interactive-only magit--checkout))
   (interactive (list (magit-read-other-branch-or-commit "Checkout")
                      (magit-branch-arguments)))
   (when (string-match "\\`heads/\\(.+\\)" revision)
     (setq revision (match-string 1 revision)))
-  (magit-run-git "checkout" args revision))
+  (magit-run-git-async "checkout" args revision))
+
+(defun magit--checkout (revision &optional args)
+  (when (string-match "\\`heads/\\(.+\\)" revision)
+    (setq revision (match-string 1 revision)))
+  (magit-call-git "checkout" args revision))
 
 ;;;###autoload
 (defun magit-branch-create (branch start-point)
   "Create BRANCH at branch or revision START-POINT."
+  (declare (interactive-only magit-call-git))
   (interactive (magit-branch-read-args "Create branch"))
-  (magit-call-git "branch" branch start-point)
-  (magit-branch-maybe-adjust-upstream branch start-point)
-  (magit-refresh))
+  (magit-run-git-async "branch" branch start-point)
+  (set-process-sentinel
+   magit-this-process
+   (lambda (process event)
+     (when (memq (process-status process) '(exit signal))
+       (magit-branch-maybe-adjust-upstream branch start-point)
+       (magit-process-sentinel process event)))))
 
 ;;;###autoload
 (defun magit-branch-and-checkout (branch start-point &optional args)
   "Create and checkout BRANCH at branch or revision START-POINT."
+  (declare (interactive-only magit-call-git))
   (interactive (append (magit-branch-read-args "Create and checkout branch")
                        (list (magit-branch-arguments))))
   (if (string-match-p "^stash@{[0-9]+}$" start-point)
       (magit-run-git "stash" "branch" branch start-point)
-    (magit-call-git "checkout" args "-b" branch start-point)
-    (magit-branch-maybe-adjust-upstream branch start-point)
-    (magit-refresh)))
+    (magit-run-git-async "checkout" args "-b" branch start-point)
+    (set-process-sentinel
+     magit-this-process
+     (lambda (process event)
+       (when (memq (process-status process) '(exit signal))
+         (magit-branch-maybe-adjust-upstream branch start-point)
+         (magit-process-sentinel process event))))))
 
 ;;;###autoload
 (defun magit-branch-or-checkout (arg &optional start-point)
@@ -291,6 +317,7 @@ Otherwise create and checkout a new branch using the input as
 its name.  Before doing so read the starting-point for the new
 branch.  This is similar to what `magit-branch-and-checkout'
 does."
+  (declare (interactive-only magit-call-git))
   (interactive
    (let ((arg (magit-read-other-branch-or-commit "Checkout")))
      (list arg
@@ -299,8 +326,10 @@ does."
   (when (string-match "\\`heads/\\(.+\\)" arg)
     (setq arg (match-string 1 arg)))
   (if start-point
-      (magit-branch-and-checkout arg start-point)
-    (magit-checkout arg)))
+      (with-suppressed-warnings ((interactive-only magit-branch-and-checkout))
+        (magit-branch-and-checkout arg start-point))
+    (magit--checkout arg)
+    (magit-refresh)))
 
 ;;;###autoload
 (defun magit-branch-checkout (branch &optional start-point)
@@ -326,6 +355,7 @@ In the latter two cases the upstream is also set.  Whether it is
 set to the chosen START-POINT or something else depends on the
 value of `magit-branch-adjust-remote-upstream-alist', just like
 when using `magit-branch-and-checkout'."
+  (declare (interactive-only magit-call-git))
   (interactive
    (let* ((current (magit-get-current-branch))
           (local   (magit-list-local-branch-names))
@@ -351,34 +381,43 @@ when using `magit-branch-and-checkout'."
             (list choice))
            (t
             (list choice (magit-read-starting-point "Create" choice))))))
-  (if (not start-point)
-      (magit-checkout branch (magit-branch-arguments))
+  (cond
+   ((not start-point)
+    (magit--checkout branch (magit-branch-arguments))
+    (magit-refresh))
+   (t
     (when (magit-anything-modified-p t)
       (user-error "Cannot checkout when there are uncommitted changes"))
-    (let ((magit-inhibit-refresh t))
-      (magit-branch-and-checkout branch start-point))
-    (when (magit-remote-branch-p start-point)
-      (pcase-let ((`(,remote . ,remote-branch)
-                   (magit-split-branch-name start-point)))
-        (when (and (equal branch remote-branch)
-                   (not (equal remote (magit-get "remote.pushDefault"))))
-          (magit-set remote "branch" branch "pushRemote"))))
-    (magit-refresh)))
+    (magit-run-git-async "checkout" (magit-branch-arguments)
+                         "-b" branch start-point)
+    (set-process-sentinel
+     magit-this-process
+     (lambda (process event)
+       (when (memq (process-status process) '(exit signal))
+         (magit-branch-maybe-adjust-upstream branch start-point)
+         (when (magit-remote-branch-p start-point)
+           (pcase-let ((`(,remote . ,remote-branch)
+                        (magit-split-branch-name start-point)))
+             (when (and (equal branch remote-branch)
+                        (not (equal remote (magit-get "remote.pushDefault"))))
+               (magit-set remote "branch" branch "pushRemote"))))
+         (magit-process-sentinel process event)))))))
 
 (defun magit-branch-maybe-adjust-upstream (branch start-point)
-  (--when-let
-      (or (and (magit-get-upstream-branch branch)
-               (magit-get-indirect-upstream-branch start-point))
-          (and (magit-remote-branch-p start-point)
-               (let ((name (cdr (magit-split-branch-name start-point))))
-                 (-some (pcase-lambda (`(,upstream . ,rule))
-                          (and (magit-branch-p upstream)
-                               (if (listp rule)
-                                   (not (member name rule))
-                                 (string-match-p rule name))
-                               upstream))
-                        magit-branch-adjust-remote-upstream-alist))))
-    (magit-call-git "branch" (concat "--set-upstream-to=" it) branch)))
+  (when-let ((upstream
+              (or (and (magit-get-upstream-branch branch)
+                       (magit-get-indirect-upstream-branch start-point))
+                  (and (magit-remote-branch-p start-point)
+                       (let ((name (cdr (magit-split-branch-name start-point))))
+                         (seq-some
+                          (pcase-lambda (`(,upstream . ,rule))
+                            (and (magit-branch-p upstream)
+                                 (if (listp rule)
+                                     (not (member name rule))
+                                   (string-match-p rule name))
+                                 upstream))
+                          magit-branch-adjust-remote-upstream-alist))))))
+    (magit-call-git "branch" (concat "--set-upstream-to=" upstream) branch)))
 
 ;;;###autoload
 (defun magit-branch-orphan (branch start-point)
@@ -389,22 +428,21 @@ when using `magit-branch-and-checkout'."
 (defun magit-branch-read-args (prompt &optional default-start)
   (if magit-branch-read-upstream-first
       (let ((choice (magit-read-starting-point prompt nil default-start)))
-        (if (magit-rev-verify choice)
-            (list (magit-read-string-ns
-                   (if magit-completing-read--silent-default
-                       (format "%s (starting at `%s')" prompt choice)
-                     "Name for new branch")
-                   (let ((def (mapconcat #'identity
-                                         (cdr (split-string choice "/"))
-                                         "/")))
-                     (and (member choice (magit-list-remote-branch-names))
-                          (not (member def (magit-list-local-branch-names)))
-                          def)))
-                  choice)
-          (if (eq magit-branch-read-upstream-first 'fallback)
-              (list choice
-                    (magit-read-starting-point prompt choice default-start))
-            (user-error "Not a valid starting-point: %s" choice))))
+        (cond
+         ((magit-rev-verify choice)
+          (list (magit-read-string-ns
+                 (if magit-completing-read--silent-default
+                     (format "%s (starting at `%s')" prompt choice)
+                   "Name for new branch")
+                 (let ((def (string-join (cdr (split-string choice "/")) "/")))
+                   (and (member choice (magit-list-remote-branch-names))
+                        (not (member def (magit-list-local-branch-names)))
+                        def)))
+                choice))
+         ((eq magit-branch-read-upstream-first 'fallback)
+          (list choice
+                (magit-read-starting-point prompt choice default-start)))
+         ((user-error "Not a valid starting-point: %s" choice))))
     (let ((branch (magit-read-string-ns (concat prompt " named"))))
       (if (magit-branch-p branch)
           (magit-branch-read-args
@@ -478,8 +516,8 @@ from the source branch's upstream, then an error is raised."
           (if checkout
               (magit-call-git "checkout" "-b" branch current)
             (magit-call-git "branch" branch current)))
-        (--when-let (magit-get-indirect-upstream-branch current)
-          (magit-call-git "branch" "--set-upstream-to" it branch))
+        (when-let ((upstream (magit-get-indirect-upstream-branch current)))
+          (magit-call-git "branch" "--set-upstream-to" upstream branch))
         (when (and tracked
                    (setq base
                          (if from
@@ -512,7 +550,8 @@ then also set the target branch as the upstream of the branch
 that is being reset."
   (interactive
    (let* ((atpoint (magit-local-branch-at-point))
-          (branch  (magit-read-local-branch "Reset branch" atpoint)))
+          (branch (magit-read-local-branch "Reset branch" atpoint))
+          (minibuffer-default-add-function (magit--minibuf-default-add-commit)))
      (list branch
            (magit-completing-read (format "Reset %s to" branch)
                                   (delete branch (magit-list-branch-names))
@@ -565,13 +604,14 @@ prompt is confusing."
              (list (magit-read-branch-prefer-other
                     (if force "Force delete branch" "Delete branch")))))
      (unless force
-       (when-let ((unmerged (-remove #'magit-branch-merged-p branches)))
+       (when-let ((unmerged (seq-remove #'magit-branch-merged-p branches)))
          (if (magit-confirm 'delete-unmerged-branch
                "Delete unmerged branch %s"
                "Delete %d unmerged branches"
                'noabort unmerged)
              (setq force branches)
-           (or (setq branches (-difference branches unmerged))
+           (or (setq branches
+                     (cl-set-difference branches unmerged :test #'equal))
                (user-error "Abort")))))
      (list branches force)))
   (let* ((refs (mapcar #'magit-ref-fullname branches))
@@ -582,7 +622,7 @@ prompt is confusing."
        (let ((len (length ambiguous)))
          (cond
           ((= len 1)
-           (format "%s is" (-first #'magit-ref-ambiguous-p branches)))
+           (format "%s is" (seq-find #'magit-ref-ambiguous-p branches)))
           ((= len (length refs))
            (format "These %s names are" len))
           (t
@@ -593,12 +633,12 @@ prompt is confusing."
              (offset (1+ (length remote))))
         (cond
          ((magit-confirm 'delete-branch-on-remote
-            (format "Deleting local %s.  Also delete on %s"
-                    (magit-ref-fullname (car branches))
-                    remote)
-            (format "Deleting %d local refs.  Also delete on %s"
-                    (length refs)
-                    remote)
+            (list "Deleting local %s.  Also delete on %s"
+                  (magit-ref-fullname (car branches))
+                  remote)
+            (list "Deleting %d local refs.  Also delete on %s"
+                  (length refs)
+                  remote)
             'noabort refs)
           ;; The ref may actually point at another rev on the remote,
           ;; but this is better than nothing.
@@ -684,8 +724,8 @@ prompt is confusing."
           (when (member refspec refspecs)
             (if (and (length= refspecs 1)
                      (magit-confirm 'delete-pr-remote
-                       (format "Also delete remote %s (%s)" remote
-                               "no pull-request branch remains")
+                       (list "Also delete remote %s (%s)" remote
+                             "no pull-request branch remains")
                        nil t))
                 (magit-call-git "remote" "rm" remote)
               (magit-call-git "config" "--unset-all" variable
@@ -753,8 +793,10 @@ the remote."
                  (not (eq magit-branch-rename-push-target 'local-only))
                  (or (not (eq magit-branch-rename-push-target 'forge-only))
                      (and (require (quote forge) nil t)
-                          (fboundp 'forge--forge-remote-p)
-                          (forge--forge-remote-p remote))))
+                          (fboundp 'forge--split-forge-url)
+                          (and-let* ((url (magit-git-string
+                                           "remote" "get-url" remote)))
+                            (forge--split-forge-url url)))))
         (let ((old-target (magit-get-push-branch old t))
               (new-target (magit-get-push-branch new t))
               (remote (magit-get-push-remote new)))
@@ -762,11 +804,11 @@ the remote."
                      (not new-target)
                      (magit-y-or-n-p (format "Also rename %S to %S on \"%s\""
                                              old new remote)))
-            ;; Rename on (i.e. within) the remote, but only if the
+            ;; Rename on (i.e., within) the remote, but only if the
             ;; destination ref doesn't exist yet.  If that ref already
             ;; exists, then it probably is of some value and we better
             ;; not touch it.  Ignore what the local ref points at,
-            ;; i.e. if the local and the remote ref didn't point at
+            ;; i.e., if the local and the remote ref didn't point at
             ;; the same commit before the rename then keep it that way.
             (magit-call-git "push" "-v" remote
                             (format "%s:refs/heads/%s" old-target new)
@@ -820,17 +862,17 @@ and also rename the respective reflog file."
   :man-page "git-branch"
   [:description
    (lambda ()
-     (concat
-      (propertize "Configure " 'face 'transient-heading)
-      (propertize (oref transient--prefix scope) 'face 'magit-branch-local)))
-   ("d"   magit-branch.<branch>.description)
-   ("u"   magit-branch.<branch>.merge/remote)
-   ("r"   magit-branch.<branch>.rebase)
-   ("p"   magit-branch.<branch>.pushRemote)]
+     (concat (propertize "Configure " 'face 'transient-heading)
+             (propertize (oref (transient-prefix-object) scope)
+                         'face 'magit-branch-local)))
+   ("d" magit-branch.<branch>.description)
+   ("u" magit-branch.<branch>.merge/remote)
+   ("r" magit-branch.<branch>.rebase)
+   ("p" magit-branch.<branch>.pushRemote)]
   ["Configure repository defaults"
    ("R" magit-pull.rebase)
    ("P" magit-remote.pushDefault)
-   ("b" "Update default branch" magit-update-default-branch
+   ("B" "Update default branch" magit-update-default-branch
     :inapt-if-not magit-get-some-remote)]
   ["Configure branch creation"
    ("a m" magit-branch.autoSetupMerge)
@@ -865,7 +907,7 @@ and also rename the respective reflog file."
   :class 'magit--git-branch:upstream)
 
 (cl-defmethod transient-init-value ((obj magit--git-branch:upstream))
-  (when-let* ((branch (oref transient--prefix scope))
+  (when-let* ((branch (oref (transient-prefix-object) scope))
               (remote (magit-get "branch" branch "remote"))
               (merge  (magit-get "branch" branch "merge")))
     (oset obj value (list remote merge))))
@@ -873,19 +915,20 @@ and also rename the respective reflog file."
 (cl-defmethod transient-infix-read ((obj magit--git-branch:upstream))
   (if (oref obj value)
       (oset obj value nil)
-    (magit-read-upstream-branch (oref transient--prefix scope) "Upstream")))
+    (magit-read-upstream-branch (oref (transient-prefix-object) scope)
+                                "Upstream")))
 
 (cl-defmethod transient-infix-set ((obj magit--git-branch:upstream) refname)
-  (magit-set-upstream-branch (oref transient--prefix scope) refname)
+  (magit-set-upstream-branch (oref (transient-prefix-object) scope) refname)
   (oset obj value
-        (and-let* ((branch (oref transient--prefix scope))
+        (and-let* ((branch (oref (transient-prefix-object) scope))
                    (r (magit-get "branch" branch "remote"))
                    (m (magit-get "branch" branch "merge")))
           (list r m)))
   (magit-refresh))
 
 (cl-defmethod transient-format ((obj magit--git-branch:upstream))
-  (let ((branch (oref transient--prefix scope)))
+  (let ((branch (oref (transient-prefix-object) scope)))
     (format-spec
      (oref obj format)
      `((?k . ,(transient-format-key obj))

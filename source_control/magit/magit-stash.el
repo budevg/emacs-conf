@@ -1,9 +1,9 @@
 ;;; magit-stash.el --- Stash support for Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -79,6 +79,11 @@ AUTHOR-WIDTH has to be an integer.  When the name of the author
   :initialize #'magit-custom-initialize-reset
   :set-after '(magit-log-margin)
   :set (apply-partially #'magit-margin-set-variable 'magit-stashes-mode))
+
+;;;; Variables
+
+(defvar magit-stash-read-message-function #'magit-stash-read-message
+  "Function used to read the message when creating a stash.")
 
 ;;; Commands
 
@@ -160,22 +165,41 @@ while two prefix arguments are equivalent to `--all'."
   (magit-stash-save message t t include-untracked t 'index))
 
 (defun magit-stash-read-args ()
-  (list (magit-stash-read-message)
+  (list (funcall magit-stash-read-message-function)
         (magit-stash-read-untracked)))
 
-(defun magit-stash-read-untracked ()
-  (let ((prefix (prefix-numeric-value current-prefix-arg))
-        (args   (magit-stash-arguments)))
-    (cond ((or (= prefix 16) (member "--all" args)) 'all)
-          ((or (= prefix  4) (member "--include-untracked" args)) t))))
-
 (defun magit-stash-read-message ()
+  "Read a message from the minibuffer, to be used for a stash.
+
+The message that Git would have picked, is available as the
+default (used when the user enters the empty string) and as
+the next history element (which can be accessed with \
+\\<minibuffer-local-map>\\[next-history-element])."
+  (read-string (format "Stash message (default: On%s:%s): "
+                       (magit--ellipsis) (magit--ellipsis))
+               nil nil
+               (format "On %s: %s"
+                       (or (magit-get-current-branch) "(no branch)")
+                       (magit-rev-format "%h %s"))))
+
+(defun magit-stash-read-message-traditional ()
+  "Read a message from the minibuffer, to be used for a stash.
+
+If the user confirms the initial-input unmodified, then the
+abbreviated commit hash and commit summary are appended.
+The resulting message is what Git would have used."
   (let* ((default (format "On %s: "
                           (or (magit-get-current-branch) "(no branch)")))
          (input (magit-read-string "Stash message" default)))
     (if (equal input default)
         (concat default (magit-rev-format "%h %s"))
       input)))
+
+(defun magit-stash-read-untracked ()
+  (let ((prefix (prefix-numeric-value current-prefix-arg))
+        (args   (magit-stash-arguments)))
+    (cond ((or (= prefix 16) (member "--all" args)) 'all)
+          ((or (= prefix  4) (member "--include-untracked" args)) t))))
 
 ;;;###autoload
 (defun magit-snapshot-both (&optional include-untracked)
@@ -237,31 +261,79 @@ specifying a list of files to be stashed."
 ;;;###autoload
 (defun magit-stash-apply (stash)
   "Apply a stash to the working tree.
-Try to preserve the stash index.  If that fails because there
-are staged changes, apply without preserving the stash index."
+
+First try \"git stash apply --index\", which tries to preserve
+the index stored in the stash, if any.  This may fail because
+applying the stash could result in conflicts and those have to
+be stored in the index, making it impossible to also store the
+stash's index there as well.
+
+If the above failed, then try \"git stash apply\".  This fails
+\(with or without \"--index\") if there are any uncommitted
+changes to files that are also modified in the stash.
+
+If both of the above failed, then apply using \"git apply\".
+If there are no conflicting files, use \"--3way\".  If there are
+conflicting files, then using \"--3way\" requires that those
+files are staged first, which may be undesirable, so prompt
+the user whether to use \"--3way\" or \"--reject\"."
   (interactive (list (magit-read-stash "Apply stash")))
-  (if (= (magit-call-git "stash" "apply" "--index" stash) 0)
-      (magit-refresh)
-    (magit-run-git "stash" "apply" stash)))
+  (magit-stash--apply "apply" stash))
 
 ;;;###autoload
 (defun magit-stash-pop (stash)
-  "Apply a stash to the working tree and remove it from stash list.
-Try to preserve the stash index.  If that fails because there
-are staged changes, apply without preserving the stash index
-and forgo removing the stash."
+  "Apply a stash to the working tree, on success remove it from stash list.
+
+First try \"git stash pop --index\", which tries to preserve
+the index stored in the stash, if any.  This may fail because
+applying the stash could result in conflicts and those have to
+be stored in the index, making it impossible to also store the
+stash's index there as well.
+
+If the above failed, then try \"git stash apply\".  This fails
+\(with or without \"--index\") if there are any uncommitted
+changes to files that are also modified in the stash.
+
+If both of the above failed, then apply using \"git apply\".
+If there are no conflicting files, use \"--3way\".  If there are
+conflicting files, then using \"--3way\" requires that those
+files are staged first, which may be undesirable, so prompt
+the user whether to use \"--3way\" or \"--reject\"."
   (interactive (list (magit-read-stash "Pop stash")))
-  (if (= (magit-call-git "stash" "apply" "--index" stash) 0)
-      (magit-stash-drop stash)
-    (magit-run-git "stash" "apply" stash)))
+  (magit-stash--apply "pop" stash))
+
+(defun magit-stash--apply (action stash)
+  (or (= (magit-call-git "stash" action "--index" stash) 0)
+      ;; The stash's index could not be applied, so always keep the stash.
+      (= (magit-call-git "stash" "apply" stash) 0)
+      (let* ((range (format "%s^..%s" stash stash))
+             (stashed (magit-git-items "diff" "-z" "--name-only" range "--"))
+             (conflicts (cl-sort (cl-union (magit-unstaged-files t stashed)
+                                           (magit-untracked-files t stashed)
+                                           :test #'equal)
+                                 #'string<))
+             (arg (cond
+                   ((not conflicts) "--3way")
+                   ((magit-confirm-files
+                     'stash-apply-3way conflicts
+                     "Apply stash using `--3way', which requires first staging"
+                     "(else use `--reject')"
+                     t)
+                    (magit-stage-1 nil conflicts)
+                    "--3way")
+                   ("--reject"))))
+        (with-temp-buffer
+          (magit-git-insert "diff" range)
+          (magit-run-git-with-input "apply" arg "-"))))
+  (magit-refresh))
 
 ;;;###autoload
 (defun magit-stash-drop (stash)
   "Remove a stash from the stash list.
 When the region is active offer to drop all contained stashes."
   (interactive
-   (list (--if-let (magit-region-values 'stash)
-             (magit-confirm 'drop-stashes nil "Drop %d stashes" nil it)
+   (list (if-let ((values (magit-region-values 'stash)))
+             (magit-confirm 'drop-stashes nil "Drop %d stashes" nil values)
            (magit-read-stash "Drop stash"))))
   (dolist (stash (if (listp stash)
                      (nreverse (prog1 stash (setq stash (car stash))))
@@ -276,26 +348,29 @@ When the region is active offer to drop all contained stashes."
 (defun magit-stash-clear (ref)
   "Remove all stashes saved in REF's reflog by deleting REF."
   (interactive (let ((ref (or (magit-section-value-if 'stashes) "refs/stash")))
-                 (magit-confirm t (format "Drop all stashes in %s" ref))
+                 (magit-confirm t (list "Drop all stashes in %s" ref))
                  (list ref)))
   (magit-run-git "update-ref" "-d" ref))
 
 ;;;###autoload
 (defun magit-stash-branch (stash branch)
-  "Create and checkout a new BRANCH from STASH."
+  "Create and checkout a new BRANCH from an existing STASH.
+The new branch starts at the commit that was current when the
+stash was created.  If the stash applies cleanly, then drop it."
   (interactive (list (magit-read-stash "Branch stash")
                      (magit-read-string-ns "Branch name")))
   (magit-run-git "stash" "branch" branch stash))
 
 ;;;###autoload
 (defun magit-stash-branch-here (stash branch)
-  "Create and checkout a new BRANCH and apply STASH.
-The branch is created using `magit-branch-and-checkout', using the
-current branch or `HEAD' as the start-point."
+  "Create and checkout a new BRANCH from an existing STASH.
+Use the current branch or `HEAD' as the starting-point of BRANCH.
+Then apply STASH, dropping it if it applies cleanly."
   (interactive (list (magit-read-stash "Branch stash")
                      (magit-read-string-ns "Branch name")))
-  (let ((magit-inhibit-refresh t))
-    (magit-branch-and-checkout branch (or (magit-get-current-branch) "HEAD")))
+  (let ((start-point (or (magit-get-current-branch) "HEAD")))
+    (magit-call-git "checkout" "-b" branch start-point)
+    (magit-branch-maybe-adjust-upstream branch start-point))
   (magit-stash-apply stash))
 
 ;;;###autoload
@@ -392,7 +467,7 @@ current branch or `HEAD' as the start-point."
   "<1>" (magit-menu-item "Visit %v"  #'magit-stash-show))
 
 (magit-define-section-jumper magit-jump-to-stashes
-  "Stashes" stashes "refs/stash")
+  "Stashes" stashes "refs/stash" magit-insert-stashes)
 
 (cl-defun magit-insert-stashes (&optional (ref   "refs/stash")
                                           (heading "Stashes:"))
@@ -436,8 +511,9 @@ instead of \"Stashes:\"."
 
 (define-derived-mode magit-stashes-mode magit-reflog-mode "Magit Stashes"
   "Mode for looking at lists of stashes."
+  :interactive nil
   :group 'magit-log
-  (hack-dir-local-variables-non-file-buffer))
+  (magit-hack-dir-local-variables))
 
 (defun magit-stashes-setup-buffer ()
   (magit-setup-buffer #'magit-stashes-mode nil
@@ -445,9 +521,10 @@ instead of \"Stashes:\"."
 
 (defun magit-stashes-refresh-buffer ()
   (magit-insert-section (stashesbuf)
-    (magit-insert-heading (if (equal magit-buffer-refname "refs/stash")
-                              "Stashes:"
-                            (format "Stashes [%s]:" magit-buffer-refname)))
+    (magit-insert-heading t
+      (if (equal magit-buffer-refname "refs/stash")
+          "Stashes"
+        (format "Stashes [%s]" magit-buffer-refname)))
     (magit-git-wash (apply-partially #'magit-log-wash-log 'stash)
       "reflog" "--format=%gd%x00%aN%x00%at%x00%gs" magit-buffer-refname)))
 
@@ -496,8 +573,9 @@ If there is no stash buffer in the same frame, then do nothing."
 
 (define-derived-mode magit-stash-mode magit-diff-mode "Magit Stash"
   "Mode for looking at individual stashes."
+  :interactive nil
   :group 'magit-diff
-  (hack-dir-local-variables-non-file-buffer)
+  (magit-hack-dir-local-variables)
   (setq magit--imenu-group-types '(commit)))
 
 (defun magit-stash-setup-buffer (stash args files)
@@ -532,13 +610,11 @@ If there is no stash buffer in the same frame, then do nothing."
   "Insert section showing notes for a stash.
 This shows the notes for stash@{N} but not for the other commits
 that make up the stash."
-  (magit-insert-section section (note)
-    (magit-insert-heading "Notes")
+  (magit-insert-section (note)
+    (magit-insert-heading t "Notes")
     (magit-git-insert "notes" "show" magit-buffer-revision)
-    (if (= (point)
-           (oref section content))
-        (magit-cancel-section)
-      (insert "\n"))))
+    (magit-cancel-section 'if-empty)
+    (insert "\n")))
 
 (defun magit-insert-stash-index ()
   "Insert section showing staged changes of the stash."

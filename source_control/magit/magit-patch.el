@@ -1,9 +1,9 @@
 ;;; magit-patch.el --- Creating and applying patches  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -102,12 +102,12 @@ which creates patches for all commits that are reachable from
      (cons (if-let ((revs (magit-region-values 'commit t)))
                (concat (car (last revs)) "^.." (car revs))
              (let ((range (magit-read-range-or-commit
-                           "Format range or commit")))
+                           "Create patches for range or commit")))
                (if (string-search ".." range)
                    range
                  (format "%s~..%s" range range))))
            (let ((args (transient-args 'magit-patch-create)))
-             (list (-filter #'stringp args)
+             (list (seq-filter #'stringp args)
                    (cdr (assoc "--" args)))))))
   (if (not range)
       (transient-setup 'magit-patch-create)
@@ -294,7 +294,9 @@ same differences as those shown in the buffer are always used."
              (setq args nil)))
           ((eq (car-safe magit-patch-save-arguments) 'exclude)
            (unless arg
-             (setq args (-difference args (cdr magit-patch-save-arguments)))))
+             (setq args
+                   (cl-set-difference args (cdr magit-patch-save-arguments)
+                                      :test #'equal))))
           ((not arg)
            (setq args magit-patch-save-arguments)))
     (with-temp-file file

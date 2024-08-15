@@ -1,7 +1,7 @@
 (autoload 'magit-status "magit" nil t)
 (global-set-key [(meta m)] 'magit-status)
 
-(setq magit-version "3.1.0")
+(setq magit-version "4.0.0")
 
 (eval-after-load "magit"
   '(progn

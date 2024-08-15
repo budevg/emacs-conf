@@ -1,9 +1,9 @@
 ;;; magit-transient.el --- Support for transients  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -134,9 +134,9 @@
         (seturl   (oref obj seturl-arg))
         (remote   (oref transient--prefix scope)))
     (oset obj value values)
-    (dolist (v (-difference values previous))
+    (dolist (v (cl-set-difference values previous :test #'equal))
       (magit-call-git "remote" "set-url" seturl "--add" remote v))
-    (dolist (v (-difference previous values))
+    (dolist (v (cl-set-difference previous values :test #'equal))
       (magit-call-git "remote" "set-url" seturl "--delete" remote
                       (concat "^" (regexp-quote v) "$")))
     (magit-refresh)))
@@ -218,6 +218,15 @@
                                         'transient-inactive-value
                                       'transient-value))))))
      (propertize "]" 'face 'transient-inactive-value))))
+
+;;; Utilities
+
+(defun magit--transient-args-and-files ()
+  "Return (args files) for use by log and diff functions.
+The value derives from that returned by `transient-get-value'."
+  (let ((args (transient-get-value)))
+    (list (seq-filter #'atom args)
+          (cdr (assoc "--" args)))))
 
 ;;; _
 (provide 'magit-transient)

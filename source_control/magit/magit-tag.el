@@ -1,9 +1,9 @@
 ;;; magit-tag.el --- Tag functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -80,8 +80,8 @@ If the region marks multiple tags (and nothing else), then offer
 to delete those, otherwise prompt for a single tag to be deleted,
 defaulting to the tag at point.
 \n(git tag -d TAGS)"
-  (interactive (list (--if-let (magit-region-values 'tag)
-                         (magit-confirm t nil "Delete %d tags" nil it)
+  (interactive (list (if-let ((tags (magit-region-values 'tag)))
+                         (magit-confirm t nil "Delete %d tags" nil tags)
                        (let ((helm-comp-read-use-marked t))
                          (magit-read-tag "Delete tag" t)))))
   (magit-run-git "tag" "-d" tags))
@@ -95,8 +95,8 @@ defaulting to the tag at point.
           (rtags  (prog2 (message "Determining remote tags...")
                       (magit-remote-list-tags remote)
                     (message "Determining remote tags...done")))
-          (ltags  (-difference tags rtags))
-          (rtags  (-difference rtags tags)))
+          (ltags  (cl-set-difference tags rtags :test #'equal))
+          (rtags  (cl-set-difference rtags tags :test #'equal)))
      (unless (or ltags rtags)
        (message "Same tags exist locally and remotely"))
      (unless (magit-confirm t
@@ -127,7 +127,7 @@ defaulting to the tag at point.
 See also `magit-release-tag-regexp'.")
 
 (defvar magit-release-tag-regexp "\\`\
-\\(?1:\\(?:v\\(?:ersion\\)?\\|r\\(?:elease\\)?\\)?[-_]?\\)?\
+\\(?1:\\(?:v\\(?:ersion\\)?\\|r\\(?:elease\\)?\\)[-_]?\\)?\
 \\(?2:[0-9]+\\(?:\\.[0-9]+\\)*\
 \\(?:-[a-zA-Z0-9-]+\\(?:\\.[a-zA-Z0-9-]+\\)*\\)?\\)\\'"
   "Regexp used by `magit-tag-release' to parse release tags.
@@ -199,13 +199,13 @@ like \"/path/to/foo-bar\"."
                           (replace-match ver t t pmsg))
                          ((and ptag (string-match (regexp-quote ptag) pmsg))
                           (replace-match tag t t pmsg))
-                         (t (format "%s %s"
-                                    (capitalize
-                                     (file-name-nondirectory
-                                      (directory-file-name (magit-toplevel))))
-                                    ver)))))
+                         ((format "%s %s"
+                                  (capitalize
+                                   (file-name-nondirectory
+                                    (directory-file-name (magit-toplevel))))
+                                  ver)))))
              args))))
-  (magit-run-git-async "tag" args (and msg (list "-m" msg)) tag)
+  (magit-run-git-with-editor "tag" args (and msg (list "-m" msg)) tag)
   (set-process-sentinel
    magit-this-process
    (lambda (process event)

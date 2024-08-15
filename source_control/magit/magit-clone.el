@@ -1,9 +1,9 @@
 ;;; magit-clone.el --- Clone a repository  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -238,7 +238,7 @@ Then show the status buffer for the new repository."
 
 (defun magit-clone-internal (repository directory args &optional sparse)
   (let* ((checkout (not (member (car args) '("--bare" "--mirror"))))
-         (remote (or (transient-arg-value "--origin" args)
+         (remote (or (transient-arg-value "--origin=" args)
                      (magit-get "clone.defaultRemote")
                      "origin"))
          (set-push-default

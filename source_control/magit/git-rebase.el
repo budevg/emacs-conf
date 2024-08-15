@@ -1,9 +1,9 @@
 ;;; git-rebase.el --- Edit Git rebase files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
 ;; Author: Phil Jackson <phil@shellarchive.co.uk>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -25,7 +25,7 @@
 ;; This package assists the user in editing the list of commits to be
 ;; rewritten during an interactive rebase.
 
-;; When the user initiates an interactive rebase, e.g. using "r e" in
+;; When the user initiates an interactive rebase, e.g., using "r e" in
 ;; a Magit buffer or on the command line using "git rebase -i REV",
 ;; Git invokes the `$GIT_SEQUENCE_EDITOR' (or if that is undefined
 ;; `$GIT_EDITOR' or even `$EDITOR') letting the user rearrange, drop,
@@ -36,7 +36,7 @@
 ;; providing the following commands:
 ;;
 ;;   C-c C-c  Tell Git to make it happen.
-;;   C-c C-k  Tell Git that you changed your mind, i.e. abort.
+;;   C-c C-k  Tell Git that you changed your mind, i.e., abort.
 ;;
 ;;   p        Move point to previous line.
 ;;   n        Move point to next line.
@@ -199,7 +199,7 @@
 
 (defvar git-rebase-command-descriptions
   '((with-editor-finish           . "tell Git to make it happen")
-    (with-editor-cancel           . "tell Git that you changed your mind, i.e. abort")
+    (with-editor-cancel           . "tell Git that you changed your mind, i.e., abort")
     (git-rebase-backward-line     . "move point to previous line")
     (forward-line                 . "move point to next line")
     (git-rebase-move-line-up      . "move the commit at point up")
@@ -464,9 +464,9 @@ If the region is active, act on all lines touched by the region."
   "Read an arbitrary commit and insert it below current line."
   (interactive (list (magit-read-branch-or-commit "Insert revision")))
   (forward-line)
-  (--if-let (magit-rev-format "%h %s" rev)
+  (if-let ((info (magit-rev-format "%h %s" rev)))
       (let ((inhibit-read-only t))
-        (insert "pick " it ?\n))
+        (insert "pick " info ?\n))
     (user-error "Unknown revision")))
 
 (defun git-rebase-set-noncommit-action (action value-fn arg)
@@ -653,13 +653,14 @@ Like `undo' but works in read-only buffers."
   (let ((magit--disable-save-buffers t))
     (save-excursion
       (goto-char (line-beginning-position))
-      (--if-let (with-slots (action-type target) (git-rebase-current-line)
-                  (and (eq action-type 'commit)
-                       target))
+      (if-let ((rev (with-slots (action-type target)
+                        (git-rebase-current-line)
+                      (and (eq action-type 'commit)
+                           target))))
           (pcase scroll
             ('up   (magit-diff-show-or-scroll-up))
             ('down (magit-diff-show-or-scroll-down))
-            (_     (apply #'magit-show-commit it
+            (_     (apply #'magit-show-commit rev
                           (magit-diff-arguments 'magit-revision-mode))))
         (ding)))))
 
@@ -704,6 +705,7 @@ Rebase files are generated when you run \"git rebase -i\" or run
 `magit-interactive-rebase'.  They describe how Git should perform
 the rebase.  See the documentation for git-rebase (e.g., by
 running \"man git-rebase\" at the command line) for details."
+  :interactive nil
   :group 'git-rebase
   (setq comment-start (or (magit-get "core.commentChar") "#"))
   (setq git-rebase-comment-re (concat "^" (regexp-quote comment-start)))
@@ -717,8 +719,10 @@ running \"man git-rebase\" at the command line) for details."
   (when git-rebase-confirm-cancel
     (add-hook 'with-editor-cancel-query-functions
               #'git-rebase-cancel-confirm nil t))
-  (setq-local redisplay-highlight-region-function #'git-rebase-highlight-region)
-  (setq-local redisplay-unhighlight-region-function #'git-rebase-unhighlight-region)
+  (setq-local redisplay-highlight-region-function
+              #'git-rebase-highlight-region)
+  (setq-local redisplay-unhighlight-region-function
+              #'git-rebase-unhighlight-region)
   (add-hook 'with-editor-pre-cancel-hook  #'git-rebase-autostash-save  nil t)
   (add-hook 'with-editor-post-cancel-hook #'git-rebase-autostash-apply nil t)
   (setq imenu-prev-index-position-function
@@ -734,13 +738,13 @@ running \"man git-rebase\" at the command line) for details."
       (magit-confirm 'abort-rebase "Abort this rebase" nil 'noabort)))
 
 (defun git-rebase-autostash-save ()
-  (--when-let (magit-file-line
-               (expand-file-name "rebase-merge/autostash" (magit-gitdir)))
-    (push (cons 'stash it) with-editor-cancel-alist)))
+  (when-let ((rev (magit-file-line
+                   (expand-file-name "rebase-merge/autostash" (magit-gitdir)))))
+    (push (cons 'stash rev) with-editor-cancel-alist)))
 
 (defun git-rebase-autostash-apply ()
-  (--when-let (cdr (assq 'stash with-editor-cancel-alist))
-    (magit-stash-apply it)))
+  (when-let ((rev (cdr (assq 'stash with-editor-cancel-alist))))
+    (magit-stash-apply rev)))
 
 (defun git-rebase-match-comment-line (limit)
   (re-search-forward (concat git-rebase-comment-re ".*") limit t))
@@ -829,7 +833,7 @@ By default, this is the same except for the \"pick\" command."
 (add-hook 'git-rebase-mode-hook #'git-rebase-mode-show-keybindings t)
 
 (defun git-rebase-mode-disable-before-save-hook ()
-  (set (make-local-variable 'before-save-hook) nil))
+  (setq-local before-save-hook nil))
 
 (add-hook 'git-rebase-mode-hook #'git-rebase-mode-disable-before-save-hook)
 

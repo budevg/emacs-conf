@@ -1,9 +1,9 @@
 ;;; magit-sequence.el --- History manipulation in Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2023 The Magit Project Contributors
+;; Copyright (C) 2008-2024 The Magit Project Contributors
 
-;; Author: Jonas Bernoulli <jonas@bernoul.li>
-;; Maintainer: Jonas Bernoulli <jonas@bernoul.li>
+;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
+;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -91,31 +91,36 @@
 (defun magit-sequencer-continue ()
   "Resume the current cherry-pick or revert sequence."
   (interactive)
-  (if (magit-sequencer-in-progress-p)
-      (if (magit-anything-unmerged-p)
-          (user-error "Cannot continue due to unresolved conflicts")
-        (magit-run-git-sequencer
-         (if (magit-revert-in-progress-p) "revert" "cherry-pick") "--continue"))
-    (user-error "No cherry-pick or revert in progress")))
+  (cond
+   ((not (magit-sequencer-in-progress-p))
+    (user-error "No cherry-pick or revert in progress"))
+   ((magit-anything-unmerged-p)
+    (user-error "Cannot continue due to unresolved conflicts"))
+   ((magit-run-git-sequencer
+     (if (magit-revert-in-progress-p) "revert" "cherry-pick") "--continue"))))
 
 ;;;###autoload
 (defun magit-sequencer-skip ()
   "Skip the stopped at commit during a cherry-pick or revert sequence."
   (interactive)
-  (if (magit-sequencer-in-progress-p)
-      (progn (magit-call-git "reset" "--hard")
-             (magit-sequencer-continue))
-    (user-error "No cherry-pick or revert in progress")))
+  (unless (magit-sequencer-in-progress-p)
+    (user-error "No cherry-pick or revert in progress"))
+  (magit-call-git "reset" "--hard")
+  (magit-sequencer-continue))
 
 ;;;###autoload
 (defun magit-sequencer-abort ()
   "Abort the current cherry-pick or revert sequence.
 This discards all changes made since the sequence started."
   (interactive)
-  (if (magit-sequencer-in-progress-p)
-      (magit-run-git-sequencer
-       (if (magit-revert-in-progress-p) "revert" "cherry-pick") "--abort")
-    (user-error "No cherry-pick or revert in progress")))
+  (cond
+   ((not (magit-sequencer-in-progress-p))
+    (user-error "No cherry-pick or revert in progress"))
+   ((magit-revert-in-progress-p)
+    (magit-confirm 'abort-revert "Really abort revert")
+    (magit-run-git-sequencer "revert" "--abort"))
+   ((magit-confirm 'abort-cherry-pick "Really abort cherry-pick")
+    (magit-run-git-sequencer "cherry-pick" "--abort"))))
 
 (defun magit-sequencer-in-progress-p ()
   (or (magit-cherry-pick-in-progress-p)
@@ -281,8 +286,8 @@ the process manually."
     (unless (magit-branch-p dst)
       (let ((magit-process-raise-error t))
         (magit-call-git "branch" dst start-point))
-      (--when-let (magit-get-indirect-upstream-branch start-point)
-        (magit-call-git "branch" "--set-upstream-to" it dst)))
+      (when-let ((upstream (magit-get-indirect-upstream-branch start-point)))
+        (magit-call-git "branch" "--set-upstream-to" upstream dst)))
     (unless (equal dst current)
       (let ((magit-process-raise-error t))
         (magit-call-git "checkout" dst)))
@@ -335,12 +340,11 @@ the process manually."
                       (list commits))))
     (magit-run-git-sequencer
      (if revert "revert" "cherry-pick")
-     (pcase-let ((`(,merge ,non-merge)
-                  (-separate #'magit-merge-commit-p commits)))
+     (let ((merges (seq-filter #'magit-merge-commit-p commits)))
        (cond
-        ((not merge)
+        ((not merges)
          (--remove (string-prefix-p "--mainline=" it) args))
-        (non-merge
+        ((cl-set-difference commits merges :test #'equal)
          (user-error "Cannot %s merge and non-merge commits at once"
                      command))
         ((--first (string-prefix-p "--mainline=" it) args)
@@ -486,28 +490,29 @@ without prompting."
 (defun magit-am-continue ()
   "Resume the current patch applying sequence."
   (interactive)
-  (if (magit-am-in-progress-p)
-      (if (magit-anything-unstaged-p t)
-          (error "Cannot continue due to unstaged changes")
-        (magit-run-git-sequencer "am" "--continue"))
-    (user-error "Not applying any patches")))
+  (cond
+   ((not (magit-am-in-progress-p))
+    (user-error "Not applying any patches"))
+   ((magit-anything-unstaged-p t)
+    (user-error "Cannot continue due to unstaged changes"))
+   ((magit-run-git-sequencer "am" "--continue"))))
 
 ;;;###autoload
 (defun magit-am-skip ()
   "Skip the stopped at patch during a patch applying sequence."
   (interactive)
-  (if (magit-am-in-progress-p)
-      (magit-run-git-sequencer "am" "--skip")
-    (user-error "Not applying any patches")))
+  (unless (magit-am-in-progress-p)
+    (user-error "Not applying any patches"))
+  (magit-run-git-sequencer "am" "--skip"))
 
 ;;;###autoload
 (defun magit-am-abort ()
   "Abort the current patch applying sequence.
 This discards all changes made since the sequence started."
   (interactive)
-  (if (magit-am-in-progress-p)
-      (magit-run-git "am" "--abort")
-    (user-error "Not applying any patches")))
+  (unless (magit-am-in-progress-p)
+    (user-error "Not applying any patches"))
+  (magit-run-git "am" "--abort"))
 
 (defun magit-am-in-progress-p ()
   (file-exists-p (expand-file-name "rebase-apply/applying" (magit-gitdir))))
@@ -915,24 +920,31 @@ If no such sequence is in progress, do nothing."
   (when (magit-am-in-progress-p)
     (magit-insert-section (rebase-sequence)
       (magit-insert-heading "Applying patches")
-      (let ((patches (nreverse (magit-rebase-patches)))
-            patch commit)
-        (while patches
+      (let* ((patches (nreverse (magit-rebase-patches)))
+             (dir (expand-file-name "rebase-apply" (magit-gitdir)))
+             (i (string-to-number
+                 (magit-file-line (expand-file-name "last" dir))))
+             (cur (string-to-number
+                   (magit-file-line (expand-file-name "next" dir))))
+             patch commit)
+        (while (and patches (>= i cur))
           (setq patch (pop patches))
           (setq commit (magit-commit-p
                         (cadr (split-string (magit-file-line patch)))))
-          (cond ((and commit patches)
+          (cond ((and commit (= i cur))
+                 (magit-sequence-insert-commit
+                  "stop" commit 'magit-sequence-stop))
+                ((= i cur)
+                 (magit-sequence-insert-am-patch
+                  "stop" patch 'magit-sequence-stop))
+                (commit
                  (magit-sequence-insert-commit
                   "pick" commit 'magit-sequence-pick))
-                (patches
-                 (magit-sequence-insert-am-patch
-                  "pick" patch 'magit-sequence-pick))
-                (commit
-                 (magit-sequence-insert-sequence commit "ORIG_HEAD"))
                 (t
                  (magit-sequence-insert-am-patch
-                  "stop" patch 'magit-sequence-stop)
-                 (magit-sequence-insert-sequence nil "ORIG_HEAD")))))
+                  "pick" patch 'magit-sequence-pick)))
+          (cl-decf i)))
+      (magit-sequence-insert-sequence nil "ORIG_HEAD")
       (insert ?\n))))
 
 (defun magit-sequence-insert-am-patch (type patch face)
@@ -976,7 +988,7 @@ If no such sequence is in progress, do nothing."
 (defun magit-rebase--todo ()
   "Return `git-rebase-action' instances for remaining rebase actions.
 These are ordered in that the same way they'll be sorted in the
-status buffer (i.e. the reverse of how they will be applied)."
+status buffer (i.e., the reverse of how they will be applied)."
   (let ((comment-start (or (magit-get "core.commentChar") "#"))
         lines)
     (with-temp-buffer
@@ -1035,7 +1047,7 @@ status buffer (i.e. the reverse of how they will be applied)."
 
 (defun magit-rebase-patches ()
   (directory-files (expand-file-name "rebase-apply" (magit-gitdir))
-                   t "^[0-9]\\{4\\}$"))
+                   t "\\`[0-9]\\{4\\}\\'"))
 
 (defun magit-sequence-insert-sequence (stop onto &optional orig)
   (let ((head (magit-rev-parse "HEAD")) done)
@@ -1043,8 +1055,8 @@ status buffer (i.e. the reverse of how they will be applied)."
     (setq done (magit-git-lines "log" "--format=%H" (concat onto "..HEAD")))
     (when (and stop (not (member (magit-rev-parse stop) done)))
       (let ((id (magit-patch-id stop)))
-        (--if-let (--first (equal (magit-patch-id it) id) done)
-            (setq stop it)
+        (if-let ((matched (--first (equal (magit-patch-id it) id) done)))
+            (setq stop matched)
           (cond
            ((--first (magit-rev-equal it stop) done)
             ;; The commit's testament has been executed.
