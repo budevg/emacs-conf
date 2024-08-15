@@ -17,7 +17,7 @@
 (global-set-key [(control tab)] 'other-window)
 (global-set-key [(meta up)] (lambda () (interactive) (windmove-ext 'up)))
 (global-set-key [(meta down)] (lambda () (interactive) (windmove-ext 'down)))
-(global-set-key [(pause)] 'kill-this-buffer)
+(global-set-key [(pause)] 'kill-current-buffer)
 (global-set-key [(control pause)] 'delete-frame)
 
 (ido-mode t)

@@ -16,7 +16,7 @@
   (interactive)
   (set-buffer-modified-p nil)
   (let ((remote-buffer remote-comint-buffer-loc))
-    (kill-this-buffer)
+    (kill-current-buffer)
     (switch-to-buffer remote-buffer)))
 
 
