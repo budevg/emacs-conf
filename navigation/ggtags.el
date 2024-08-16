@@ -1525,7 +1525,7 @@ commands `next-error' and `previous-error'.
               3 2 (,(lambda () (ggtags-global-column (1+ (match-end 0)))))
               nil 3 (1 font-lock-function-name-face))
      ;; src/dialog.cc:172:#undef ACTIVE_ESCAPE
-     (grep "^\\(.+?\\):\\([0-9]+\\):\\(?:$\\|[^0-9\n]\\|[0-9][^0-9\n]\\|[0-9][0-9].\\)"
+     (grep "^\\(.+?\\):\\([0-9]+\\):\\(?:$\\|[^0-9\n]\\|[0-9][^0-9\n]\\|[0-9][0-9][^,]\\)"
            1 2 (,(lambda () (ggtags-global-column (1+ (match-end 2))))) nil 1)
      ;; src/dialog.cc ACTIVE_ESCAPE 172 #undef ACTIVE_ESCAPE
      (cscope "^\\(.+?\\)[ \t]+\\([^ \t\n]+\\)[ \t]+\\([0-9]+\\).*\\(?:[^0-9\n]\\|[^0-9\n][0-9]\\|[^:\n][0-9][0-9]\\)$"
