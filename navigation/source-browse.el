@@ -8,22 +8,17 @@
 (autoload 'moccur "color-moccur" nil t)
 (global-set-key [(shift f9)] 'moccur)
 
-(autoload 'ggtags-find-tag-dwim "ggtags" nil t)
-(autoload 'ggtags-find-definition "ggtags" nil t)
-(autoload 'ggtags-find-reference "ggtags" nil t)
-(autoload 'ggtags-find-tag-regexp "ggtags" nil t)
-(autoload 'ggtags-find-other-symbol "ggtags" nil t)
-(define-key global-map [(meta f9)]  'ggtags-find-other-symbol)
-(define-key global-map [(control /)]  'ggtags-find-definition)
-(define-key global-map [(control \?)]  'xref-go-back)
-(define-key global-map [(control \.)]  'ggtags-find-reference)
-
-(eval-after-load "ggtags"
-  '(progn
-     (setq ggtags-highlight-tag nil)
-     (setq ggtags-update-on-save nil)
-     (setq ggtags-global-window-height nil)
-     ))
+(use-package ggtags
+  :config
+  (setq ggtags-highlight-tag nil
+        ggtags-update-on-save nil
+        ggtags-global-window-height nil
+        ggtags-global-abbreviate-filename nil)
+  :bind (("M-<f9>" . ggtags-find-other-symbol)
+         ("C-/" . ggtags-find-definition)
+         ("C-?" . xref-go-back)
+         ("C-." . ggtags-find-reference))
+  )
 
 (defun ctags-build ()
   (interactive)
