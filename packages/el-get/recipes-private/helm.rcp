@@ -1,7 +1,0 @@
-(:name helm
-       :description "Emacs incremental completion and narrowing framework"
-       :type github
-       :pkgname "emacs-helm/helm"
-       :build `(,(concat "cp *.el "
-                         (in-emacs-d "navigation/helm")))
-       )
