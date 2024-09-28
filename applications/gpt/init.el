@@ -12,8 +12,21 @@
   (gptel-make-gemini "gemini"
                      :key 'gptel-api-key
                      :stream t
-                     :models '("gemini-1.5-pro-latest"
-                               "gemini-1.5-flash-latest"))
+                     :models '("gemini-1.5-pro-002"
+                               "gemini-1.5-flash-002"))
+
+  (gptel-make-openai "github"
+                     :host "models.inference.ai.azure.com"
+                     :endpoint "/chat/completions"
+                     :key 'gptel-api-key
+                     :stream t
+                     :models '("gpt-4o"
+                               "gpt-4o-mini"
+                               "ai21-jamba-1.5-large"
+                               "ai21-jamba-1.5-mini"
+                               "Mistral-large"
+                               "Mistral-small"
+                               ))
 
   (gptel-make-openai "open-router"
                      :host "openrouter.ai"
@@ -43,5 +56,5 @@
   (assoc-delete-all "ChatGPT" gptel--known-backends #'equal)
 
   (setq-default gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
-                gptel-model "gemini-1.5-pro-latest")
+                gptel-model "gemini-1.5-pro-002")
   )
