@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: cmain
-# key: cmain
+# name: c
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

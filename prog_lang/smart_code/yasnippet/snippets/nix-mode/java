@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: javamain
-# key: javamain
+# name: java
+# key: main
 # --
 { pkgs ? import <nixpkgs> {}, unstable ? import <unstable> {} }:
 with pkgs;

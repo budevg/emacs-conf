@@ -1,5 +1,6 @@
-# key: rsmain
-# name: rsmain
+# -*- mode: snippet -*-
+# name: rust
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: gomain
-# key: gomain
+# name: go
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

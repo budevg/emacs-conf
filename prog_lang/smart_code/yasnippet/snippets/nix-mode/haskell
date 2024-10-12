@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: hsmain
-# key: hsmain
+# name: haskell
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

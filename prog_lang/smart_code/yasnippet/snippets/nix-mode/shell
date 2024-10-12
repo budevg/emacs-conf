@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
 # name: shell
-# key: shell
+# key: main
 # --
 { pkgs ? import <nixpkgs> {} }:
 

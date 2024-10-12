@@ -1,0 +1,28 @@
+# -*- mode: snippet -*-
+# name: jupyter
+# key: main
+# --
+{ pkgs ? import <nixpkgs> { } }:
+
+with pkgs;
+let
+  py-packages = pypkgs:
+    with pypkgs; [
+      jupyter
+      numpy
+      pandas
+      matplotlib
+      seaborn
+    ];
+in mkShell {
+  buildInputs = [
+    (python3.withPackages py-packages)
+    python3Packages.black
+    python3Packages.python-lsp-server
+  ];
+  shellHook = ''
+    export JUPYTER_CONFIG_DIR=`pwd`/.jupyter/config
+    export JUPYTER_DATA_DIR=`pwd`/.jupyter/data
+    export JUPYTER_RUNTIME_DIR=`pwd`/.jupyter/runtime
+  '';
+}$0

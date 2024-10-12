@@ -1,0 +1,33 @@
+# -*- mode: snippet -*-
+# name: tunnel
+# key: main
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ ];
+  shellHook = ''
+    pkill ssh-agent
+    ssh-agent > ssh-agent.cfg
+    eval $(cat ssh-agent.cfg)
+
+    ssh-keygen -f key -N "" -C key
+    ssh-add key
+
+    LABEL=$(tr -dc 'a-z' < /dev/urandom | head -c 6)
+
+    cat << EOF > tunnel.cmd
+    echo "$(cat key.pub)" >> ~/.ssh/authorized_keys
+    # servio
+    ssh -R $LABEL:5901:localhost:22 serveo.net
+
+    ssh -L 5900:$LABEL:5901 serveo.net
+
+    ssh -p 5900 root@localhost
+
+    # pinggy
+    ssh -p 443 -R0:localhost:22 -o ServerAliveInterval=30 tcp@a.pinggy.io
+    EOF
+  '';
+}
+$0

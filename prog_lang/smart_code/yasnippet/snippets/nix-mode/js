@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: jsmain
-# key: jsmain
+# name: js
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

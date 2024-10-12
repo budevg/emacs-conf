@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: tormain
-# key: tormain
+# name: tor
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

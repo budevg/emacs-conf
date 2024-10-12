@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: sshmain
-# key: sshmain
+# name: ssh
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;

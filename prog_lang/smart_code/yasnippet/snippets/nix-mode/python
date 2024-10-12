@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: pymain
-# key: pymain
+# name: python
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 

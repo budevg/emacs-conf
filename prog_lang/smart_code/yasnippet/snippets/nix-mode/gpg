@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: gpgmain
-# key: gpgmain
+# name: gpg
+# key: main
 # --
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;
