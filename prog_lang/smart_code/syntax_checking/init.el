@@ -1,13 +1,23 @@
-(autoload 'flycheck-mode "flycheck" nil t)
-(global-set-key [(control O)] 'flycheck-mode)
-(setq flycheck-python-pylint-executable "pylint")
+(use-package flycheck
+  :config
+  (setq flycheck-python-pylint-executable "pylint")
+  :bind (("C-c o" . flycheck-mode))
+  )
 
-(autoload 'format-all-region-or-buffer "format-all" nil t)
-(global-set-key (kbd "C-c p") 'format-all-region-or-buffer)
-(setq format-all-formatters
-      '(("Python" black)
-        ("Go" goimports)
-        ("Haskell" fourmolu)
-        ("C++" clang-format)
-        ("C" clang-format)
-        ))
+(use-package flycheck-eglot
+  :after eglot
+  :bind
+  (:map eglot-mode-map
+        ("C-c e o" . flycheck-eglot-mode))
+  )
+
+(use-package format-all
+  :bind (("C-c p" . format-all-region-or-buffer))
+  :config
+  (setq format-all-formatters
+        '(("Python" black)
+          ("Go" goimports)
+          ("Haskell" fourmolu)
+          ("C++" clang-format)
+          ("C" clang-format)
+          )))

@@ -1,0 +1,7 @@
+(:name flycheck-eglot
+       :type github
+       :pkgname "flycheck/flycheck-eglot"
+       :description "Flycheck support for eglot"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/smart_code/syntax_checking")))
+       )

@@ -1,5 +1,11 @@
 (use-package eglot
   :commands (eglot)
+  :init
+  (defun eglot-or-shutdown ()
+    (interactive)
+    (if (and (fboundp 'eglot-managed-p) (eglot-managed-p))
+        (call-interactively 'eglot-shutdown)
+      (call-interactively 'eglot)))
   :config
   (setq eglot-autoshutdown t
         eglot-stay-out-of '(eldoc flymake company imenu)
@@ -14,12 +20,14 @@
                  ,(eglot-alternatives
                    '(("deno" "lsp") ("typescript-language-server" "--stdio")))))
   (defun eglot--post-self-insert-hook ())
-  :bind
-  (:map eglot-mode-map
-        ("C-/" .  'xref-find-definitions)
-        ("C-?" . 'xref-go-back)
-        ("C-." .  'xref-find-references)
-        ("C-c P" .  'eglot-format))
+  :bind (("C-S-o" . 'eglot-or-shutdown)
+         :map eglot-mode-map
+         ("C-/" .  'xref-find-definitions)
+         ("C-?" . 'xref-go-back)
+         ("C-." .  'xref-find-references)
+         ("C-c e p" .  'eglot-format)
+         ("C-c e c" .  'eglot-code-actions)
+         ("C-c e r" .  'eglot-rename))
   )
 
 (if (not (fboundp 'project-root))
