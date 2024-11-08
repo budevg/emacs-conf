@@ -11,5 +11,6 @@ in mkShell {
     (python3.withPackages py-packages)
     python3Packages.black
     python3Packages.python-lsp-server
+    python3Packages.python-lsp-ruff
   ];
 }
