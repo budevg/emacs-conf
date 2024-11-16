@@ -34,6 +34,7 @@
 (declare-function text-property-search-backward "text-property-search")
 (declare-function json-read "json" ())
 (declare-function gptel-context--wrap "gptel-context")
+(declare-function gptel-context--collect-media "gptel-context")
 
 ;;; Anthropic (Messages API)
 (cl-defstruct (gptel-anthropic (:constructor gptel--make-anthropic)
@@ -63,19 +64,27 @@
 (cl-defmethod gptel--request-data ((_backend gptel-anthropic) prompts)
   "JSON encode PROMPTS for sending to ChatGPT."
   (let ((prompts-plist
-         `(:model ,gptel-model
-           :system ,gptel--system-message
+         `(:model ,(gptel--model-name gptel-model)
            :stream ,(or (and gptel-stream gptel-use-curl
                          (gptel-backend-stream gptel-backend))
                      :json-false)
            :max_tokens ,(or gptel-max-tokens 1024)
            :messages [,@prompts])))
+    (when (and gptel--system-message
+               (not (gptel--model-capable-p 'nosystem)))
+      (plist-put prompts-plist :system gptel--system-message))
     (when gptel-temperature
       (plist-put prompts-plist :temperature gptel-temperature))
-    prompts-plist))
+    ;; Merge request params with model and backend params.
+    (gptel--merge-plists
+     prompts-plist
+     (gptel-backend-request-params gptel-backend)
+     (gptel--model-request-params  gptel-model))))
 
 (cl-defmethod gptel--parse-buffer ((_backend gptel-anthropic) &optional max-entries)
-  (let ((prompts) (prop))
+  (let ((prompts) (prop)
+        (include-media (and gptel-track-media (or (gptel--model-capable-p 'media)
+                                                (gptel--model-capable-p 'url)))))
     (if (or gptel-mode gptel-track-response)
         (while (and
                 (or (not max-entries) (>= max-entries 0))
@@ -84,16 +93,30 @@
                             (when (get-char-property (max (point-min) (1- (point)))
                                                      'gptel)
                               t))))
-          (push (list :role (if (prop-match-value prop) "assistant" "user")
-                      :content
-                      (string-trim
-                       (buffer-substring-no-properties (prop-match-beginning prop)
-                                                       (prop-match-end prop))
-                       (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
-                               (regexp-quote (gptel-prompt-prefix-string)))
-                       (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
-                               (regexp-quote (gptel-response-prefix-string)))))
-                prompts)
+          (if (prop-match-value prop)   ; assistant role
+              (push (list :role "assistant"
+                          :content
+                          (buffer-substring-no-properties (prop-match-beginning prop)
+                                                          (prop-match-end prop)))
+                    prompts)
+            ;; HACK Until we can find a more robust solution for editing
+            ;; responses, ignore user prompts containing only whitespace, as the
+            ;; Anthropic API can't handle it.  See #409, #406, #351 and #321
+            (unless (save-excursion (skip-syntax-forward " ")
+                                    (eq (get-char-property (point) 'gptel) 'response))
+              (if include-media         ; user role: possibly with media
+                  (push (list :role "user"
+                              :content
+                              (gptel--anthropic-parse-multipart
+                               (gptel--parse-media-links
+                                major-mode (prop-match-beginning prop) (prop-match-end prop))))
+                        prompts)
+                (push (list :role "user"
+                            :content
+                            (gptel--trim-prefixes
+                             (buffer-substring-no-properties (prop-match-beginning prop)
+                                                             (prop-match-end prop))))
+                      prompts))))
           (and max-entries (cl-decf max-entries)))
       (push (list :role "user"
                   :content
@@ -101,21 +124,170 @@
             prompts))
     prompts))
 
-(cl-defmethod gptel--wrap-user-prompt ((_backend gptel-anthropic) prompts)
-  "Wrap the last user prompt in PROMPTS with the context string."
-  (cl-callf gptel-context--wrap (plist-get (car (last prompts)) :content)))
+(defun gptel--anthropic-parse-multipart (parts)
+  "Convert a multipart prompt PARTS to the Anthropic API format.
+
+The input is an alist of the form
+ ((:text \"some text\")
+  (:media \"/path/to/media.png\" :mime \"image/png\")
+  (:text \"More text\")).
+
+The output is a vector of entries in a backend-appropriate
+format."
+  (cl-loop
+   for part in parts
+   for n upfrom 1
+   with last = (length parts)
+   with type
+   for text = (plist-get part :text)
+   for mime = (plist-get part :mime)
+   for media = (plist-get part :media)
+   if text do
+   (and (or (= n 1) (= n last)) (setq text (gptel--trim-prefixes text))) and
+   unless (string-empty-p text)
+   collect `(:type "text" :text ,text) into parts-array end
+   else if media
+   do
+   (setq type (cond                     ;Currently supported: Images and PDFs
+               ((equal (substring mime 0 5) "image") "image")
+               ;; NOTE: Only Claude 3.5 Sonnet supports PDF documents:
+               ((equal mime "application/pdf") "document")
+               (t (error (concat "(gptel-anthropic) Request aborted: "
+                                 "trying to send unsupported MIME type %s")
+                         mime))))
+   and collect
+   `(:type ,type
+     :source (:type "base64"
+              :media_type ,(plist-get part :mime)
+              :data ,(gptel--base64-encode media))
+     ;; TODO Make media caching a user option
+     ,@(and (gptel--model-capable-p 'cache)
+        '(:cache_control (:type "ephemeral"))))
+   into parts-array
+   finally return (vconcat parts-array)))
+
+(cl-defmethod gptel--wrap-user-prompt ((_backend gptel-anthropic) prompts
+                                       &optional inject-media)
+  "Wrap the last user prompt in PROMPTS with the context string.
+
+If INJECT-MEDIA is non-nil wrap it with base64-encoded media
+files in the context."
+  (if inject-media
+      ;; Wrap the first user prompt with included media files/contexts
+      (when-let ((media-list (gptel-context--collect-media)))
+        (cl-callf (lambda (current)
+                    (vconcat
+                     (gptel--anthropic-parse-multipart media-list)
+                     (cl-typecase current
+                       (string `((:type "text" :text ,current)))
+                       (vector current)
+                       (t current))))
+            (plist-get (car prompts) :content)))
+    ;; Wrap the last user prompt with included text contexts
+    (cl-callf (lambda (current)
+                (cl-etypecase current
+                  (string (gptel-context--wrap current))
+                  (vector (if-let ((wrapped (gptel-context--wrap nil)))
+                              (vconcat `((:type "text" :text ,wrapped))
+                                       current)
+                            current))))
+        (plist-get (car (last prompts)) :content))))
+
+;; (if-let ((context-string (gptel-context--string gptel-context--alist)))
+;;     (cl-callf (lambda (previous)
+;;                 (cl-typecase previous
+;;                   (string (concat context-string previous))
+;;                   (vector (vconcat `((:type "text" :text ,previous))
+;;                                    previous))
+;;                   (t context-string)))
+;;         (plist-get (car (last prompts)) :content)))
+
+(defconst gptel--anthropic-models
+  '((claude-3-5-sonnet-20241022
+     :description "Highest level of intelligence and capability"
+     :capabilities (media tool cache)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+     :context-window 200
+     :input-cost 3
+     :output-cost 15
+     :cutoff-date "2024-04")
+    (claude-3-5-sonnet-20240620
+     :description "Highest level of intelligence and capability"
+     :capabilities (media tool cache)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 3
+     :output-cost 15
+     :cutoff-date "2024-04")
+    (claude-3-opus-20240229
+     :description "Top-level performance, intelligence, fluency, and understanding"
+     :capabilities (media tool cache)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 15
+     :output-cost 75
+     :cutoff-date "2023-08")
+    (claude-3-5-haiku-20241022
+     :description "Intelligence at blazing speeds"
+     :capabilities (media tool)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 1.00
+     :output-cost 5.00
+     :cutoff-date "2024-07")
+    (claude-3-haiku-20240307
+     :description "Fast and most compact model for near-instant responsiveness"
+     :capabilities (media tool)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 0.25
+     :output-cost 1.25
+     :cutoff-date "2023-08")
+    (claude-3-sonnet-20240229
+     :description "Balance of intelligence and speed (legacy model)"
+     :capabilities (media tool)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 3
+     :output-cost 15
+     :cutoff-date "2023-08"))
+  "List of available Anthropic models and associated properties.
+Keys:
+
+- `:description': a brief description of the model.
+
+- `:capabilities': a list of capabilities supported by the model.
+
+- `:mime-types': a list of supported MIME types for media files.
+
+- `:context-window': the context window size, in thousands of tokens.
+
+- `:input-cost': the input cost, in US dollars per million tokens.
+
+- `:output-cost': the output cost, in US dollars per million tokens.
+
+- `:cutoff-date': the knowledge cutoff date.
+
+- `:request-params': a plist of additional request parameters to
+  include when using this model.
+
+Information about the Anthropic models was obtained from the following
+sources:
+
+- <https://www.anthropic.com/pricing#anthropic-api>
+- <https://www.anthropic.com/news/claude-3-5-sonnet>
+- <https://assets.anthropic.com/m/61e7d27f8c8f5919/original/Claude-3-Model-Card.pdf>")
 
 ;;;###autoload
 (cl-defun gptel-make-anthropic
-    (name &key curl-args stream key
+    (name &key curl-args stream key request-params
           (header
            (lambda () (when-let (key (gptel--get-api-key))
-                        `(("x-api-key" . ,key)
-                          ("anthropic-version" . "2023-06-01")))))
-          (models '("claude-3-5-sonnet-20240620"
-                    "claude-3-sonnet-20240229"
-                    "claude-3-haiku-20240307"
-                    "claude-3-opus-20240229"))
+                   `(("x-api-key" . ,key)
+                     ("anthropic-version" . "2023-06-01")
+                     ("anthropic-beta" . "pdfs-2024-09-25")
+                     ("anthropic-beta" . "prompt-caching-2024-07-31")))))
+          (models gptel--anthropic-models)
           (host "api.anthropic.com")
           (protocol "https")
           (endpoint "/v1/messages"))
@@ -127,7 +299,25 @@ CURL-ARGS (optional) is a list of additional Curl arguments.
 
 HOST (optional) is the API host, \"api.anthropic.com\" by default.
 
-MODELS is a list of available model names.
+MODELS is a list of available model names, as symbols.
+Additionally, you can specify supported LLM capabilities like
+vision or tool-use by appending a plist to the model with more
+information, in the form
+
+ (model-name . plist)
+
+For a list of currently recognized plist keys, see
+`gptel--anthropic-models'. An example of a model specification
+including both kinds of specs:
+
+:models
+\\='(claude-3-haiku-20240307               ;Simple specs
+  claude-3-opus-20240229
+  (claude-3-5-sonnet-20240620           ;Full spec
+   :description  \"Balance of intelligence and speed\"
+   :capabilities (media tool json)
+   :mime-types
+   (\"image/jpeg\" \"image/png\" \"image/gif\" \"image/webp\")))
 
 STREAM is a boolean to toggle streaming responses, defaults to
 false.
@@ -138,12 +328,17 @@ ENDPOINT (optional) is the API endpoint for completions, defaults to
 \"/v1/messages\".
 
 HEADER (optional) is for additional headers to send with each
-request. It should be an alist or a function that retuns an
+request.  It should be an alist or a function that retuns an
 alist, like:
-((\"Content-Type\" . \"application/json\"))
+ ((\"Content-Type\" . \"application/json\"))
 
 KEY is a variable whose value is the API key, or function that
-returns the key."
+returns the key.
+
+REQUEST-PARAMS (optional) is a plist of additional HTTP request
+parameters (as plist keys) and values supported by the API.  Use
+these to set parameters that gptel does not provide user options
+for."
   (declare (indent 1))
   (let ((backend (gptel--make-anthropic
                   :curl-args curl-args
@@ -151,10 +346,11 @@ returns the key."
                   :host host
                   :header header
                   :key key
-                  :models models
+                  :models (gptel--process-models models)
                   :protocol protocol
                   :endpoint endpoint
                   :stream stream
+                  :request-params request-params
                   :url (if protocol
                            (concat protocol "://" host endpoint)
                          (concat host endpoint)))))
@@ -164,4 +360,4 @@ returns the key."
                   backend))))
 
 (provide 'gptel-anthropic)
-;;; gptel-backends.el ends here
+;;; gptel-anthropic.el ends here

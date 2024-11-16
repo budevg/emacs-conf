@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthik.chikmagalur@gmail.com>
-;; Version: 0.9.0
+;; Version: 0.9.6
 ;; Package-Requires: ((emacs "27.1") (transient "0.4.0") (compat "29.1.4.1"))
 ;; Keywords: convenience
 ;; URL: https://github.com/karthink/gptel
@@ -27,12 +27,16 @@
 
 ;;; Commentary:
 
-;; gptel is a simple Large Language Model chat client, with support for multiple models/backends.
+;; gptel is a simple Large Language Model chat client, with support for multiple
+;; models and backends.
+;;
+;; It works in the spirit of Emacs, available at any time and in any buffer.
 ;;
 ;; gptel supports
 ;;
 ;; - The services ChatGPT, Azure, Gemini, Anthropic AI, Anyscale, Together.ai,
-;;   Perplexity, Anyscale, OpenRouter, Groq and Kagi (FastGPT & Summarizer)
+;;   Perplexity, Anyscale, OpenRouter, Groq, PrivateGPT, DeepSeek, Cerebras,
+;;   Github Models and Kagi (FastGPT & Summarizer)
 ;; - Local models via Ollama, Llama.cpp, Llamafiles or GPT4All
 ;;
 ;;  Additionally, any LLM service (local or remote) that provides an
@@ -44,9 +48,13 @@
 ;;   wherever)
 ;; - LLM responses are in Markdown or Org markup.
 ;; - Supports conversations and multiple independent sessions.
+;; - Supports multi-modal models (send images, documents).
 ;; - Save chats as regular Markdown/Org/Text files and resume them later.
 ;; - You can go back and edit your previous prompts or LLM responses when
 ;;   continuing a conversation.  These will be fed back to the model.
+;; - Redirect prompts and responses easily
+;; - Rewrite, refactor or fill in regions in buffers
+;; - Write your own commands for custom tasks with a simple API.
 ;;
 ;; Requirements for ChatGPT, Azure, Gemini or Kagi:
 ;;
@@ -60,8 +68,9 @@
 ;; - For Gemini: define a gptel-backend with `gptel-make-gemini', which see.
 ;; - For Anthropic (Claude): define a gptel-backend with `gptel-make-anthropic',
 ;;   which see
-;; - For Together.ai, Anyscale, Perplexity, Groq and OpenRouter: define a
-;;   gptel-backend with `gptel-make-openai', which see.
+;; - For Together.ai, Anyscale, Perplexity, Groq, OpenRouter, DeepSeek, Cerebras or
+;;   Github Models: define a gptel-backend with `gptel-make-openai', which see.
+;; - For PrivateGPT: define a backend with `gptel-make-privategpt', which see.
 ;; - For Kagi: define a gptel-backend with `gptel-make-kagi', which see.
 ;;
 ;; For local models using Ollama, Llama.cpp or GPT4All:
@@ -106,16 +115,27 @@
 ;;   `gptel-mode' before editing it to restore the conversation state and
 ;;   continue chatting.
 ;;
+;; - To include media files with your request, you can add them to the context
+;;   (described next), or include them as links in Org or Markdown mode chat
+;;   buffers.  Sending media is disabled by default, you can turn it on globally
+;;   via `gptel-track-media', or locally in a chat buffer via the header line.
+;; 
 ;; Include more context with requests:
 ;;
 ;; If you want to provide the LLM with more context, you can add arbitrary
-;; regions, buffers or files to the query with `gptel-add'.  (Call `gptel-add'
-;; in Dired or use the dedicated `gptel-add-file' to add files.)
+;; regions, buffers or files to the query with `gptel-add'.  To add text or
+;; media files, call `gptel-add' in Dired or use the dedicated `gptel-add-file'.
 ;;
 ;; You can also add context from gptel's menu instead (gptel-send with a prefix
 ;; arg), as well as examine or modify context.
 ;;
 ;; When context is available, gptel will include it with each LLM query.
+;;
+;; Rewrite/refactor interface
+;;
+;; In any buffer: with a region selected, you can rewrite prose, refactor code
+;; or fill in the region.  Use gptel's menu (C-u M-x `gptel-send') to access
+;; this feature.
 ;;
 ;; gptel in Org mode:
 ;;
@@ -169,7 +189,7 @@
   (require 'gptel-org))
 
 
-;; User options
+;;; User options
 
 (defgroup gptel nil
   "Interact with LLMs from anywhere in Emacs."
@@ -297,6 +317,14 @@ This hook is called in the buffer from which the prompt was sent
 to the LLM, and after a text insertion."
   :type 'hook)
 
+(defcustom gptel-save-state-hook nil
+  "Hook run before gptel saves model parameters to a file.
+
+You can use this hook to store additional conversation state or
+model parameters to the chat buffer, or to modify the buffer in
+some other way."
+  :type 'hook)
+
 (defcustom gptel-default-mode (if (fboundp 'markdown-mode)
 				  'markdown-mode
 				'text-mode)
@@ -401,35 +429,37 @@ call `gptel-send' with a prefix argument."
   :type '(choice (natnum :tag "Specify Token count")
                  (const :tag "Default" nil)))
 
-(defcustom gptel-model "gpt-3.5-turbo"
+(defcustom gptel-model 'gpt-4o-mini
   "GPT Model for chat.
 
-The name of the model as a string.  This is the name as expected
+The name of the model, as a symbol.  This is the name as expected
 by the LLM provider's API.
 
 The current options for ChatGPT are
-- \"gpt-3.5-turbo\"
-- \"gpt-3.5-turbo-16k\"
-- \"gpt-4\"
-- \"gpt-4o\"
-- \"gpt-4-turbo\"
-- \"gpt-4-turbo-preview\"
-- \"gpt-4-32k\"
-- \"gpt-4-1106-preview\"
+- `gpt-3.5-turbo'
+- `gpt-3.5-turbo-16k'
+- `gpt-4o-mini'
+- `gpt-4'
+- `gpt-4o'
+- `gpt-4-turbo'
+- `gpt-4-turbo-preview'
+- `gpt-4-32k'
+- `gpt-4-1106-preview'
 
 To set the model for a chat session interactively call
 `gptel-send' with a prefix argument."
   :safe #'always
   :type '(choice
-          (string :tag "Specify model name")
-          (const :tag "GPT 3.5 turbo" "gpt-3.5-turbo")
-          (const :tag "GPT 3.5 turbo 16k" "gpt-3.5-turbo-16k")
-          (const :tag "GPT 4" "gpt-4")
-          (const :tag "GPT 4 omni" "gpt-4o")
-          (const :tag "GPT 4 turbo" "gpt-4-turbo")
-          (const :tag "GPT 4 turbo (preview)" "gpt-4-turbo-preview")
-          (const :tag "GPT 4 32k" "gpt-4-32k")
-          (const :tag "GPT 4 1106 (preview)" "gpt-4-1106-preview")))
+          (symbol :tag "Specify model name")
+          (const :tag "GPT 4 omni mini" gpt-4o-mini)
+          (const :tag "GPT 3.5 turbo" gpt-3.5-turbo)
+          (const :tag "GPT 3.5 turbo 16k" gpt-3.5-turbo-16k)
+          (const :tag "GPT 4" gpt-4)
+          (const :tag "GPT 4 omni" gpt-4o)
+          (const :tag "GPT 4 turbo" gpt-4-turbo)
+          (const :tag "GPT 4 turbo (preview)" gpt-4-turbo-preview)
+          (const :tag "GPT 4 32k" gpt-4-32k)
+          (const :tag "GPT 4 1106 (preview)" gpt-4-1106-preview)))
 
 (defcustom gptel-temperature 1.0
   "\"Temperature\" of the LLM response.
@@ -444,14 +474,123 @@ To set the temperature for a chat session interactively call
 
 (defvar gptel--known-backends)
 
+(defconst gptel--openai-models
+  '((gpt-4o
+     :description "Advanced model for complex tasks; cheaper & faster than GPT-Turbo"
+     :capabilities (media tool json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 128
+     :input-cost 2.50
+     :output-cost 10
+     :cutoff-date "2023-10")
+    (gpt-4o-mini
+     :description "Cheap model for fast tasks; cheaper & more capable than GPT-3.5 Turbo"
+     :capabilities (media tool json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 128
+     :input-cost 0.15
+     :output-cost 0.60
+     :cutoff-date "2023-10")
+    (gpt-4-turbo
+     :description "Previous high-intelligence model"
+     :capabilities (media tool url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 128
+     :input-cost 10
+     :output-cost 30
+     :cutoff-date "2023-12")
+    ;; points to gpt-4-0613
+    (gpt-4
+     :description "GPT-4 snapshot from June 2023 with improved function calling support"
+     :context-window 8.192
+     :input-cost 30
+     :output-cost 60
+     :cutoff-date "2023-09")
+    (gpt-4-turbo-preview
+     :description "Points to gpt-4-0125-preview"
+     :context-window 128
+     :input-cost 10
+     :output-cost 30
+     :cutoff-date "2023-12")
+    (gpt-4-0125-preview
+     :description "GPT-4 Turbo preview model intended to reduce cases of “laziness”"
+     :context-window 128
+     :input-cost 10
+     :output-cost 30
+     :cutoff-date "2023-12")
+    (o1-preview
+     :description "Reasoning model designed to solve hard problems across domains"
+     :context-window 128
+     :input-cost 15
+     :output-cost 60
+     :cutoff-date "2023-10"
+     :capabilities (nosystem)
+     :request-params (:stream :json-false))
+    (o1-mini
+     :description "Faster and cheaper reasoning model good at coding, math, and science"
+     :context-window 128
+     :input-cost 3
+     :output-cost 12
+     :cutoff-date "2023-10"
+     :capabilities (nosystem)
+     :request-params (:stream :json-false))
+    ;; limited information available
+    (gpt-4-32k
+     :input-cost 60
+     :output-cost 120)
+    (gpt-4-1106-preview
+     :description "Preview model with improved function calling support"
+     :context-window 128
+     :input-cost 10
+     :output-cost 30
+     :cutoff-date "2023-04")
+    (gpt-3.5-turbo
+     :description "More expensive & less capable than GPT-4o-mini; use that instead"
+     :capabilities (tool)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 16.358
+     :input-cost 0.50
+     :output-cost 1.50
+     :cutoff-date "2021-09")
+    (gpt-3.5-turbo-16k
+     :description "More expensive & less capable than GPT-4o-mini; use that instead"
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 16.385
+     :input-cost 3
+     :output-cost 4
+     :cutoff-date "2021-09"))
+  "List of available OpenAI models and associated properties.
+Keys:
+
+- `:description': a brief description of the model.
+
+- `:capabilities': a list of capabilities supported by the model.
+
+- `:mime-types': a list of supported MIME types for media files.
+
+- `:context-window': the context window size, in thousands of tokens.
+
+- `:input-cost': the input cost, in US dollars per million tokens.
+
+- `:output-cost': the output cost, in US dollars per million tokens.
+
+- `:cutoff-date': the knowledge cutoff date.
+
+- `:request-params': a plist of additional request parameters to
+  include when using this model.
+
+Information about the OpenAI models was obtained from the following
+sources:
+
+- <https://openai.com/pricing>
+- <https://platform.openai.com/docs/models>")
+
 (defvar gptel--openai
   (gptel-make-openai
-   "ChatGPT"
-   :key 'gptel-api-key
-   :stream t
-   :models '("gpt-3.5-turbo" "gpt-3.5-turbo-16k" "gpt-4" "gpt-4o"
-             "gpt-4-turbo" "gpt-4-turbo-preview" "gpt-4-32k"
-             "gpt-4-1106-preview" "gpt-4-0125-preview")))
+      "ChatGPT"
+    :key 'gptel-api-key
+    :stream t
+    :models gptel--openai-models))
 
 (defcustom gptel-backend gptel--openai
   "LLM backend to use.
@@ -474,7 +613,7 @@ README for examples."
   :type `(choice
           (const :tag "ChatGPT" ,gptel--openai)
           (restricted-sexp :match-alternatives (gptel-backend-p 'nil)
-           :tag "Other backend")))
+			   :tag "Other backend")))
 
 (defvar gptel-expert-commands nil
   "Whether experimental gptel options should be enabled.
@@ -515,13 +654,44 @@ distinction is necessary for back-and-forth conversation with an
 LLM.
 
 In regular Emacs buffers you can turn this behavior off by
-setting `gptel-track-response' to `nil'.  All text, including
+setting `gptel-track-response' to nil.  All text, including
 past LLM responses, is then treated as user input when sending
 queries.
 
 This variable has no effect in dedicated chat buffers (buffers
 with `gptel-mode' enabled), where user prompts and responses are
 always handled separately."
+  :type 'boolean)
+
+(defcustom gptel-track-media nil
+  "Whether supported media in chat buffers should be sent.
+
+When the active `gptel-model' supports it, gptel can send images
+or other media from links in chat buffers to the LLM.  To use
+this, the following steps are required.
+
+1. `gptel-track-media' (this variable) should be non-nil
+
+2. The LLM should provide vision or document support.  Currently,
+only the OpenAI, Anthropic and Ollama APIs are supported.  See
+the documentation of `gptel-make-openai', `gptel-make-anthropic'
+and `gptel-make-ollama' resp. for details on how to specify media
+support for models.
+
+3. Only \"standalone\" links in chat buffers are considered.
+These are links on their own line with no surrounding text.
+Further:
+
+- In Org mode, only files or URLs of the form
+  [[/path/to/media][bracket links]] and <angle/link/path>
+  are sent.
+
+- In Markdown mode, only files or URLS of the form
+  [bracket link](/path/to/media) and <angle/link/path>
+  are sent.
+
+This option has no effect in non-chat buffers.  To include
+media (including images) more generally, use `gptel-add'."
   :type 'boolean)
 
 (defcustom gptel-use-context 'system
@@ -558,7 +728,7 @@ or
  (\"path/to/file\").")
 
 
-;; Utility functions
+;;; Utility functions
 
 (defun gptel-api-key-from-auth-source (&optional host user)
   "Lookup api key in the auth source.
@@ -589,13 +759,39 @@ and \"apikey\" as USER."
                 (error "`gptel-api-key' is not valid")))
       (t (error "`gptel-api-key' is not valid")))))
 
-(defsubst gptel--numberize (val)
+(defsubst gptel--to-number (val)
   "Ensure VAL is a number."
   (cond
    ((numberp val) val)
    ((stringp val) (string-to-number val))
    ((error "%S cannot be converted to a number" val))))
 
+(defsubst gptel--to-string (s)
+  "Convert S to a string, if possible."
+  (cl-etypecase s
+    (symbol (symbol-name s))
+    (string s)
+    (number (number-to-string s))))
+
+(defsubst gptel--intern (s)
+  "Intern S, if possible."
+  (cl-etypecase s
+    (symbol s)
+    (string (intern s))))
+
+(defun gptel--merge-plists (&rest plists)
+  "Merge PLISTS, altering the first one.
+
+Later plists in the sequence take precedence over earlier ones."
+  (let (;; (rtn (copy-sequence (pop plists)))
+        (rtn (pop plists))
+        p v ls)
+    (while plists
+      (setq ls (pop plists))
+      (while ls
+        (setq p (pop ls) v (pop ls))
+        (setq rtn (plist-put rtn p v))))
+    rtn))
 (defun gptel-auto-scroll ()
   "Scroll window if LLM response continues below viewport.
 
@@ -643,10 +839,33 @@ Note: This will move the cursor."
      ,(macroexp-progn body)))
 
 (defun gptel-prompt-prefix-string ()
+  "Prefix before user prompts in `gptel-mode'."
   (or (alist-get major-mode gptel-prompt-prefix-alist) ""))
 
 (defun gptel-response-prefix-string ()
+  "Prefix before LLM responses in `gptel-mode'."
   (or (alist-get major-mode gptel-response-prefix-alist) ""))
+
+(defsubst gptel--trim-prefixes (s)
+  "Remove prompt/response prefixes from string S."
+  (string-trim s
+   (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
+             (regexp-quote (gptel-prompt-prefix-string)))
+   (format "[\t\r\n ]*\\(?:%s\\)?[\t\r\n ]*"
+           (regexp-quote (gptel-response-prefix-string)))))
+
+(defsubst gptel--link-standalone-p (beg end)
+  "Return non-nil if positions BEG and END are isolated.
+
+This means the extent from BEG to END is the only non-whitespace
+content on this line."
+  (save-excursion
+    (and (= beg (progn (goto-char beg) (beginning-of-line)
+                       (skip-chars-forward "\t ")
+                       (point)))
+         (= end (progn (goto-char end) (end-of-line)
+                       (skip-chars-backward "\t ")
+                       (point))))))
 
 (defvar-local gptel--backend-name nil
   "Store to persist backend name across Emacs sessions.
@@ -654,6 +873,51 @@ Note: This will move the cursor."
 Note: Changing this variable does not affect gptel\\='s behavior
 in any way.")
 (put 'gptel--backend-name 'safe-local-variable #'always)
+
+;;;; Model interface
+;; NOTE: This interface would be simpler to implement as a defstruct.  But then
+;; users cannot set `gptel-model' to a symbol/string directly, or we'd need
+;; another map from these symbols to the actual model structs.
+
+(defsubst gptel--model-name (model)
+  "Get name of gptel MODEL."
+  (gptel--to-string model))
+
+(defsubst gptel--model-capabilities (model)
+  "Get MODEL capabilities."
+  (get model :capabilities))
+
+(defsubst gptel--model-mimes (model)
+  "Get supported mime-types for MODEL."
+  (get model :mime-types))
+
+(defsubst gptel--model-capable-p (cap &optional model)
+  "Return non-nil if MODEL supports capability CAP."
+  (memq cap (gptel--model-capabilities
+             (or model gptel-model))))
+
+;; TODO Handle model mime specifications like "image/*"
+(defsubst gptel--model-mime-capable-p (mime &optional model)
+  "Return non nil if MODEL can understand MIME type."
+  (car-safe (member mime (gptel--model-mimes
+                        (or model gptel-model)))))
+
+(defsubst gptel--model-request-params (model)
+  "Get model-specific request parameters for MODEL."
+  (get model :request-params))
+
+;;;; File handling
+(defun gptel--base64-encode (file)
+  "Encode FILE as a base64 string.
+
+FILE is assumed to exist and be a regular file."
+  (with-temp-buffer
+    (insert-file-contents-literally file)
+    (base64-encode-region (point-min) (point-max)
+                          :no-line-break)
+    (buffer-string)))
+
+;;;; Response text recognition
 
 (defun gptel--get-buffer-bounds ()
   "Return the gptel response boundaries in the buffer as an alist."
@@ -688,20 +952,33 @@ in any way.")
   "Check if gptel response at position PT has variants."
   (get-char-property (or pt (point)) 'gptel-history))
 
-(defun gptel--strip-mode-suffix (mode-sym)
-  "Remove the -mode suffix from MODE-NAME.
+(defvar gptel--mode-description-alist
+  '((js2-mode      . "Javascript")
+    (sh-mode       . "Shell")
+    (enh-ruby-mode . "Ruby")
+    (yaml-mode     . "Yaml")
+    (yaml-ts-mode  . "Yaml")
+    (rustic-mode   . "Rust"))
+  "Mapping from unconventionally named major modes to languages.
 
-MODE-NAME is typically a major-mode symbol."
-  (let ((mode-name (thread-last
-                (symbol-name mode-sym)
-                (string-remove-suffix "-mode")
-                (string-remove-suffix "-ts"))))
-    (if (provided-mode-derived-p
-         mode-sym 'prog-mode 'text-mode 'tex-mode)
-     mode-name "")))
+This is used when generating system prompts for rewriting and
+when including context from these major modes.")
+
+(defun gptel--strip-mode-suffix (mode-sym)
+  "Remove the -mode suffix from MODE-SYM.
+
+MODE-SYM is typically a major-mode symbol."
+  (or (alist-get mode-sym gptel--mode-description-alist)
+      (let ((mode-name (thread-last
+                         (symbol-name mode-sym)
+                         (string-remove-suffix "-mode")
+                         (string-remove-suffix "-ts"))))
+        (if (provided-mode-derived-p
+             mode-sym 'prog-mode 'text-mode 'tex-mode)
+            mode-name ""))))
 
 
-;; Logging
+;;; Logging
 
 (defconst gptel--log-buffer-name "*gptel-log*"
   "Log buffer for gptel.")
@@ -722,32 +999,32 @@ Valid JSON unless NO-JSON is t."
       (unless no-json (ignore-errors (json-pretty-print p (point)))))))
 
 
-;; Saving and restoring state
+;;; Saving and restoring state
 
 (defun gptel--restore-state ()
   "Restore gptel state when turning on `gptel-mode'."
   (when (buffer-file-name)
-    (pcase major-mode
-      ('org-mode
-       (require 'gptel-org)
-       (gptel-org--restore-state))
-      (_ (when gptel--bounds
-           (mapc (pcase-lambda (`(,beg . ,end))
-                         (put-text-property beg end 'gptel 'response))
-                 gptel--bounds)
-           (message "gptel chat restored."))
-         (when gptel--backend-name
-           (if-let ((backend (alist-get
-                              gptel--backend-name gptel--known-backends
-                              nil nil #'equal)))
-               (setq-local gptel-backend backend)
-             (message
-               (substitute-command-keys
-                (concat
-                 "Could not activate gptel backend \"%s\"!  "
-                 "Switch backends with \\[universal-argument] \\[gptel-send]"
-                 " before using gptel."))
-               gptel--backend-name)))))))
+    (if (derived-mode-p 'org-mode)
+        (progn
+          (require 'gptel-org)
+          (gptel-org--restore-state))
+      (when gptel--bounds
+        (mapc (pcase-lambda (`(,beg . ,end))
+                (put-text-property beg end 'gptel 'response))
+              gptel--bounds)
+        (message "gptel chat restored."))
+      (when gptel--backend-name
+        (if-let ((backend (alist-get
+                           gptel--backend-name gptel--known-backends
+                           nil nil #'equal)))
+            (setq-local gptel-backend backend)
+          (message
+           (substitute-command-keys
+            (concat
+             "Could not activate gptel backend \"%s\"!  "
+             "Switch backends with \\[universal-argument] \\[gptel-send]"
+             " before using gptel."))
+           gptel--backend-name))))))
 
 (defun gptel--save-state ()
   "Write the gptel state to the buffer.
@@ -755,27 +1032,31 @@ Valid JSON unless NO-JSON is t."
 This saves chat metadata when writing the buffer to disk.  To
 restore a chat session, turn on `gptel-mode' after opening the
 file."
-  (pcase major-mode
-    ('org-mode
-     (require 'gptel-org)
-     (gptel-org--save-state))
-    (_ (let ((print-escape-newlines t))
-         (save-excursion
-           (save-restriction
-             (add-file-local-variable 'gptel-model gptel-model)
-             (add-file-local-variable 'gptel--backend-name
-                                      (gptel-backend-name gptel-backend))
-             (unless (equal (default-value 'gptel-temperature) gptel-temperature)
-               (add-file-local-variable 'gptel-temperature gptel-temperature))
-             (unless (string= (default-value 'gptel--system-message)
-                              gptel--system-message)
-               (add-file-local-variable 'gptel--system-message gptel--system-message))
-             (when gptel-max-tokens
-               (add-file-local-variable 'gptel-max-tokens gptel-max-tokens))
-             (add-file-local-variable 'gptel--bounds (gptel--get-buffer-bounds))))))))
+  (run-hooks 'gptel-save-state-hook)
+  (if (derived-mode-p 'org-mode)
+      (progn
+        (require 'gptel-org)
+        (gptel-org--save-state))
+    (let ((print-escape-newlines t))
+      (save-excursion
+        (save-restriction
+          (add-file-local-variable 'gptel-model gptel-model)
+          (add-file-local-variable 'gptel--backend-name
+                                   (gptel-backend-name gptel-backend))
+          (unless (equal (default-value 'gptel-temperature) gptel-temperature)
+            (add-file-local-variable 'gptel-temperature gptel-temperature))
+          (unless (string= (default-value 'gptel--system-message)
+                           gptel--system-message)
+            (add-file-local-variable 'gptel--system-message gptel--system-message))
+          (when gptel-max-tokens
+            (add-file-local-variable 'gptel-max-tokens gptel-max-tokens))
+          (when (natnump gptel--num-messages-to-send)
+            (add-file-local-variable 'gptel--num-messages-to-send
+                                     gptel--num-messages-to-send))
+          (add-file-local-variable 'gptel--bounds (gptel--get-buffer-bounds)))))))
 
 
-;; Minor mode and UI
+;;; Minor mode and UI
 
 ;; NOTE: It's not clear that this is the best strategy:
 (add-to-list 'text-property-default-nonsticky '(gptel . t))
@@ -790,7 +1071,8 @@ file."
     map)
   (if gptel-mode
       (progn
-        (unless (memq major-mode '(org-mode markdown-mode text-mode))
+        (unless (or (derived-mode-p 'org-mode 'markdown-mode)
+                    (eq major-mode 'text-mode))
           (gptel-mode -1)
           (user-error (format "`gptel-mode' is not supported in `%s'." major-mode)))
         (add-hook 'before-save-hook #'gptel--save-state nil t)
@@ -802,7 +1084,8 @@ file."
                                (format "%s" (gptel-backend-name gptel-backend))))
                       (propertize " Ready" 'face 'success)
                       '(:eval
-                        (let ((system
+                        (let* ((model (gptel--model-name gptel-model))
+                              (system
                                (propertize
                                 (buttonize
                                  (format "[Prompt: %s]"
@@ -830,21 +1113,47 @@ file."
                                      (require 'gptel-context)
                                      (gptel-context--buffer-setup)))
                                   'mouse-face 'highlight
-                                  'help-echo "Active gptel context")))))
+                                  'help-echo "Active gptel context"))))
+                              (toggle-track-media
+                               (lambda (&rest _)
+                                 (setq-local gptel-track-media
+                                  (not gptel-track-media))
+                                 (if gptel-track-media
+                                     (message
+                                      (concat
+                                       "Sending media from included links.  To include media, create "
+                                       "a \"standalone\" link in a paragraph by itself, separated from surrounding text."))
+                                   (message "Ignoring image links.  Only link text will be sent."))
+                                 (run-at-time 0 nil #'force-mode-line-update)))
+                              (track-media
+                               (and (gptel--model-capable-p 'media)
+                                (if gptel-track-media
+                                    (propertize
+                                     (buttonize "[Sending media]" toggle-track-media)
+                                     'mouse-face 'highlight
+                                     'help-echo
+                                     "Sending media from standalone links/urls when supported.\nClick to toggle")
+                                  (propertize
+                                     (buttonize "[Ignoring media]" toggle-track-media)
+                                     'mouse-face 'highlight
+                                     'help-echo
+                                     "Ignoring images from standalone links/urls.\nClick to toggle")))))
                          (concat
                           (propertize
                            " " 'display
-                           `(space :align-to (- right ,(+ 4 (length gptel-model) (length system) (length context)))))
-                          context " " system " "
+                           `(space :align-to (- right ,(+ 5 (length model) (length system)
+                                                        (length track-media) (length context)))))
+                          track-media (and context " ") context " " system " "
                           (propertize
-                           (buttonize (concat "[" gptel-model "]")
+                           (buttonize (concat "[" model "]")
                             (lambda (&rest _) (gptel-menu)))
                            'mouse-face 'highlight
                            'help-echo "GPT model in use"))))))
           (setq mode-line-process
                 '(:eval (concat " "
-                         (buttonize gptel-model
+                         (buttonize (gptel--model-name gptel-model)
                             (lambda (&rest _) (gptel-menu))))))))
+    (remove-hook 'before-save-hook #'gptel--save-state t)
     (if gptel-use-header-line
         (setq header-line-format gptel--old-header-line
               gptel--old-header-line nil)
@@ -861,7 +1170,7 @@ file."
           (setq mode-line-process (propertize msg 'face face))
         (setq mode-line-process
               '(:eval (concat " "
-                       (buttonize gptel-model
+                       (buttonize (gptel--model-name gptel-model)
                             (lambda (&rest _) (gptel-menu))))))
         (message (propertize msg 'face face))))
     (force-mode-line-update)))
@@ -869,7 +1178,7 @@ file."
 (declare-function gptel-context--wrap "gptel-context")
 
 
-;; Send queries, handle responses
+;;; Send queries, handle responses
 (cl-defun gptel-request
     (&optional prompt &key callback
                (buffer (current-buffer))
@@ -963,10 +1272,13 @@ query data as usual, but do not send the request.
 
 Model parameters can be let-bound around calls to this function."
   (declare (indent 1))
+  ;; TODO Remove this check in version 1.0
+  (gptel--sanitize-model)
   (let* ((gptel--system-message
           ;Add context chunks to system message if required
           (if (and gptel-context--alist
-                   (eq gptel-use-context 'system))
+                   (eq gptel-use-context 'system)
+                   (not (gptel--model-capable-p 'nosystem)))
               (gptel-context--wrap system)
             system))
          (gptel-stream stream)
@@ -1033,7 +1345,7 @@ waiting for the response."
   "Show REQUEST-DATA, the full LLM query to be sent, in a buffer.
 
 This functions as a dry run of `gptel-send'.  If ARG is
-the symbol json, show the encoded JSON query instead of the lisp
+the symbol json, show the encoded JSON query instead of the Lisp
 structure gptel uses."
   (with-current-buffer (get-buffer-create "*gptel-query*")
     (let ((standard-output (current-buffer))
@@ -1125,6 +1437,7 @@ there."
     (save-restriction
       (let* ((max-entries (and gptel--num-messages-to-send
                                (* 2 gptel--num-messages-to-send)))
+             (prompt-end (or prompt-end (point-max)))
              (prompts
               (cond
                ((use-region-p)
@@ -1134,15 +1447,28 @@ there."
                 (gptel--parse-buffer gptel-backend max-entries))
                ((derived-mode-p 'org-mode)
                 (require 'gptel-org)
-                (gptel-org--create-prompt (or prompt-end (point-max))))
-               (t (goto-char (or prompt-end (point-max)))
+                (goto-char prompt-end)
+                (gptel-org--create-prompt prompt-end))
+               (t (goto-char prompt-end)
                   (gptel--parse-buffer gptel-backend max-entries)))))
-        ;; Inject context chunks into the last user prompt if required
-        ;; NOTE: prompts is modified in place
-        (when (and gptel-context--alist
-                   (eq gptel-use-context 'user)
-                   (> (length prompts) 0))
-          (gptel--wrap-user-prompt gptel-backend prompts))
+        ;; NOTE: prompts is modified in place here
+        (when gptel-context--alist
+          ;; Inject context chunks into the last user prompt if required.
+          ;; This is also the fallback for when `gptel-use-context' is set to
+          ;; 'system but the model does not support system messages.
+          (when (and gptel-use-context
+                     (or (eq gptel-use-context 'user)
+                         (gptel--model-capable-p 'nosystem))
+                     (> (length prompts) 0)) ;FIXME context should be injected
+                                             ;even when there are no prompts
+            (gptel--wrap-user-prompt gptel-backend prompts))
+          ;; Inject media chunks into the first user prompt if required.  Media
+          ;; chunks are always included with the first user message,
+          ;; irrespective of the preference in `gptel-use-context'.  This is
+          ;; because media cannot be included (in general) with system messages.
+          (when (and gptel-use-context gptel-track-media
+                     (gptel--model-capable-p 'media))
+            (gptel--wrap-user-prompt gptel-backend prompts :media)))
         prompts))))
 
 (cl-defgeneric gptel--parse-buffer (backend max-entries)
@@ -1153,11 +1479,73 @@ BACKEND is the LLM backend in use.
 MAX-ENTRIES is the number of queries/responses to include for
 contexbt.")
 
+(cl-defgeneric gptel--parse-media-links (mode beg end)
+  "Find media links between BEG and END.
+
+MODE is the major-mode of the buffer.
+
+Returns a plist where each entry is of the form
+  (:text \"some text\")
+or
+  (:media \"media uri or file path\")."
+  (ignore mode)                         ;byte-compiler
+  (list `(:text ,(buffer-substring beg end))))
+
+(defvar markdown-regex-link-inline)
+(defvar markdown-regex-angle-uri)
+(declare-function markdown-link-at-pos "markdown-mode")
+(declare-function mailcap-file-name-to-mime-type "mailcap")
+
+(cl-defmethod gptel--parse-media-links ((_mode (eql 'markdown-mode)) beg end)
+  "Parse text and actionable links between BEG and END.
+
+Return a list of the form
+ ((:text \"some text\")
+  (:media \"/path/to/media.png\" :mime \"image/png\")
+  (:text \"More text\"))
+for inclusion into the user prompt for the gptel request."
+  (require 'mailcap)                    ;FIXME Avoid this somehow
+  (let ((parts) (from-pt))
+    (save-excursion
+      (setq from-pt (goto-char beg))
+      (while (re-search-forward
+              (concat "\\(?:" markdown-regex-link-inline "\\|"
+                      markdown-regex-angle-uri "\\)")
+              end t)
+        (when-let* ((link-at-pt (markdown-link-at-pos (point)))
+                    ((gptel--link-standalone-p
+                      (car link-at-pt) (cadr link-at-pt)))
+                    (path (nth 3 link-at-pt))
+                    (path (string-remove-prefix "file://" path))
+                    (mime (mailcap-file-name-to-mime-type path))
+                    ((gptel--model-mime-capable-p mime)))
+          (cond
+           ((seq-some (lambda (p) (string-prefix-p p path))
+                      '("https:" "http:" "ftp:"))
+            ;; Collect text up to this image, and collect this image url
+            (when (gptel--model-capable-p 'url) ; FIXME This is not a good place
+                                                ; to check for url capability!
+              (push (list :text (buffer-substring-no-properties from-pt (car link-at-pt)))
+                    parts)
+              (push (list :url path :mime mime) parts)
+              (setq from-pt (cadr link-at-pt))))
+           ((file-readable-p path)
+            ;; Collect text up to this image, and collect this image
+            (push (list :text (buffer-substring-no-properties from-pt (car link-at-pt)))
+                  parts)
+            (push (list :media path :mime mime) parts)
+            (setq from-pt (cadr link-at-pt)))))))
+    (unless (= from-pt end)
+      (push (list :text (buffer-substring-no-properties from-pt end)) parts))
+    (nreverse parts)))
+
 (cl-defgeneric gptel--wrap-user-prompt (backend _prompts)
   "Wrap the last prompt in PROMPTS with gptel's context.
 
 PROMPTS is a structure as returned by `gptel--parse-buffer'.
-Typically this is a list of plists."
+Typically this is a list of plists.
+
+BACKEND is the gptel backend in use."
   (display-warning
    '(gptel context)
    (format "Context support not implemented for backend %s, ignoring context"
@@ -1194,9 +1582,9 @@ hook."
 Currently only `org-mode' is handled.
 
 BUFFER is the LLM interaction buffer."
-  (pcase (buffer-local-value 'major-mode buffer)
-    ('org-mode (gptel--convert-markdown->org content))
-    (_ content)))
+  (if (with-current-buffer buffer (derived-mode-p 'org-mode))
+      (gptel--convert-markdown->org content)
+    content))
 
 (defun gptel--url-get-response (info &optional callback)
   "Fetch response to prompt in INFO from the LLM.
@@ -1308,6 +1696,15 @@ See `gptel-curl--get-response' for its contents.")
 
 If SHOOSH is true, don't issue a warning."
   (let ((available (gptel-backend-models backend)))
+    (when (stringp model)
+      (unless shoosh
+        (display-warning
+         'gptel
+         (format "`gptel-model' expects a symbol, found string \"%s\"
+   Resetting `gptel-model' to %s"
+                 model model)))
+      (setq gptel-model (gptel--intern model)
+            model gptel-model))
     (unless (member model available)
       (let ((fallback (car available)))
         (unless shoosh
@@ -1332,11 +1729,13 @@ INTERACTIVEP is t when gptel is called interactively."
    (let* ((backend (default-value 'gptel-backend))
           (backend-name
            (format "*%s*" (gptel-backend-name backend))))
-     (list (read-buffer "Create or choose gptel buffer: "
-                        backend-name nil                         ; DEFAULT and REQUIRE-MATCH
-                        (lambda (b)                              ; PREDICATE
-                          (buffer-local-value 'gptel-mode
-                                              (get-buffer (or (car-safe b) b)))))
+     (list (read-buffer
+            "Create or choose gptel buffer: "
+            backend-name nil                         ; DEFAULT and REQUIRE-MATCH
+            (lambda (b)                                   ; PREDICATE
+              ;; NOTE: buffer check is required (#450)
+              (and-let* ((buf (get-buffer (or (car-safe b) b))))
+                (buffer-local-value 'gptel-mode buf))))
            (condition-case nil
                (gptel--get-api-key
                 (gptel-backend-key backend))
@@ -1369,7 +1768,7 @@ INTERACTIVEP is t when gptel is called interactively."
     (current-buffer)))
 
 
-;; Response tweaking commands
+;;; Response tweaking commands
 
 (defun gptel--attach-response-history (history &optional buf)
   "Attach HISTORY to the next gptel response in buffer BUF.

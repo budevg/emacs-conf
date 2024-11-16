@@ -109,10 +109,23 @@ the response is inserted into the current buffer after point."
                              (random) (emacs-pid) (user-full-name)
                              (recent-keys))))
          (args (gptel-curl--get-args (plist-get info :data) token))
-         (stream (and gptel-stream (gptel-backend-stream gptel-backend)))
+         (stream (and ;; Check model-specific request-params for streaming preference
+                  (let* ((model-params (gptel--model-request-params gptel-model))
+                         (stream-spec (plist-get model-params :stream)))
+                    ;; If not present, there is no model-specific preference
+                    (or (not (memq :stream model-params))
+                        ;; If present, it must not be :json-false or nil
+                        (and stream-spec (not (eq stream-spec :json-false)))))
+                  ;; Check global and backend-specific streaming settings
+                  gptel-stream
+                  (gptel-backend-stream gptel-backend)))
          (backend (buffer-local-value 'gptel-backend (plist-get info :buffer)))
          (process (apply #'start-process "gptel-curl"
                          (generate-new-buffer "*gptel-curl*") "curl" args)))
+    (when (memq system-type '(windows-nt ms-dos))
+      ;; Don't try to convert cr-lf to cr on Windows so that curl's "header size
+      ;; in bytes" stays correct
+      (set-process-coding-system process 'utf-8-unix 'utf-8-unix))
     (when (eq gptel-log-level 'debug)
       (gptel--log (mapconcat #'shell-quote-argument (cons "curl" args) " \\\n")
                   "request Curl command" 'no-json))
@@ -135,10 +148,8 @@ the response is inserted into the current buffer after point."
                                        (if stream
                                            #'gptel-curl--stream-insert-response
                                          #'gptel--insert-response))
-                         :transformer (when (eq (buffer-local-value
-                                                 'major-mode
-                                                 (plist-get info :buffer))
-                                                'org-mode)
+                         :transformer (when (with-current-buffer (plist-get info :buffer)
+                                              (derived-mode-p 'org-mode))
                                         (gptel--stream-convert-markdown->org)))
                    info))
       (if stream

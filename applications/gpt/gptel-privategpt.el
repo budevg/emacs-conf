@@ -85,7 +85,7 @@
 (cl-defmethod gptel--request-data ((_backend gptel-privategpt) prompts)
   "JSON encode PROMPTS for sending to ChatGPT."
   (let ((prompts-plist
-         `(:model ,gptel-model
+         `(:model ,(gptel--model-name gptel-model)
 	   :messages [,@prompts]
 	   :use_context ,(or (gptel-privategpt-context gptel-backend) :json-false)
 	   :include_sources ,(or (gptel-privategpt-sources gptel-backend) :json-false)
@@ -96,18 +96,22 @@
       (plist-put prompts-plist :temperature gptel-temperature))
     (when gptel-max-tokens
       (plist-put prompts-plist :max_tokens gptel-max-tokens))
-    prompts-plist))
+    ;; Merge request params with model and backend params.
+    (gptel--merge-plists
+     prompts-plist
+     (gptel-backend-request-params gptel-backend)
+     (gptel--model-request-params  gptel-model))))
 
 
 ;;;###autoload
 (cl-defun gptel-make-privategpt
-    (name &key curl-args stream key
+    (name &key curl-args stream key request-params
           (header
            (lambda () (when-let (key (gptel--get-api-key))
 			`(("Authorization" . ,(concat "Bearer " key))))))
           (host "localhost:8001")
           (protocol "http")
-	  (models '("private-gpt"))
+	  (models '(private-gpt))
           (endpoint "/v1/chat/completions")
           (context t) (sources t))
   "Register an Privategpt API-compatible backend for gptel with NAME.
@@ -137,7 +141,12 @@ KEY is a variable whose value is the API key, or function that
 returns the key.
 
 CONTEXT and SOURCES: if true (the default), use available context
-and provide sources used by the model to generate the response."
+and provide sources used by the model to generate the response.
+
+REQUEST-PARAMS (optional) is a plist of additional HTTP request
+parameters (as plist keys) and values supported by the API.  Use
+these to set parameters that gptel does not provide user options
+for."
   (declare (indent 1))
   (let ((backend (gptel--make-privategpt
                   :curl-args curl-args
@@ -149,6 +158,7 @@ and provide sources used by the model to generate the response."
                   :protocol protocol
                   :endpoint endpoint
                   :stream stream
+                  :request-params request-params
                   :url (if protocol
                            (concat protocol "://" host endpoint)
                          (concat host endpoint))

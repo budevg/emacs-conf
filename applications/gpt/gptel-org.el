@@ -27,10 +27,28 @@
 (require 'org-element)
 (require 'outline)
 
-(declare-function org-element-begin "org-element")
-
 ;; Functions used for saving/restoring gptel state in Org buffers
+(defvar gptel--num-messages-to-send)
 (defvar org-entry-property-inherited-from)
+(defvar gptel-backend)
+(defvar gptel--known-backends)
+(defvar gptel--system-message)
+(defvar gptel-model)
+(defvar gptel-temperature)
+(defvar gptel-max-tokens)
+
+(defvar org-link-angle-re)
+(defvar org-link-bracket-re)
+(declare-function mailcap-file-name-to-mime-type "mailcap")
+(declare-function gptel--model-capable-p "gptel")
+(declare-function gptel--model-mime-capable-p "gptel")
+(declare-function gptel--model-name "gptel")
+(declare-function gptel--to-string "gptel")
+(declare-function gptel--to-number "gptel")
+(declare-function gptel--intern "gptel")
+(declare-function gptel--get-buffer-bounds "gptel")
+(declare-function gptel-backend-name "gptel")
+(declare-function gptel--parse-buffer "gptel")
 (declare-function org-entry-get "org")
 (declare-function org-entry-put "org")
 (declare-function org-with-wide-buffer "org-macs")
@@ -42,7 +60,7 @@
 (declare-function org-at-heading-p "org")
 
 ;; Bundle `org-element-lineage-map' if it's not available (for Org 9.67 or older)
-(eval-when-compile
+(eval-and-compile
   (if (fboundp 'org-element-lineage-map)
       (progn (declare-function org-element-lineage-map "org-element-ast")
              (defalias 'gptel-org--element-lineage-map 'org-element-lineage-map))
@@ -66,7 +84,13 @@ of Org."
                   (throw :--first-match rtn)
                 (when rtn (push rtn acc))))
             (setq up (org-element-parent up)))
-          (nreverse acc))))))
+          (nreverse acc)))))
+  (if (fboundp 'org-element-begin)
+      (progn (declare-function org-element-begin "org-element")
+             (defalias 'gptel-org--element-begin 'org-element-begin))
+    (defun gptel-org--element-begin (node)
+      "Get `:begin' property of NODE."
+      (org-element-property :begin node))))
 
 
 ;;; User options
@@ -122,7 +146,7 @@ This makes it feasible to have multiple conversation branches."
     (marker-position org-entry-property-inherited-from)))
 
 (defun gptel-org-set-topic (topic)
-  "Set a topic and limit this conversation to the current heading.
+  "Set a TOPIC and limit this conversation to the current heading.
 
 This limits the context sent to the LLM to the text between the
 current heading and the cursor position."
@@ -130,7 +154,7 @@ current heading and the cursor position."
    (list
     (progn
       (or (derived-mode-p 'org-mode)
-          (user-error "Support for multiple topics per buffer is only implemented for `org-mode'."))
+          (user-error "Support for multiple topics per buffer is only implemented for `org-mode'"))
       (completing-read "Set topic as: "
                        (org-property-values "GPTEL_TOPIC")
                        nil nil (downcase
@@ -167,11 +191,11 @@ value of `gptel-org-branching-context', which see."
             (save-excursion
               (let* ((org-buf (current-buffer))
                      (start-bounds (gptel-org--element-lineage-map
-                                       (org-element-at-point) #'org-element-begin
+                                       (org-element-at-point) #'gptel-org--element-begin
                                      '(headline org-data) 'with-self))
                      (end-bounds
                       (cl-loop
-                       for pos in (cdr start-bounds)
+                       for (pos . rest) on (cdr start-bounds)
                        while
                        (and (>= pos (point-min)) ;respect narrowing
                             (goto-char pos)
@@ -180,7 +204,10 @@ value of `gptel-org-branching-context', which see."
                             ;; heading here, it is either a false positive or we
                             ;; would be double counting it.  So we reject this node
                             ;; when also at a heading.
-                            (not (and (eq pos 1) (org-at-heading-p))))
+                            (not (and (eq pos 1) (org-at-heading-p)
+                                      ;; Skip if at the last element of start-bounds,
+                                      ;; since we captured this heading already (#476)
+                                      (null rest))))
                        do (outline-next-heading)
                        collect (point) into ends
                        finally return (cons prompt-end ends))))
@@ -191,7 +218,9 @@ value of `gptel-org-branching-context', which see."
                               gptel-model (buffer-local-value 'gptel-model org-buf)
                               gptel-mode (buffer-local-value 'gptel-mode org-buf)
                               gptel-track-response
-                              (buffer-local-value 'gptel-track-response org-buf))
+                              (buffer-local-value 'gptel-track-response org-buf)
+                              gptel-track-media
+                              (buffer-local-value 'gptel-track-media org-buf))
                   (cl-loop for start in start-bounds
                            for end   in end-bounds
                            do (insert-buffer-substring org-buf start end)
@@ -206,13 +235,78 @@ value of `gptel-org-branching-context', which see."
       ;; Create prompt the usual way
       (gptel--parse-buffer gptel-backend max-entries))))
 
+;; Handle media links in the buffer
+(cl-defmethod gptel--parse-media-links ((_mode (eql 'org-mode)) beg end)
+  "Parse text and actionable links between BEG and END.
+
+Return a list of the form
+ ((:text \"some text\")
+  (:media \"/path/to/media.png\" :mime \"image/png\")
+  (:text \"More text\"))
+for inclusion into the user prompt for the gptel request."
+  (require 'mailcap)                    ;FIXME Avoid this somehow
+  (let ((parts) (from-pt)
+        (link-regex (concat "\\(?:" org-link-bracket-re "\\|"
+                            org-link-angle-re "\\)")))
+    (save-excursion
+      (setq from-pt (goto-char beg))
+      (while (re-search-forward link-regex end t)
+        (when-let* ((link (org-element-context))
+                    ((gptel-org--link-standalone-p link))
+                    (raw-link (org-element-property :raw-link link))
+                    (path (org-element-property :path link))
+                    (type (org-element-property :type link))
+                    ;; FIXME This is not a good place to check for url capability!
+                    ((member type `("attachment" "file"
+                                    ,@(and (gptel--model-capable-p 'url)
+                                       '("http" "https" "ftp")))))
+                    (mime (mailcap-file-name-to-mime-type path))
+                    ((gptel--model-mime-capable-p mime)))
+          (cond
+           ((member type '("file" "attachment"))
+            (when (file-readable-p path)
+              ;; Collect text up to this image, and
+              ;; Collect this image
+              (when-let ((text (string-trim (buffer-substring-no-properties
+                                             from-pt (gptel-org--element-begin link)))))
+                (unless (string-empty-p text) (push (list :text text) parts)))
+              (push (list :media path :mime mime) parts)
+              (setq from-pt (point))))
+           ((member type '("http" "https" "ftp"))
+            ;; Collect text up to this image, and
+            ;; Collect this image url
+            (when-let ((text (string-trim (buffer-substring-no-properties
+                                             from-pt (gptel-org--element-begin link)))))
+              (unless (string-empty-p text) (push (list :text text) parts)))
+            (push (list :url raw-link :mime mime) parts)
+            (setq from-pt (point))))))
+      (unless (= from-pt end)
+        (push (list :text (buffer-substring-no-properties from-pt end)) parts)))
+    (nreverse parts)))
+
+(defun gptel-org--link-standalone-p (object)
+  "Check if link OBJECT is on a line by itself."
+  ;; Specify ancestor TYPES as list (#245)
+  (let ((par (org-element-lineage object '(paragraph))))
+    (and (= (gptel-org--element-begin object)
+            (save-excursion
+              (goto-char (org-element-property :contents-begin par))
+              (skip-chars-forward "\t ")
+              (point)))                 ;account for leading space
+                                        ;before object
+         (<= (- (org-element-property :contents-end par)
+                (org-element-property :end object))
+             1))))
+
 (defun gptel-org--send-with-props (send-fun &rest args)
   "Conditionally modify SEND-FUN's calling environment.
 
 If in an Org buffer under a heading containing a stored gptel
 configuration, use that for requests instead.  This includes the
 system message, model and provider (backend), among other
-parameters."
+parameters.
+
+ARGS are the original function call arguments."
   (if (derived-mode-p 'org-mode)
       (pcase-let ((`(,gptel--system-message ,gptel-backend ,gptel-model
                      ,gptel-temperature ,gptel-max-tokens)
@@ -234,22 +328,25 @@ parameters."
 
 ;;; Saving and restoring state
 (defun gptel-org--entry-properties (&optional pt)
-  "Find gptel configuration properties stored in the current heading."
+  "Find gptel configuration properties stored at PT."
   (pcase-let
-      ((`(,system ,backend ,model ,temperature ,tokens)
+      ((`(,system ,backend ,model ,temperature ,tokens ,num)
          (mapcar
           (lambda (prop) (org-entry-get (or pt (point)) prop 'selective))
           '("GPTEL_SYSTEM" "GPTEL_BACKEND" "GPTEL_MODEL"
-            "GPTEL_TEMPERATURE" "GPTEL_MAX_TOKENS"))))
+            "GPTEL_TEMPERATURE" "GPTEL_MAX_TOKENS"
+            "GPTEL_NUM_MESSAGES_TO_SEND"))))
     (when system
       (setq system (string-replace "\\n" "\n" system)))
     (when backend
       (setq backend (alist-get backend gptel--known-backends
                                nil nil #'equal)))
+    (when model (setq model (gptel--intern model)))
     (when temperature
-      (setq temperature (gptel--numberize temperature)))
-    (when tokens (setq tokens (gptel--numberize tokens)))
-    (list system backend model temperature tokens)))
+      (setq temperature (gptel--to-number temperature)))
+    (when tokens (setq tokens (gptel--to-number tokens)))
+    (when num (setq num (gptel--to-number num)))
+    (list system backend model temperature tokens num)))
 
 (defun gptel-org--restore-state ()
   "Restore gptel state for Org buffers when turning on `gptel-mode'."
@@ -261,7 +358,7 @@ parameters."
             (mapc (pcase-lambda (`(,beg . ,end))
                     (put-text-property beg end 'gptel 'response))
                   (read bounds)))
-          (pcase-let ((`(,system ,backend ,model ,temperature ,tokens)
+          (pcase-let ((`(,system ,backend ,model ,temperature ,tokens ,num)
                        (gptel-org--entry-properties (point-min))))
             (when system (setq-local gptel--system-message system))
             (if backend (setq-local gptel-backend backend)
@@ -274,7 +371,8 @@ parameters."
                backend))
             (when model (setq-local gptel-model model))
             (when temperature (setq-local gptel-temperature temperature))
-            (when tokens (setq-local gptel-max-tokens tokens))))
+            (when tokens (setq-local gptel-max-tokens tokens))
+            (when num (setq-local gptel--num-messages-to-send num))))
       (:success (message "gptel chat restored."))
       (error (message "Could not restore gptel state, sorry! Error: %s" status)))))
 
@@ -288,13 +386,16 @@ settings when applicable.
 PT is the cursor position by default.  If MSG is
 non-nil (default), display a message afterwards."
   (interactive (list (point) t))
-  (org-entry-put pt "GPTEL_MODEL" gptel-model)
+  (org-entry-put pt "GPTEL_MODEL" (gptel--model-name gptel-model))
   (org-entry-put pt "GPTEL_BACKEND" (gptel-backend-name gptel-backend))
   (unless (equal (default-value 'gptel-temperature) gptel-temperature)
     (org-entry-put pt "GPTEL_TEMPERATURE"
                    (number-to-string gptel-temperature)))
+  (when (natnump gptel--num-messages-to-send)
+    (org-entry-put pt "GPTEL_NUM_MESSAGES_TO_SEND"
+                   (number-to-string gptel--num-messages-to-send)))
   (org-entry-put pt "GPTEL_SYSTEM"
-                 (string-replace "\n" "\\n" gptel--system-message))   
+                 (string-replace "\n" "\\n" gptel--system-message))
   (when gptel-max-tokens
     (org-entry-put
      pt "GPTEL_MAX_TOKENS" (number-to-string gptel-max-tokens)))
