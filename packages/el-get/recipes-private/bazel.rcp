@@ -1,0 +1,7 @@
+(:name bazel
+       :description "Emacs mode for Bazel "
+       :type github
+       :pkgname "bazelbuild/emacs-bazel-mode"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "build_system")))
+       )
