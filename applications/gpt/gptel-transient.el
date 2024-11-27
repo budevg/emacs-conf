@@ -442,7 +442,7 @@ Also format its value in the Transient menu."
        finally return
        (nconc
         prompt-suffixes
-        (list (list "DEL" "None"
+        (list (list "<delete>" "None"
                     (lambda () (interactive)
                       (message "Directive unset")
                       (gptel--set-with-scope 'gptel--system-message nil
