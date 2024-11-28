@@ -19,8 +19,10 @@
   (gptel-make-gemini "gemini"
                      :key 'gptel-api-key
                      :stream t
-                     :models '(gemini-1.5-pro-002
-                               gemini-1.5-flash-002))
+                     :models '(gemini-1.5-pro
+                               gemini-1.5-flash
+                               gemini-1.5-flash-8b
+                               learnlm-1.5-pro-experimental))
 
   (gptel-make-openai "github"
                      :host "models.inference.ai.azure.com"
@@ -50,7 +52,7 @@
                                allenai/OLMo-7B-Instruct-hf))
 
   (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
-        gptel-model 'gemini-1.5-pro-002
+        gptel-model 'gemini-1.5-pro
         gptel-directives
         '((default . "You are a large language model living in Emacs and a helpful assistant. Respond concisely.")
           ))
