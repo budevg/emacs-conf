@@ -1,0 +1,7 @@
+(:name inhibit-mouse
+       :description "Disable the mouse in Emacs"
+       :type github
+       :pkgname "jamescherti/inhibit-mouse.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+       )

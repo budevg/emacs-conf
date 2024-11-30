@@ -240,3 +240,8 @@ Fall back to `completing-read' otherwise."
   :hook
   ((prog-mode . hs-org/minor-mode))
   )
+
+(use-package inhibit-mouse
+  :config
+  (inhibit-mouse-mode)
+  )
