@@ -1,0 +1,9 @@
+# -*- mode: snippet -*-
+# name: terraform
+# key: main
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ terraform terraform-ls ];
+}$0
