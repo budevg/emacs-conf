@@ -1,12 +1,16 @@
-(autoload 'deft "deft" nil t)
-(global-set-key (kbd "<f4>") 'deft)
-(eval-after-load "deft"
-  '(progn
-     (setq
-      deft-extension "org"
-      deft-directory "~/.deft/"
-      deft-use-filename-as-title t
-      deft-text-mode 'org-mode)))
+(use-package deft
+  :commands (deft)
+  :bind ("<f4>" . deft)
+  :config
+  (setq deft-extensions '("org")
+        deft-directory "~/.deft/"
+        deft-use-filter-string-for-filename t
+        deft-recursive t
+        deft-current-sort-method 'title
+        deft-use-filename-as-title t
+        deft-auto-save-interval 0
+        deft-default-extension "org")
+  )
 
 (if (fboundp 'global-eldoc-mode)
     (global-eldoc-mode 0))

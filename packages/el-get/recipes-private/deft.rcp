@@ -1,7 +1,7 @@
 (:name deft
        :description "Deft is an Emacs mode for quickly browsing, filtering, and editing directories of plain text notes, inspired by Notational Velocity."
-       :type git
-       :url "git://jblevins.org/git/deft.git"
+       :type github
+       :pkgname "jrblevin/deft"
        :build `(,(concat "cp deft.el "
                          (in-emacs-d "doc_lang")))
        )
