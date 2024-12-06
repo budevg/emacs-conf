@@ -6,4 +6,4 @@
           company-files
           (company-dabbrev-code company-gtags company-etags company-keywords)
           company-dabbrev))
-  (global-company-mode t))
+  )
