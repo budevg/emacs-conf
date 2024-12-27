@@ -22,7 +22,8 @@
                      :models '(gemini-1.5-pro
                                gemini-1.5-flash
                                gemini-1.5-flash-8b
-                               learnlm-1.5-pro-experimental))
+                               learnlm-1.5-pro-experimental
+                               gemini-2.0-flash-exp))
 
   (gptel-make-openai "github"
                      :host "models.inference.ai.azure.com"
@@ -52,7 +53,7 @@
                                allenai/OLMo-7B-Instruct-hf))
 
   (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
-        gptel-model 'gemini-1.5-pro
+        gptel-model 'gemini-2.0-flash-exp
         gptel-directives
         '((default . "You are a large language model living in Emacs and a helpful assistant. Respond concisely.")
           ))

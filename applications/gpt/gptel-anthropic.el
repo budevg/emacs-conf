@@ -81,8 +81,15 @@
      (gptel-backend-request-params gptel-backend)
      (gptel--model-request-params  gptel-model))))
 
+(cl-defmethod gptel--parse-list ((_backend gptel-anthropic) prompt-list)
+  (cl-loop for text in prompt-list
+           for role = t then (not role)
+           if text collect
+           (list :role (if role "user" "assistant")
+                 :content `[(:type "text" :text ,text)])))
+
 (cl-defmethod gptel--parse-buffer ((_backend gptel-anthropic) &optional max-entries)
-  (let ((prompts) (prop)
+  (let ((prompts) (prop) (prev-pt (point))
         (include-media (and gptel-track-media (or (gptel--model-capable-p 'media)
                                                 (gptel--model-capable-p 'url)))))
     (if (or gptel-mode gptel-track-response)
@@ -93,17 +100,18 @@
                             (when (get-char-property (max (point-min) (1- (point)))
                                                      'gptel)
                               t))))
-          (if (prop-match-value prop)   ; assistant role
-              (push (list :role "assistant"
-                          :content
-                          (buffer-substring-no-properties (prop-match-beginning prop)
-                                                          (prop-match-end prop)))
-                    prompts)
-            ;; HACK Until we can find a more robust solution for editing
-            ;; responses, ignore user prompts containing only whitespace, as the
-            ;; Anthropic API can't handle it.  See #409, #406, #351 and #321
-            (unless (save-excursion (skip-syntax-forward " ")
-                                    (eq (get-char-property (point) 'gptel) 'response))
+          ;; HACK Until we can find a more robust solution for editing
+          ;; responses, ignore prompts containing only whitespace, as the
+          ;; Anthropic API can't handle it.  See #452, #409, #406, #351 and #321
+          ;; We check for blank prompts by skipping whitespace and comparing
+          ;; point against the previous.
+          (unless (save-excursion (skip-syntax-forward " ") (>= (point) prev-pt))
+            (if (prop-match-value prop) ; assistant role
+                (push (list :role "assistant"
+                            :content
+                            (buffer-substring-no-properties (prop-match-beginning prop)
+                                                            (prop-match-end prop)))
+                      prompts)
               (if include-media         ; user role: possibly with media
                   (push (list :role "user"
                               :content
@@ -117,6 +125,7 @@
                              (buffer-substring-no-properties (prop-match-beginning prop)
                                                              (prop-match-end prop))))
                       prompts))))
+          (setq prev-pt (point))
           (and max-entries (cl-decf max-entries)))
       (push (list :role "user"
                   :content
@@ -212,21 +221,13 @@ files in the context."
      :output-cost 15
      :cutoff-date "2024-04")
     (claude-3-5-sonnet-20240620
-     :description "Highest level of intelligence and capability"
+     :description "Highest level of intelligence and capability (earlier version)"
      :capabilities (media tool cache)
      :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
      :context-window 200
      :input-cost 3
      :output-cost 15
      :cutoff-date "2024-04")
-    (claude-3-opus-20240229
-     :description "Top-level performance, intelligence, fluency, and understanding"
-     :capabilities (media tool cache)
-     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
-     :context-window 200
-     :input-cost 15
-     :output-cost 75
-     :cutoff-date "2023-08")
     (claude-3-5-haiku-20241022
      :description "Intelligence at blazing speeds"
      :capabilities (media tool)
@@ -235,13 +236,13 @@ files in the context."
      :input-cost 1.00
      :output-cost 5.00
      :cutoff-date "2024-07")
-    (claude-3-haiku-20240307
-     :description "Fast and most compact model for near-instant responsiveness"
-     :capabilities (media tool)
+    (claude-3-opus-20240229
+     :description "Top-level performance, intelligence, fluency, and understanding"
+     :capabilities (media tool cache)
      :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
      :context-window 200
-     :input-cost 0.25
-     :output-cost 1.25
+     :input-cost 15
+     :output-cost 75
      :cutoff-date "2023-08")
     (claude-3-sonnet-20240229
      :description "Balance of intelligence and speed (legacy model)"
@@ -250,6 +251,14 @@ files in the context."
      :context-window 200
      :input-cost 3
      :output-cost 15
+     :cutoff-date "2023-08")
+    (claude-3-haiku-20240307
+     :description "Fast and most compact model for near-instant responsiveness"
+     :capabilities (media tool)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 0.25
+     :output-cost 1.25
      :cutoff-date "2023-08"))
   "List of available Anthropic models and associated properties.
 Keys:
@@ -272,11 +281,9 @@ Keys:
   include when using this model.
 
 Information about the Anthropic models was obtained from the following
-sources:
+comparison table:
 
-- <https://www.anthropic.com/pricing#anthropic-api>
-- <https://www.anthropic.com/news/claude-3-5-sonnet>
-- <https://assets.anthropic.com/m/61e7d27f8c8f5919/original/Claude-3-Model-Card.pdf>")
+<https://docs.anthropic.com/en/docs/about-claude/models#model-comparison-table>")
 
 ;;;###autoload
 (cl-defun gptel-make-anthropic

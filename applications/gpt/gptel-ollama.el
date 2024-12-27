@@ -75,31 +75,38 @@ Intended for internal use only.")
 
 (cl-defmethod gptel--request-data ((_backend gptel-ollama) prompts)
   "JSON encode PROMPTS for sending to ChatGPT."
-  (let ((prompts-plist
-         `(:model ,(gptel--model-name gptel-model)
-           :messages [,@prompts]
-           :stream ,(or (and gptel-stream gptel-use-curl
-                         (gptel-backend-stream gptel-backend))
-                     :json-false)))
-        options-plist)
-    (when gptel-temperature
+  (when (and gptel--system-message
+             (not (gptel--model-capable-p 'nosystem)))
+    (push (list :role "system"
+                :content gptel--system-message)
+          prompts))
+  (let* ((prompts-plist
+          (gptel--merge-plists
+           `(:model ,(gptel--model-name gptel-model)
+             :messages [,@prompts]
+             :stream ,(or (and gptel-stream gptel-use-curl
+                               (gptel-backend-stream gptel-backend))
+                          :json-false))
+           (gptel-backend-request-params gptel-backend)
+           (gptel--model-request-params  gptel-model)))
+         ;; the initial options (if any) from request params
+         (options-plist (plist-get prompts-plist :options)))
+
+    ;; if the temperature and max-tokens aren't set as
+    ;; backend/model-specific, use the global settings
+    (when (and gptel-temperature (not (plist-get options-plist :temperature)))
       (setq options-plist
-            (plist-put options-plist :temperature
-                       gptel-temperature)))
-    (when gptel-max-tokens
+            (plist-put options-plist :temperature gptel-temperature)))
+    (when (and gptel-max-tokens (not (plist-get options-plist :num_predict)))
       (setq options-plist
-            (plist-put options-plist :num_predict
-                       gptel-max-tokens)))
-    ;; FIXME: These options will be lost if there are model/backend-specific
-    ;; :options, since `gptel--merge-plists' does not merge plist values
-    ;; recursively.
-    (when options-plist
-      (plist-put prompts-plist :options options-plist))
-    ;; Merge request params with model and backend params.
-    (gptel--merge-plists
-     prompts-plist
-     (gptel-backend-request-params gptel-backend)
-     (gptel--model-request-params  gptel-model))))
+            (plist-put options-plist :num_predict gptel-max-tokens)))
+    (plist-put prompts-plist :options options-plist)))
+
+(cl-defmethod gptel--parse-list ((_backend gptel-ollama) prompt-list)
+  (cl-loop for text in prompt-list
+           for role = t then (not role)
+           if text collect
+           (list :role (if role "user" "assistant") :content text)))
 
 (cl-defmethod gptel--parse-buffer ((_backend gptel-ollama) &optional max-entries)
   (let ((prompts) (prop)
@@ -135,12 +142,7 @@ Intended for internal use only.")
                   :content
                   (string-trim (buffer-substring-no-properties (point-min) (point-max))))
             prompts))
-    (if (and (not (gptel--model-capable-p 'nosystem))
-             gptel--system-message)
-        (cons (list :role "system"
-                    :content gptel--system-message)
-              prompts)
-      prompts)))
+    prompts))
 
 (defun gptel--ollama-parse-multipart (parts)
   "Convert a multipart prompt PARTS to the Ollama API format.

@@ -51,6 +51,7 @@
 (declare-function gptel-prompt-prefix-string "gptel")
 (declare-function gptel-response-prefix-string "gptel")
 (declare-function gptel--merge-plists "gptel")
+(declare-function gptel--model-request-params "gptel")
 (declare-function gptel-context--wrap "gptel-context")
 
 (defmacro gptel--json-read ()
@@ -137,6 +138,11 @@ with differing settings.")
 
 (cl-defmethod gptel--request-data ((_backend gptel-openai) prompts)
   "JSON encode PROMPTS for sending to ChatGPT."
+  (when (and gptel--system-message
+             (not (gptel--model-capable-p 'nosystem)))
+    (push (list :role "system"
+                :content gptel--system-message)
+          prompts))
   (let ((prompts-plist
          `(:model ,(gptel--model-name gptel-model)
            :messages [,@prompts]
@@ -146,12 +152,22 @@ with differing settings.")
     (when gptel-temperature
       (plist-put prompts-plist :temperature gptel-temperature))
     (when gptel-max-tokens
-      (plist-put prompts-plist :max_completion_tokens gptel-max-tokens))
+      ;; HACK: The OpenAI API has deprecated max_tokens, but we still need it
+      ;; for OpenAI-compatible APIs like GPT4All (#485)
+      (plist-put prompts-plist (if (memq gptel-model '(o1-preview o1-mini))
+                                   :max_completion_tokens :max_tokens)
+                 gptel-max-tokens))
     ;; Merge request params with model and backend params.
     (gptel--merge-plists
      prompts-plist
      (gptel-backend-request-params gptel-backend)
      (gptel--model-request-params  gptel-model))))
+
+(cl-defmethod gptel--parse-list ((_backend gptel-openai) prompt-list)
+  (cl-loop for text in prompt-list
+           for role = t then (not role)
+           if text collect
+           (list :role (if role "user" "assistant") :content text)))
 
 (cl-defmethod gptel--parse-buffer ((_backend gptel-openai) &optional max-entries)
   (let ((prompts) (prop)
@@ -190,12 +206,7 @@ with differing settings.")
                   :content
                   (gptel--trim-prefixes (buffer-substring-no-properties (point-min) (point-max))))
             prompts))
-    (if (and (not (gptel--model-capable-p 'nosystem))
-             gptel--system-message)
-        (cons (list :role "system"
-                    :content gptel--system-message)
-              prompts)
-      prompts)))
+    prompts))
 
 ;; TODO This could be a generic function
 (defun gptel--openai-parse-multipart (parts)
