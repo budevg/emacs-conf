@@ -499,10 +499,10 @@ If EXTERNAL is non-nil, include external sources of directives."
            finally return
            (nconc
             prompt-suffixes
-            (list (list "DEL" "None"
+            (list (list "<delete>" "None"
                         `(lambda () (interactive)
                            (message "%s unset" ,msg)
-                           (gptel--set-with-scope ',sym nil gptel--set-buffer-locally))
+                           (gptel--set-with-scope ',sym "" gptel--set-buffer-locally))
                         :transient 'transient--do-return))
             (and external
                  (list (list "SPC" "Pick crowdsourced prompt"
