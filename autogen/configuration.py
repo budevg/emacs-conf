@@ -190,6 +190,8 @@ applications = [Node(path = "applications/init.el",
                      msg = "Init kubernetes"),
                 Node(path = "applications/gpt/init.el",
                      msg = "Init chat gpt"),
+                Node(path = "applications/media/init.el",
+                     msg = "video adn audio media"),
                 ]
 
 packages = [Node(path = "packages/el-get",

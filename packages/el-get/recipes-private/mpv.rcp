@@ -1,0 +1,8 @@
+(:name mpv
+       :description "control mpv for easy note taking"
+       :type github
+       :pkgname "kljohann/mpv.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/media")))
+
+       )

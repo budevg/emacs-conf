@@ -1,0 +1,8 @@
+(:name yeetube
+       :description "YouTube Front End for GNU Emacs"
+       :type git
+       :url "https://git.thanosapollo.org/yeetube"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/media")))
+
+       )

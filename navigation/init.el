@@ -227,11 +227,7 @@ Fall back to `completing-read' otherwise."
   (defengine github
              "https://github.com/search?q=%s"
              :browser 'browse-url-chromium)
-  (defengine youtube
-             "https://vid.puffyan.us/search?q=%s&date=year&type=video&duration=long&sort=relevance"
-             :browser 'eww-browse-url)
-  :bind (("C-f v v" . engine/search-youtube)
-         ("C-f v g" . engine/search-github)
+  :bind (("C-f v g" . engine/search-github)
          )
   )
 
