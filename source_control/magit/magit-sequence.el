@@ -1,6 +1,6 @@
 ;;; magit-sequence.el --- History manipulation in Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -144,8 +144,8 @@ This discards all changes made since the sequence started."
    ("-F" "Attempt fast-forward"               "--ff")
    ("-x" "Reference cherry in commit message" "-x")
    ("-e" "Edit commit messages"               ("-e" "--edit"))
-   ("-s" "Add Signed-off-by lines"            ("-s" "--signoff"))
-   (5 magit:--gpg-sign)]
+   (magit:--gpg-sign)
+   (magit:--signoff)]
   [:if-not magit-sequencer-in-progress-p
    ["Apply here"
     ("A" "Pick"    magit-cherry-copy)
@@ -343,11 +343,11 @@ the process manually."
      (let ((merges (seq-filter #'magit-merge-commit-p commits)))
        (cond
         ((not merges)
-         (--remove (string-prefix-p "--mainline=" it) args))
+         (seq-remove (##string-prefix-p "--mainline=" %) args))
         ((cl-set-difference commits merges :test #'equal)
          (user-error "Cannot %s merge and non-merge commits at once"
                      command))
-        ((--first (string-prefix-p "--mainline=" it) args)
+        ((seq-find (##string-prefix-p "--mainline=" %) args)
          args)
         (t
          (cons (format "--mainline=%s"
@@ -378,8 +378,8 @@ the process manually."
    ("-e" "Edit commit message"       ("-e" "--edit"))
    ("-E" "Don't edit commit message" "--no-edit")
    ("=s" magit-merge:--strategy)
-   ("-s" "Add Signed-off-by lines"   ("-s" "--signoff"))
-   (5 magit:--gpg-sign)]
+   (magit:--gpg-sign)
+   (magit:--signoff)]
   ["Actions"
    :if-not magit-sequencer-in-progress-p
    ("V" "Revert commit(s)" magit-revert-and-commit)
@@ -440,7 +440,8 @@ without prompting."
    ("-d" "Use author date as committer date" "--committer-date-is-author-date")
    ("-t" "Use current time as author date"   "--ignore-date")
    ("-s" "Add Signed-off-by lines"           ("-s" "--signoff"))
-   (5 magit:--gpg-sign)]
+   (magit:--gpg-sign)
+   (magit:--signoff)]
   ["Apply"
    :if-not magit-am-in-progress-p
    ("m" "maildir"     magit-am-apply-maildir)
@@ -474,9 +475,9 @@ without prompting."
                                   nil default))))
                      (magit-am-arguments)))
   (magit-run-git-sequencer "am" args "--"
-                           (--map (magit-convert-filename-for-git
-                                   (expand-file-name it))
-                                  files)))
+                           (mapcar (##magit-convert-filename-for-git
+                                    (expand-file-name %))
+                                   files)))
 
 ;;;###autoload
 (defun magit-am-apply-maildir (&optional maildir args)
@@ -530,8 +531,7 @@ This discards all changes made since the sequence started."
    ("-p" "Preserve merges"          ("-p" "--preserve-merges")
     :if (lambda () (magit-git-version< "2.33.0")))
    ("-r" "Rebase merges"            ("-r" "--rebase-merges=")
-    magit-rebase-merges-select-mode
-    :if (lambda () (magit-git-version>= "2.18.0")))
+    magit-rebase-merges-select-mode)
    ("-u" "Update branches"          "--update-refs"
     :if (lambda () (magit-git-version>= "2.38.0")))
    (7 magit-merge:--strategy)
@@ -545,7 +545,8 @@ This discards all changes made since the sequence started."
    ("-i" "Interactive"              ("-i" "--interactive"))
    ("-h" "Disable hooks"            "--no-verify")
    (7 magit-rebase:--exec)
-   (5 magit:--gpg-sign)]
+   (magit:--gpg-sign)
+   (magit:--signoff)]
   [:if-not magit-rebase-in-progress-p
    :description (lambda ()
                   (format (propertize "Rebase %s onto" 'face 'transient-heading)
@@ -689,7 +690,7 @@ START has to be selected from a list of recent commits."
   (when (and commit (not noassert))
     (setq commit (magit-rebase-interactive-assert
                   commit delay-edit-confirm
-                  (--some (string-prefix-p "--rebase-merges" it) args))))
+                  (seq-some (##string-prefix-p "--rebase-merges" %) args))))
   (if (and commit (not confirm))
       (let ((process-environment process-environment))
         (when editor
@@ -726,7 +727,7 @@ START has to be selected from a list of recent commits."
                    ;; merely to add new commits *after* it.  Try not to
                    ;; ask users whether they really want to edit public
                    ;; commits, when they don't actually intend to do so.
-                   (not (--all-p (magit-rev-equal it commit) branches))))
+                   (not (seq-every-p (##magit-rev-equal % commit) branches))))
       (let ((m1 "Some of these commits have already been published to ")
             (m2 ".\nDo you really want to modify them"))
         (magit-confirm (or magit--rebase-published-symbol 'rebase-published)
@@ -1031,9 +1032,9 @@ status buffer (i.e., the reverse of how they will be applied)."
 (defun magit-rebase-insert-apply-sequence (onto)
   (let* ((dir (magit-gitdir))
          (rewritten
-          (--map (car (split-string it))
-                 (magit-file-lines
-                  (expand-file-name "rebase-apply/rewritten" dir))))
+          (mapcar (##car (split-string %))
+                  (magit-file-lines
+                   (expand-file-name "rebase-apply/rewritten" dir))))
          (stop (magit-file-line
                 (expand-file-name "rebase-apply/original-commit" dir))))
     (dolist (patch (nreverse (cdr (magit-rebase-patches))))
@@ -1055,10 +1056,10 @@ status buffer (i.e., the reverse of how they will be applied)."
     (setq done (magit-git-lines "log" "--format=%H" (concat onto "..HEAD")))
     (when (and stop (not (member (magit-rev-parse stop) done)))
       (let ((id (magit-patch-id stop)))
-        (if-let ((matched (--first (equal (magit-patch-id it) id) done)))
+        (if-let ((matched (seq-find (##equal (magit-patch-id %) id) done)))
             (setq stop matched)
           (cond
-           ((--first (magit-rev-equal it stop) done)
+           ((seq-find (##magit-rev-equal % stop) done)
             ;; The commit's testament has been executed.
             (magit-sequence-insert-commit "void" stop 'magit-sequence-drop))
            ;; The faith of the commit is still undecided...
@@ -1084,7 +1085,7 @@ status buffer (i.e., the reverse of how they will be applied)."
                 (t "work")))
              stop 'magit-sequence-part))
            ;; The commit is definitely gone...
-           ((--first (magit-rev-equal it stop) done)
+           ((seq-find (##magit-rev-equal % stop) done)
             ;; ...but all of its changes are still in effect.
             (magit-sequence-insert-commit "poof" stop 'magit-sequence-drop))
            (t

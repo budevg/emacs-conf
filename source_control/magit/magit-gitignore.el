@@ -1,6 +1,6 @@
 ;;; magit-gitignore.el --- Intentionally untracked files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -116,11 +116,12 @@ Rules that are defined in that file affect all local repositories."
          (base (and base (file-directory-p base) base))
          (choices
           (delete-dups
-           (--mapcat
-            (cons (concat "/" it)
-                  (and-let* ((ext (file-name-extension it)))
-                    (list (concat "/" (file-name-directory it) "*." ext)
-                          (concat "*." ext))))
+           (mapcan
+            (lambda (file)
+              (cons (concat "/" file)
+                    (and-let* ((ext (file-name-extension file)))
+                      (list (concat "/" (file-name-directory file) "*." ext)
+                            (concat "*." ext)))))
             (sort (nconc
                    (magit-untracked-files nil base)
                    ;; The untracked section of the status buffer lists

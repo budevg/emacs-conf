@@ -1,6 +1,6 @@
 ;;; magit-status.el --- The grand overview  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -41,12 +41,12 @@
   :type 'hook)
 
 (defcustom magit-status-headers-hook
-  '(magit-insert-error-header
-    magit-insert-diff-filter-header
-    magit-insert-head-branch-header
-    magit-insert-upstream-branch-header
-    magit-insert-push-branch-header
-    magit-insert-tags-header)
+  (list #'magit-insert-error-header
+        #'magit-insert-diff-filter-header
+        #'magit-insert-head-branch-header
+        #'magit-insert-upstream-branch-header
+        #'magit-insert-push-branch-header
+        #'magit-insert-tags-header)
   "Hook run to insert headers into the status buffer.
 
 This hook is run by `magit-insert-status-headers', which in turn
@@ -55,32 +55,32 @@ all."
   :package-version '(magit . "2.1.0")
   :group 'magit-status
   :type 'hook
-  :options '(magit-insert-error-header
-             magit-insert-diff-filter-header
-             magit-insert-repo-header
-             magit-insert-remote-header
-             magit-insert-head-branch-header
-             magit-insert-upstream-branch-header
-             magit-insert-push-branch-header
-             magit-insert-tags-header))
+  :options (list #'magit-insert-error-header
+                 #'magit-insert-diff-filter-header
+                 #'magit-insert-repo-header
+                 #'magit-insert-remote-header
+                 #'magit-insert-head-branch-header
+                 #'magit-insert-upstream-branch-header
+                 #'magit-insert-push-branch-header
+                 #'magit-insert-tags-header))
 
 (defcustom magit-status-sections-hook
-  '(magit-insert-status-headers
-    magit-insert-merge-log
-    magit-insert-rebase-sequence
-    magit-insert-am-sequence
-    magit-insert-sequencer-sequence
-    magit-insert-bisect-output
-    magit-insert-bisect-rest
-    magit-insert-bisect-log
-    magit-insert-untracked-files
-    magit-insert-unstaged-changes
-    magit-insert-staged-changes
-    magit-insert-stashes
-    magit-insert-unpushed-to-pushremote
-    magit-insert-unpushed-to-upstream-or-recent
-    magit-insert-unpulled-from-pushremote
-    magit-insert-unpulled-from-upstream)
+  (list #'magit-insert-status-headers
+        #'magit-insert-merge-log
+        #'magit-insert-rebase-sequence
+        #'magit-insert-am-sequence
+        #'magit-insert-sequencer-sequence
+        #'magit-insert-bisect-output
+        #'magit-insert-bisect-rest
+        #'magit-insert-bisect-log
+        #'magit-insert-untracked-files
+        #'magit-insert-unstaged-changes
+        #'magit-insert-staged-changes
+        #'magit-insert-stashes
+        #'magit-insert-unpushed-to-pushremote
+        #'magit-insert-unpushed-to-upstream-or-recent
+        #'magit-insert-unpulled-from-pushremote
+        #'magit-insert-unpulled-from-upstream)
   "Hook run to insert sections into a status buffer."
   :package-version '(magit . "2.12.0")
   :group 'magit-status
@@ -141,6 +141,49 @@ The functions which respect this option are
   :package-version '(magit . "2.4.0")
   :group 'magit-status
   :type 'boolean)
+
+(defcustom magit-status-show-untracked-files t
+  "Whether to list untracked files in the status buffer.
+
+- If nil, do not list any untracked files.
+- If t, list untracked files, but if a directory does not contain any
+  untracked files, then only list that directory, not the contained
+  untracked files.
+- If all, then list each individual untracked files.  This is can be
+  very slow and is discouraged.
+
+The corresponding values for the Git variable are \"no\", \"normal\"
+and \"all\".
+
+To disable listing untracked files in a specific repository only, add
+the following to \".dir-locals.el\":
+
+  ((magit-status-mode
+   (magit-status-show-untracked-files . \"no\")))
+
+Alternatively (and mostly for historic reasons), it is possible to use
+`git-config' to set the repository-local value:
+
+  git config set --local status.showUntrackedFiles no
+
+This does *not* override the (if any) local value of this Lisp variable,
+but it does override its global value.
+
+See the last section in the git-status(1) manpage, to speed up the part
+of the work Git is responsible for.  Turning that list into sections is
+also not free, so Magit only lists `magit-status-file-list-limit' files."
+  :package-version '(magit . "4.3.0")
+  :group 'magit-status
+  :type 'boolean
+  :safe 'booleanp)
+
+(defcustom magit-status-file-list-limit 100
+  "How many files to list in file list sections in the status buffer.
+For performance reasons, it is recommended that you do not
+increase this limit."
+  :package-version '(magit . "4.3.0")
+  :group 'magit-status
+  :type 'natnum)
 
 (defcustom magit-status-margin
   (list nil
@@ -439,12 +482,13 @@ Type \\[magit-commit] to create a commit.
 (defun magit-status-goto-initial-section ()
   "Jump to the section specified by `magit-status-initial-section'."
   (when-let ((section
-              (--some (if (integerp it)
-                          (nth (1- it)
-                               (magit-section-siblings (magit-current-section)
-                                                       'next))
-                        (magit-get-section it))
-                      magit-status-initial-section)))
+              (seq-some (lambda (initial)
+                          (if (integerp initial)
+                              (nth (1- initial)
+                                   (magit-section-siblings
+                                    (magit-current-section) 'next))
+                            (magit-get-section initial)))
+                        magit-status-initial-section)))
     (goto-char (oref section start))
     (when-let ((vis (cdr (assq 'magit-status-initial-section
                                magit-section-initial-visibility-alist))))
@@ -537,13 +581,13 @@ instead.  The optional BRANCH argument is for internal use only."
               (insert (propertize commit 'font-lock-face 'magit-hash) ?\s))
             (insert (propertize branch 'font-lock-face 'magit-branch-local))
             (insert ?\s)
-            (insert (funcall magit-log-format-message-function branch summary))
+            (insert (magit-log--wash-summary summary))
             (insert ?\n))
         (magit-insert-section (commit commit)
           (insert (format "%-10s" "Head: "))
           (insert (propertize commit 'font-lock-face 'magit-hash))
           (insert ?\s)
-          (insert (funcall magit-log-format-message-function nil summary))
+          (insert (magit-log--wash-summary summary))
           (insert ?\n))))))
 
 (defun magit-insert-upstream-branch-header (&optional branch upstream keyword)
@@ -570,10 +614,9 @@ arguments are for internal use only."
                                                 'font-lock-face 'magit-hash)
                                     " "))
                        upstream " "
-                       (funcall magit-log-format-message-function upstream
-                                (funcall magit-log-format-message-function nil
-                                         (or (magit-rev-format "%s" upstream)
-                                             "(no commit message)"))))
+                       (magit-log--wash-summary
+                        (or (magit-rev-format "%s" upstream)
+                            "(no commit message)")))
              (cond
               ((magit--unnamed-upstream-p remote merge)
                (concat (propertize merge  'font-lock-face 'magit-branch-remote)
@@ -609,10 +652,8 @@ arguments are for internal use only."
                                             'font-lock-face 'magit-hash)
                                 " "))
                    target " "
-                   (funcall magit-log-format-message-function target
-                            (funcall magit-log-format-message-function nil
-                                     (or (magit-rev-format "%s" target)
-                                         "(no commit message)"))))
+                   (magit-log--wash-summary (or (magit-rev-format "%s" target)
+                                                "(no commit message)")))
          (let ((remote (magit-get-push-remote branch)))
            (if (magit-remote-p remote)
                (concat target " "
@@ -706,96 +747,80 @@ remote in alphabetic order."
   magit-insert-assume-unchanged-files)
 
 (defun magit-insert-untracked-files ()
-  "Maybe insert a list or tree of untracked files.
+  "Maybe insert list of untracked files.
 
-Do so depending on the value of `status.showUntrackedFiles'.
-Note that even if the value is `all', Magit still initially
-only shows directories.  But the directory sections can then
-be expanded using \"TAB\".
-
-If the first element of `magit-buffer-diff-files' is a
-directory, then limit the list to files below that.  The value
-value of that variable can be set using \"D -- DIRECTORY RET g\"."
-  (let ((show (or (magit-get "status.showUntrackedFiles") "normal")))
-    (unless (equal show "no")
-      (let* ((all (equal show "all"))
-             (base (car magit-buffer-diff-files))
-             (base (and base (file-directory-p base) base)))
-        (magit-insert-files 'untracked
-                            (lambda () (magit-untracked-files nil base (not all)))
-                            (not all))))))
+List files if `magit-status-show-untracked-files' is non-nil, but also
+take the local value of Git variable `status.showUntrackedFiles' into
+account.  The local value of the Lisp variable takes precedence over the
+local value of the Git variable.  The global value of the Git variable
+is always ignored."
+  (when-let*
+      ((value (or (and (local-variable-p 'magit-status-show-untracked-files)
+                       magit-status-show-untracked-files)
+                  (pcase (magit-get "--local" "status.showUntrackedFiles")
+                    ((or "no" "off" "false" "0") 'no)
+                    ((or "yes" "on" "true" "1") t)
+                    ("all" 'all))
+                  magit-status-show-untracked-files))
+       ((not (eq value 'no))))
+    (magit-insert-files
+     'untracked
+     (lambda (files)
+       (mapcan (lambda (line)
+                 (and (eq (aref line 0) ??)
+                      (list (substring line 3))))
+               (apply #'magit-git-items "status" "-z" "--porcelain"
+                      (format "--untracked-files=%s"
+                              (if (eq value 'all) "all" "normal"))
+                      "--" files))))))
 
 (defun magit-insert-tracked-files ()
-  "Insert a tree of tracked files.
-
-If the first element of `magit-buffer-diff-files' is a
-directory, then limit the list to files below that.  The value
-value of that variable can be set using \"D -- DIRECTORY RET g\"."
+  "Insert a list of tracked files.
+Honor the buffer's file filter, which can be set using \"D - -\"."
   (magit-insert-files 'tracked #'magit-list-files))
 
 (defun magit-insert-ignored-files ()
-  "Insert a tree of ignored files.
-
-If the first element of `magit-buffer-diff-files' is a
-directory, then limit the list to files below that.  The value
-of that variable can be set using \"D -- DIRECTORY RET g\"."
-  (magit-insert-files 'ignored #'magit-ignored-files))
+  "Insert a list of ignored files.
+Honor the buffer's file filter, which can be set using \"D - -\"."
+  (magit-insert-files 'ignored
+                      (lambda (args) (magit-ignored-files "--directory" args))))
 
 (defun magit-insert-skip-worktree-files ()
-  "Insert a tree of skip-worktree files.
-
-If the first element of `magit-buffer-diff-files' is a
-directory, then limit the list to files below that.  The value
-of that variable can be set using \"D -- DIRECTORY RET g\"."
+  "Insert a list of skip-worktree files.
+Honor the buffer's file filter, which can be set using \"D - -\"."
   (magit-insert-files 'skip-worktree #'magit-skip-worktree-files))
 
 (defun magit-insert-assume-unchanged-files ()
-  "Insert a tree of files that are assumed to be unchanged.
-
-If the first element of `magit-buffer-diff-files' is a
-directory, then limit the list to files below that.  The value
-of that variable can be set using \"D -- DIRECTORY RET g\"."
+  "Insert a list of files that are assumed to be unchanged.
+Honor the buffer's file filter, which can be set using \"D - -\"."
   (magit-insert-files 'assume-unchanged #'magit-assume-unchanged-files))
 
-(defvar magit-file-section-indent nil
-  "Indentation used for simple `file' sections.
-If non-nil, this must be a string or character, and is used as
-indentation of `file' sections inserted by `magit-insert-*-files'.
-`file' sections that are part of diffs are not affected.  This is mainly
-intended as a workaround for https://github.com/magit/magit/issues/5176,
-in which case ?\N{ZERO WIDTH SPACE} is a good value.")
-
-(defun magit-insert-files (type fn &optional nogroup)
-  (when-let ((files (funcall fn)))
-    (let* ((base (car magit-buffer-diff-files))
-           (base (and base (file-directory-p base) base))
-           (title (symbol-name type)))
-      (magit-insert-section ((eval type) nil t)
-        (magit-insert-heading (length files)
+(defun magit-insert-files (type fn)
+  (when-let ((files (funcall fn
+                             (and magit-buffer-diff-files
+                                  (cons "--" magit-buffer-diff-files)))))
+    (magit-insert-section section ((eval type) nil t)
+      (magit-insert-heading (length files)
+        (let ((title (symbol-name type)))
           (format "%c%s files"
                   (capitalize (aref title 0))
-                  (substring title 1)))
-        (magit-insert-files-1 files base nogroup)
-        (insert ?\n)))))
-
-(defun magit-insert-files-1 (files directory &optional nogroup)
-  (while (and files (or nogroup
-                        (not directory)
-                        (string-prefix-p directory (car files))))
-    (let ((dir (file-name-directory (car files))))
-      (if (or nogroup (equal dir directory))
-          (let ((file (pop files)))
-            (magit-insert-section (file file)
-              (when magit-file-section-indent
-                (insert magit-file-section-indent))
-              (insert (propertize file 'font-lock-face 'magit-filename) ?\n)))
-        (magit-insert-section (file dir t)
-          (when magit-file-section-indent
-            (insert magit-file-section-indent))
-          (insert (propertize dir 'file 'magit-filename) ?\n)
-          (magit-insert-heading)
-          (setq files (magit-insert-files-1 files dir))))))
-  files)
+                  (substring title 1))))
+      (magit-insert-section-body
+        (let ((magit-section-insert-in-reverse t)
+              (limit magit-status-file-list-limit))
+          (while (and files (> limit 0))
+            (cl-decf limit)
+            (let ((file (pop files)))
+              (magit-insert-section (file file)
+                (insert (propertize file 'font-lock-face 'magit-filename))
+                (insert ?\n))))
+          (when files
+            (magit-insert-section (info)
+              (insert (propertize
+                       (format "%s files not listed\n" (length files))
+                       'face 'warning)))))
+        (insert ?\n)
+        (oset section children (nreverse (oref section children)))))))
 
 ;;; _
 (provide 'magit-status)

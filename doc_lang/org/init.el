@@ -10,6 +10,7 @@
   (org-time-stamp-custom-formats '("<%d/%m/%Y>" . "<%d/%m/%Y %H:%M>"))
   :config
   (setq org-adapt-indentation t
+        org-confirm-babel-evaluate nil
         org-cycle-emulate-tab 'exc-hl-bol
 
         org-blank-before-new-entry '((heading . nil)
@@ -30,6 +31,12 @@
         org-descriptive-links nil
         org-export-htmlize-output-type 'css
         org-export-creator-info nil)
+
+  ;;(org-babel-do-load-languages
+  ;; 'org-babel-load-languages
+  ;; '((emacs-lisp . t)
+  ;;   (shell . t)
+  ;;   (python . t)))
 
   (org-defkey org-mode-map [(control tab)] 'other-window)
 

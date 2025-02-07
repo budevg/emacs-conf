@@ -1,0 +1,7 @@
+(:name llama
+       :description "Compact syntax for short lambda "
+       :type github
+       :pkgname "tarsius/llama"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib")))
+       )

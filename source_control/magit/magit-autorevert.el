@@ -1,6 +1,6 @@
 ;;; magit-autorevert.el --- Revert buffers when files in repository change  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -22,7 +22,7 @@
 
 ;;; Code:
 
-(require 'magit-git)
+(require 'magit-process)
 
 (require 'autorevert)
 
@@ -58,9 +58,9 @@ is enabled."
   :group 'auto-revert
   :group 'magit-auto-revert
   :group 'magit-related
-  :type '(radio (const :tag "No filter" nil)
-                (function-item magit-auto-revert-buffer-p)
-                (function-item magit-auto-revert-repository-buffer-p)
+  :type `(radio (const :tag "No filter" nil)
+                (function-item ,#'magit-auto-revert-buffer-p)
+                (function-item ,#'magit-auto-revert-repository-buffer-p)
                 function))
 
 (defcustom magit-auto-revert-tracked-only t
@@ -98,19 +98,21 @@ seconds of user inactivity.  That is not desirable."
 ;;; Mode
 
 (defun magit-turn-on-auto-revert-mode-if-desired (&optional file)
-  (if file
-      (when-let ((buffer (find-buffer-visiting file)))
-        (with-current-buffer buffer
-          (magit-turn-on-auto-revert-mode-if-desired)))
-    (when (and (not auto-revert-mode)        ; see #3014
-               (not global-auto-revert-mode) ; see #3460
-               buffer-file-name
-               (file-readable-p buffer-file-name)
-               (compat-call executable-find (magit-git-executable) t)
-               (magit-toplevel)
-               (or (not magit-auto-revert-tracked-only)
-                   (magit-file-tracked-p buffer-file-name)))
-      (auto-revert-mode 1))))
+  (cond (file
+         (when-let ((buffer (find-buffer-visiting file)))
+           (with-current-buffer buffer
+             (magit-turn-on-auto-revert-mode-if-desired))))
+        ((and (not auto-revert-mode)        ; see #3014
+              (not global-auto-revert-mode) ; see #3460
+              buffer-file-name
+              (or auto-revert-remote-files  ; see #5422
+                  (not (file-remote-p buffer-file-name)))
+              (file-readable-p buffer-file-name)
+              (compat-call executable-find (magit-git-executable) t)
+              (magit-toplevel)
+              (or (not magit-auto-revert-tracked-only)
+                  (magit-file-tracked-p buffer-file-name)))
+         (auto-revert-mode 1))))
 
 ;;;###autoload
 (define-globalized-minor-mode magit-auto-revert-mode auto-revert-mode

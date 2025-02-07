@@ -1,6 +1,6 @@
 ;;; magit-apply.el --- Apply Git diffs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -217,7 +217,7 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
 (defun magit-apply-patch (section:s args patch)
   (let* ((files (if (atom section:s)
                     (list (oref section:s value))
-                  (--map (oref it value) section:s)))
+                  (mapcar (##oref % value) section:s)))
          (command (symbol-name this-command))
          (command (if (and command (string-match "^magit-\\([^-]+\\)" command))
                       (match-string 1 command)
@@ -251,11 +251,12 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
 (defun magit-apply--get-diffs (sections)
   (magit-section-case
     ([file diffstat]
-     (--map (or (magit-get-section
-                 (append `((file . ,(oref it value)))
-                         (magit-section-ident magit-root-section)))
-                (error "Cannot get required diff headers"))
-            sections))
+     (mapcar (lambda (section)
+               (or (magit-get-section
+                    (append `((file . ,(oref section value)))
+                            (magit-section-ident magit-root-section)))
+                   (error "Cannot get required diff headers")))
+             sections))
     (t sections)))
 
 (defun magit-apply--ignore-whitespace-p (selection type scope)
@@ -337,7 +338,7 @@ With prefix argument FORCE, offer ignored files for completion."
     ;; For backward compatibility, and because of
     ;; the function's name, don't require a list.
     (magit-stage-1 (and force "--force")
-                   (if (listp files) files (list files)))))
+                   (ensure-list files))))
 
 ;;;###autoload
 (defun magit-stage-modified (&optional all)
@@ -406,10 +407,10 @@ ignored) files."
     (magit-wip-commit-after-apply files " after stage")))
 
 (defvar magit-post-stage-hook-commands
-  '(magit-stage
-    magit-stage-buffer-file
-    magit-stage-file
-    magit-stage-modified))
+  (list #'magit-stage
+        #'magit-stage-buffer-file
+        #'magit-stage-file
+        #'magit-stage-modified))
 
 (defun magit-run-post-stage-hook ()
   (when (memq this-command magit-post-stage-hook-commands)
@@ -465,7 +466,7 @@ ignored) files."
   (magit-with-toplevel
     ;; For backward compatibility, and because of
     ;; the function's name, don't require a list.
-    (magit-unstage-1 (if (listp files) files (list files)))))
+    (magit-unstage-1 (ensure-list files))))
 
 (defun magit-unstage-1 (files)
   (magit-wip-commit-before-change files " before unstage")
@@ -476,7 +477,7 @@ ignored) files."
 
 (defun magit-unstage-intent (files)
   (if-let ((staged (magit-staged-files))
-           (intent (--filter (member it staged) files)))
+           (intent (seq-filter (##member % staged) files)))
       (magit-unstage-1 intent)
     (user-error "Already unstaged")))
 
@@ -494,10 +495,10 @@ ignored) files."
   (magit-wip-commit-after-apply nil " after unstage"))
 
 (defvar magit-post-unstage-hook-commands
-  '(magit-unstage
-    magit-unstage-buffer-file
-    magit-unstage-file
-    magit-unstage-all))
+  (list #'magit-unstage
+        #'magit-unstage-buffer-file
+        #'magit-unstage-file
+        #'magit-unstage-all))
 
 (defun magit-run-post-unstage-hook ()
   (when (memq this-command magit-post-unstage-hook-commands)
@@ -683,7 +684,7 @@ of a side, then keep that side without prompting."
         (magit-call-git "reset" "--" orig)))))
 
 (defun magit-discard-files--discard (sections new-files)
-  (let ((files (--map (oref it value) sections)))
+  (let ((files (mapcar (##oref % value) sections)))
     (magit-confirm-files 'discard (append files new-files)
                          (format "Discard %s changes in" (magit-diff-type)))
     (if (eq (magit-diff-type (car sections)) 'unstaged)
@@ -694,15 +695,15 @@ of a side, then keep that side without prompting."
       (let ((binaries (magit-binary-files "--cached")))
         (when binaries
           (setq sections
-                (--remove (member (oref it value) binaries)
-                          sections)))
+                (seq-remove (##member (oref % value) binaries)
+                            sections)))
         (cond ((length= sections 1)
                (magit-discard-apply (car sections) 'magit-apply-diff))
               (sections
                (magit-discard-apply-n sections #'magit-apply-diffs)))
         (when binaries
           (let ((modified (magit-unstaged-files t)))
-            (setq binaries (--separate (member it modified) binaries)))
+            (setq binaries (magit--separate (##member % modified) binaries)))
           (when (cadr binaries)
             (magit-call-git "reset" "--" (cadr binaries)))
           (when (car binaries)
@@ -756,9 +757,9 @@ so causes the change to be applied to the index as well."
                                  magit-buffer-range)
                                 (t
                                  "--cached")))))
-                 (--separate (member (oref it value) bs)
-                             sections))))
-    (magit-confirm-files 'reverse (--map (oref it value) sections))
+                 (magit--separate (##member (oref % value) bs)
+                                  sections))))
+    (magit-confirm-files 'reverse (mapcar (##oref % value) sections))
     (cond ((length= sections 1)
            (magit-reverse-apply (car sections) #'magit-apply-diff args))
           (sections

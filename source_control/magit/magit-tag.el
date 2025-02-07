@@ -1,6 +1,6 @@
 ;;; magit-tag.el --- Tag functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -38,9 +38,10 @@
   "Create or delete a tag."
   :man-page "git-tag"
   ["Arguments"
-   ("-f" "Force"    ("-f" "--force"))
-   ("-a" "Annotate" ("-a" "--annotate"))
-   ("-s" "Sign"     ("-s" "--sign"))
+   ("-f" "Force"        ("-f" "--force"))
+   ("-e" "Edit message" ("-e" "--edit"))
+   ("-a" "Annotate"     ("-a" "--annotate"))
+   ("-s" "Sign"         ("-s" "--sign"))
    (magit-tag:--local-user)]
   [["Create"
     ("t"  "tag"     magit-tag-create)
@@ -113,7 +114,7 @@ defaulting to the tag at point.
   (when tags
     (magit-call-git "tag" "-d" tags))
   (when remote-tags
-    (magit-run-git-async "push" remote (--map (concat ":" it) remote-tags))))
+    (magit-run-git-async "push" remote (mapcar (##concat ":" %) remote-tags))))
 
 (defvar magit-tag-version-regexp-alist
   '(("^[-._+ ]?snapshot\\.?$" . -4)
@@ -155,17 +156,15 @@ prompt for the name of the new tag using the highest existing
 tag as initial input and leaving it to the user to increment the
 desired part of the version string.
 
-If `--annotate' is enabled, then prompt for the message of the
-new tag.  Base the proposed tag message on the message of the
-highest tag, provided that that contains the corresponding
-version string and substituting the new version string for that.
-Otherwise propose something like \"Foo-Bar 1.2.3\", given, for
-example, a TAG \"v1.2.3\" and a repository located at something
-like \"/path/to/foo-bar\"."
+When creating an annotated tag, prepare a message based on the message
+of the highest existing tag, provided that contains the corresponding
+version string, and substituting the new version string for that.  If
+that is not the case, propose a message using a reasonable format."
   (interactive
    (save-match-data
      (pcase-let*
-         ((`(,pver ,ptag ,pmsg) (car (magit--list-releases)))
+         ((args (magit-tag-arguments))
+          (`(,pver ,ptag ,pmsg) (car (magit--list-releases)))
           (msg (magit-rev-format "%s"))
           (ver (and (string-match magit-release-commit-regexp msg)
                     (match-string 1 msg)))
@@ -176,6 +175,10 @@ like \"/path/to/foo-bar\"."
                     (user-error "Use `sisyphus-create-release' first")))
           (tag (cond
                 ((not ptag)
+                 ;; Force the user to review the message used for the
+                 ;; initial release tag, in case they do not like the
+                 ;; default format.
+                 (cl-pushnew "--edit" args :test #'equal)
                  (read-string "Create first release tag: "
                               (if (and ver (string-match-p "\\`[0-9]" ver))
                                   (concat "v" ver)
@@ -189,21 +192,21 @@ like \"/path/to/foo-bar\"."
                   (format "Create release tag (previous was %s): " ptag)
                   ptag))))
           (ver (and (string-match magit-release-tag-regexp tag)
-                    (match-string 2 tag)))
-          (args (magit-tag-arguments)))
+                    (match-string 2 tag))))
        (list tag
-             (and (member "--annotate" args)
-                  (read-string
-                   (format "Message for %S: " tag)
-                   (cond ((and pver (string-match (regexp-quote pver) pmsg))
-                          (replace-match ver t t pmsg))
-                         ((and ptag (string-match (regexp-quote ptag) pmsg))
-                          (replace-match tag t t pmsg))
-                         ((format "%s %s"
-                                  (capitalize
-                                   (file-name-nondirectory
-                                    (directory-file-name (magit-toplevel))))
-                                  ver)))))
+             (and (seq-some (apply-partially
+                             #'string-match-p
+                             "\\`--\\(annotate\\|local-user\\|sign\\)")
+                            args)
+                  (cond ((and pver (string-match (regexp-quote pver) pmsg))
+                         (replace-match ver t t pmsg))
+                        ((and ptag (string-match (regexp-quote ptag) pmsg))
+                         (replace-match tag t t pmsg))
+                        ((format "%s %s"
+                                 (capitalize
+                                  (file-name-nondirectory
+                                   (directory-file-name (magit-toplevel))))
+                                 ver))))
              args))))
   (magit-run-git-with-editor "tag" args (and msg (list "-m" msg)) tag)
   (set-process-sentinel
@@ -223,7 +226,7 @@ a tag qualifies as a release tag."
     (mapcar
      #'cdr
      (nreverse
-      (cl-sort (cl-mapcan
+      (cl-sort (mapcan
                 (lambda (line)
                   (and (string-match " +" line)
                        (let ((tag (substring line 0 (match-beginning 0)))

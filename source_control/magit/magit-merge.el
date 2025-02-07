@@ -1,6 +1,6 @@
 ;;; magit-merge.el --- Merge functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -47,7 +47,8 @@
    (5 "-b" "Ignore changes in amount of whitespace" "-Xignore-space-change")
    (5 "-w" "Ignore whitespace when comparing lines" "-Xignore-all-space")
    (5 magit-diff:--diff-algorithm :argument "-Xdiff-algorithm=")
-   (5 magit:--gpg-sign)]
+   (magit:--gpg-sign)
+   (magit:--signoff)]
   ["Actions"
    :if-not magit-merge-in-progress-p
    [("m" "Merge"                  magit-merge-plain)

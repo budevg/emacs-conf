@@ -1,6 +1,6 @@
 ;;; magit.el --- A Git porcelain inside Emacs  -*- lexical-binding:t; coding:utf-8 -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Marius Vollmer <marius.vollmer@gmail.com>
 ;;     Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -17,16 +17,15 @@
 ;; Homepage: https://github.com/magit/magit
 ;; Keywords: git tools vc
 
-;; Package-Version: 4.0.0
+;; Package-Version: 4.3.0
 ;; Package-Requires: (
-;;     (emacs "26.1")
-;;     (compat "30.0.0.0")
-;;     (dash "2.19.1")
-;;     (git-commit "4.0.0")
-;;     (magit-section "4.0.0")
+;;     (emacs "27.1")
+;;     (compat "30.0.2.0")
+;;     (llama "0.6.0")
+;;     (magit-section "4.3.0")
 ;;     (seq "2.24")
-;;     (transient "0.7.4")
-;;     (with-editor "3.4.1"))
+;;     (transient "0.8.4")
+;;     (with-editor "3.4.3"))
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -194,7 +193,7 @@ and/or `magit-branch-remote-head'."
 
 (defface magit-keyword-squash
   '((t :inherit font-lock-warning-face))
-  "Face for squash! and fixup! keywords in commit messages."
+  "Face for squash! and similar keywords in commit messages."
   :group 'magit-faces)
 
 (defface magit-signature-good
@@ -482,7 +481,7 @@ is run in the top-level directory of the current working tree."
 (defun magit--shell-command (command &optional directory)
   (let ((default-directory (or directory default-directory)))
     (with-environment-variables (("GIT_PAGER" "cat"))
-      (magit--with-connection-local-variables
+      (with-connection-local-variables
         (magit-with-editor
           (magit-start-process shell-file-name nil
                                shell-command-switch command)))))
@@ -502,20 +501,28 @@ is run in the top-level directory of the current working tree."
 
 ;;; Shared Infix Arguments
 
+(transient-define-argument magit:--signoff ()
+  :description "Add Signed-off-by trailer"
+  :class 'transient-switch
+  :shortarg "-s"
+  :argument "--signoff"
+  :level 6)
+
 (transient-define-argument magit:--gpg-sign ()
   :description "Sign using gpg"
   :class 'transient-option
   :shortarg "-S"
   :argument "--gpg-sign="
   :allow-empty t
-  :reader #'magit-read-gpg-signing-key)
+  :reader #'magit-read-gpg-signing-key
+  :level 5)
 
 (defvar magit-gpg-secret-key-hist nil)
 
 (defun magit-read-gpg-secret-key
     (prompt &optional initial-input history predicate default)
   (require 'epa)
-  (let* ((keys (cl-mapcan
+  (let* ((keys (mapcan
                 (lambda (cert)
                   (and (or (not predicate)
                            (funcall predicate cert))
@@ -580,7 +587,7 @@ is run in the top-level directory of the current working tree."
 Use the function by the same name instead of this variable.")
 
 ;;;###autoload
-(defun magit-version (&optional print-dest interactive)
+(defun magit-version (&optional print-dest interactive nowarn)
   "Return the version of Magit currently in use.
 
 If optional argument PRINT-DEST is non-nil, also print the used
@@ -658,7 +665,7 @@ the output in the kill ring.
     (if (stringp magit-version)
         (when print-dest
           (let ((str (format
-                      "Magit %s%s, Transient %s, Git %s, Emacs %s, %s"
+                      "Magit %s%s, Transient %s,%s Git %s, Emacs %s, %s"
                       (or magit-version "(unknown)")
                       (or (and (ignore-errors
                                  (magit--version>= magit-version "2008"))
@@ -680,6 +687,18 @@ the output in the kill ring.
                                     (locate-library "transient.el" t))
                                    (lm-header "Package-Version"))))
                           "(unknown)")
+                      (let ((lib (locate-library "forge.el" t)))
+                        (or (and lib
+                                 (format
+                                  " Forge %s,"
+                                  (or (ignore-errors
+                                        (require 'lisp-mnt)
+                                        (with-temp-buffer
+                                          (insert-file-contents lib)
+                                          (and (fboundp 'lm-header)
+                                               (lm-header "Package-Version"))))
+                                      "(unknown)")))
+                            ""))
                       (magit--safe-git-version)
                       emacs-version
                       system-type)))
@@ -690,8 +709,7 @@ the output in the kill ring.
       (setq magit-version 'error)
       (when magit-version
         (push magit-version debug))
-      (unless (equal (getenv "CI") "true")
-        ;; The repository is a sparse clone.
+      (unless (or nowarn (equal (getenv "CI") "true"))
         (message "Cannot determine Magit's version %S" debug)))
     magit-version))
 
@@ -771,7 +789,7 @@ For X11 something like ~/.xinitrc should work.\n"
 (unless (bound-and-true-p byte-compile-current-file)
   (if after-init-time
       (progn (magit-startup-asserts)
-             (magit-version))
+             (magit-version nil nil t))
     (add-hook 'after-init-hook #'magit-startup-asserts t)
     (add-hook 'after-init-hook #'magit-version t)))
 

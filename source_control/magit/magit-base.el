@@ -1,6 +1,6 @@
 ;;; magit-base.el --- Early birds  -*- lexical-binding:t; coding:utf-8 -*-
 
-;; Copyright (C) 2008-2024 The Magit Project Contributors
+;; Copyright (C) 2008-2025 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -32,13 +32,14 @@
 
 ;;; Code:
 
-(defconst magit--minimal-git "2.2.0")
-(defconst magit--minimal-emacs "26.1")
+;; Also update EMACS_VERSION in "default.mk".
+(defconst magit--minimal-emacs "27.1")
+(defconst magit--minimal-git "2.25.0")
 
 (require 'cl-lib)
 (require 'compat)
-(require 'dash)
 (require 'eieio)
+(require 'llama)
 (require 'subr-x)
 
 ;; For older Emacs releases we depend on an updated `seq' release from
@@ -81,13 +82,14 @@ option to use `ivy-completing-read' or
 `ivy-completing-read', note that the items may always be shown in
 alphabetical order, depending on your version of Ivy."
   :group 'magit-essentials
-  :type '(radio (function-item magit-builtin-completing-read)
-                (function-item magit-ido-completing-read)
+  :type `(radio (function-item ,#'magit-builtin-completing-read)
+                (function-item ,#'magit-ido-completing-read)
                 (function-item ivy-completing-read)
                 (function-item helm--completing-read-default)
                 (function :tag "Other function")))
 
 (defcustom magit-dwim-selection
+  ;; Do not function-quote to avoid circular dependencies.
   '((magit-stash-apply        nil t)
     (magit-ediff-resolve-all  nil t)
     (magit-ediff-resolve-rest nil t)
@@ -605,10 +607,7 @@ acts similarly to `completing-read', except for the following:
     (let ((command this-command)
           (reply (funcall
                   magit-completing-read-function
-                  (format-prompt
-                   prompt
-                   (and (funcall magit-completing-read-default-prompt-predicate)
-                        def))
+                  (magit--format-prompt prompt def)
                   (if (and (not (functionp collection))
                            def
                            (not (member def collection)))
@@ -623,6 +622,13 @@ acts similarly to `completing-read', except for the following:
               (user-error "Nothing selected")
             nil)
         reply))))
+
+(defun magit--format-prompt (prompt default)
+  (format-prompt (if (string-suffix-p ": " prompt)
+                     (substring prompt 0 -2)
+                   prompt)
+                 (and (funcall magit-completing-read-default-prompt-predicate)
+                      default)))
 
 (defun magit--completion-table (collection)
   (lambda (string pred action)
@@ -684,7 +690,8 @@ third-party completion frameworks."
         (if no-split nil (bound-and-true-p helm-crm-default-separator)))
        ;; And now, the moment we have all been waiting for...
        (values (completing-read-multiple
-                prompt table predicate require-match initial-input
+                (magit--format-prompt prompt def)
+                table predicate require-match initial-input
                 hist def inherit-input-method)))
     (if no-split input values)))
 
@@ -775,7 +782,7 @@ This is similar to `read-string', but
                             (string-join (butlast parts) ", ")
                             ", or "  (car (last parts)) " "))
                   ',(mapcar #'car clauses))
-            ,@(--map `(,(car it) ,@(cddr it)) clauses))
+            ,@(mapcar (##`(,(car %) ,@(cddr %))) clauses))
      (message "")))
 
 (defun magit-y-or-n-p (prompt &optional action)
@@ -866,26 +873,25 @@ See info node `(magit)Debugging Tools' for more information."
               #'shell-quote-argument
               `(,(concat invocation-directory invocation-name)
                 "-Q" "--eval" "(setq debug-on-error t)"
-                ,@(cl-mapcan
+                ,@(mapcan
                    (lambda (dir) (list "-L" dir))
                    (delete-dups
-                    (cl-mapcan
+                    (mapcan
                      (lambda (lib)
                        (if-let ((path (locate-library lib)))
                            (list (file-name-directory path))
                          (error "Cannot find mandatory dependency %s" lib)))
                      '(;; Like `LOAD_PATH' in `default.mk'.
                        "compat"
-                       "dash"
+                       "llama"
+                       "seq"
                        "transient"
                        "with-editor"
                        ;; Obviously `magit' itself is needed too.
                        "magit"
-                       ;; While these are part of the Magit repository,
-                       ;; they are distributed as separate packages.
-                       "magit-section"
-                       "git-commit"
-                       ))))
+                       ;; While this is part of the Magit repository,
+                       ;; it is distributed as a separate package.
+                       "magit-section"))))
                 ;; Avoid Emacs bug#16406 by using full path.
                 "-l" ,(file-name-sans-extension (locate-library "magit")))
               " ")))
@@ -906,11 +912,11 @@ as STRING."
         (i 0))
     `(let ((,s ,string))
        (let ,(save-match-data
-               (cl-mapcan (lambda (sym)
-                            (cl-incf i)
-                            (and (not (eq (aref (symbol-name sym) 0) ?_))
-                                 (list (list sym (list 'match-string i s)))))
-                          varlist))
+               (mapcan (lambda (sym)
+                         (cl-incf i)
+                         (and (not (eq (aref (symbol-name sym) 0) ?_))
+                              (list (list sym (list 'match-string i s)))))
+                       varlist))
          ,@body))))
 
 (defun magit-delete-line ()
@@ -925,19 +931,19 @@ If optional NUM is specified, only delete that subexpression."
 
 (defun magit-file-line (file)
   "Return the first line of FILE as a string."
-  (when (file-regular-p file)
-    (with-temp-buffer
-      (insert-file-contents file)
-      (buffer-substring-no-properties (point-min)
-                                      (line-end-position)))))
+  (and (file-regular-p file)
+       (with-temp-buffer
+         (insert-file-contents file)
+         (buffer-substring-no-properties (point-min)
+                                         (line-end-position)))))
 
 (defun magit-file-lines (file &optional keep-empty-lines)
   "Return a list of strings containing one element per line in FILE.
 Unless optional argument KEEP-EMPTY-LINES is t, trim all empty lines."
-  (when (file-regular-p file)
-    (with-temp-buffer
-      (insert-file-contents file)
-      (split-string (buffer-string) "\n" (not keep-empty-lines)))))
+  (and (file-regular-p file)
+       (with-temp-buffer
+         (insert-file-contents file)
+         (split-string (buffer-string) "\n" (not keep-empty-lines)))))
 
 (defun magit-set-header-line-format (string)
   "Set `header-line-format' in the current buffer based on STRING.
@@ -1014,6 +1020,16 @@ one trailing newline is added."
                 (and (eq trim ?\n) "\n"))
       str)))
 
+(defun magit--separate (pred list)
+  "Separate elements of LIST that do and don't satisfy PRED.
+Return a list of two lists; the first containing the elements that
+do satisfy PRED and the second containing the elements that don't."
+  (let (y n)
+    (dolist (elt list)
+      (push elt (if (funcall pred elt) y n)))
+    (list (nreverse y)
+          (nreverse n))))
+
 (defun magit--version> (v1 v2)
   "Return t if version V1 is higher (younger) than V2.
 This function should be named `version>' and be part of Emacs."
@@ -1025,49 +1041,6 @@ This function should be named `version>=' and be part of Emacs."
   (version-list-<= (version-to-list v2) (version-to-list v1)))
 
 ;;; Kludges for Emacs Bugs
-
-(when (< emacs-major-version 27)
-  ;; Work around https://debbugs.gnu.org/cgi/bugreport.cgi?bug=21559.
-  ;; Fixed by cb55ccae8be946f1562d74718086a4c8c8308ee5 in Emacs 27.1.
-  (with-eval-after-load 'vc-git
-    (defun vc-git-conflicted-files (directory)
-      "Return the list of files with conflicts in DIRECTORY."
-      (let* ((status
-              (vc-git--run-command-string directory "diff-files"
-                                          "--name-status"))
-             (lines (when status (split-string status "\n" 'omit-nulls)))
-             files)
-        (dolist (line lines files)
-          (when (string-match "\\([ MADRCU?!]\\)[ \t]+\\(.+\\)" line)
-            (let ((state (match-string 1 line))
-                  (file (match-string 2 line)))
-              (when (equal state "U")
-                (push (expand-file-name file directory) files)))))))))
-
-(when (< emacs-major-version 27)
-  (defun vc-git--call@bug21559 (fn buffer command &rest args)
-    "Backport https://debbugs.gnu.org/cgi/bugreport.cgi?bug=21559."
-    (let ((process-environment process-environment))
-      (when revert-buffer-in-progress-p
-        (push "GIT_OPTIONAL_LOCKS=0" process-environment))
-      (apply fn buffer command args)))
-  (advice-add 'vc-git--call :around 'vc-git--call@bug21559)
-
-  (defun vc-git-command@bug21559
-      (fn buffer okstatus file-or-list &rest flags)
-    "Backport https://debbugs.gnu.org/cgi/bugreport.cgi?bug=21559."
-    (let ((process-environment process-environment))
-      (when revert-buffer-in-progress-p
-        (push "GIT_OPTIONAL_LOCKS=0" process-environment))
-      (apply fn buffer okstatus file-or-list flags)))
-  (advice-add 'vc-git-command :around 'vc-git-command@bug21559)
-
-  (defun auto-revert-handler@bug21559 (fn)
-    "Backport https://debbugs.gnu.org/cgi/bugreport.cgi?bug=21559."
-    (let ((revert-buffer-in-progress-p t))
-      (funcall fn)))
-  (advice-add 'auto-revert-handler :around 'auto-revert-handler@bug21559)
-  )
 
 (defun magit-which-function ()
   "Return current function name based on point.
@@ -1188,33 +1161,6 @@ See <https://github.com/raxod502/straight.el/issues/520>."
     (setq filename (expand-file-name (file-name-nondirectory filename) repo)))
   (file-chase-links filename))
 
-;;; Kludges for older Emacs versions
-
-(if (fboundp 'with-connection-local-variables)
-    (defalias 'magit--with-connection-local-variables
-      #'with-connection-local-variables)
-  (defmacro magit--with-connection-local-variables (&rest body)
-    "Abridged `with-connection-local-variables' for pre Emacs 27 compatibility.
-Bind shell file name and switch for remote execution.
-`with-connection-local-variables' isn't available until Emacs 27.
-This kludge provides the minimal functionality required by
-Magit."
-    `(if (file-remote-p default-directory)
-         (pcase-let ((`(,shell-file-name ,shell-command-switch)
-                      (with-no-warnings ; about unknown tramp functions
-                        (require 'tramp)
-                        (let ((vec (tramp-dissect-file-name
-                                    default-directory)))
-                          (list (tramp-get-method-parameter
-                                 vec 'tramp-remote-shell)
-                                (string-join (tramp-get-method-parameter
-                                              vec 'tramp-remote-shell-args)
-                                             " "))))))
-           ,@body)
-       ,@body)))
-
-(put 'magit--with-connection-local-variables 'lisp-indent-function 'defun)
-
 ;;; Miscellaneous
 
 (defun magit-message (format-string &rest args)
@@ -1222,7 +1168,7 @@ Magit."
 Like `message', except that if the users configured option
 `magit-no-message' to prevent the message corresponding to
 FORMAT-STRING to be displayed, then don't."
-  (unless (--first (string-prefix-p it format-string) magit-no-message)
+  (unless (seq-find (##string-prefix-p % format-string) magit-no-message)
     (apply #'message format-string args)))
 
 (defun magit-msg (format-string &rest args)
