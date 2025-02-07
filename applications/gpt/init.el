@@ -19,9 +19,9 @@
   (gptel-make-gemini "gemini"
                      :key 'gptel-api-key
                      :stream t
-                     :models '(gemini-2.0-flash-exp
-                               gemini-1.5-pro
-                               gemini-1.5-flash
+                     :models '(gemini-2.0-flash
+                               gemini-2.0-pro-exp
+                               gemini-2.0-flash-thinking-exp
                                ))
 
   (gptel-make-openai "github"
@@ -47,7 +47,7 @@
                                deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct))
 
   (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
-        gptel-model 'gemini-2.0-flash-exp
+        gptel-model 'gemini-2.0-flash
         gptel-directives
         '((default . "You are a large language model living in Emacs and a helpful assistant. Respond concisely.")
           ))
