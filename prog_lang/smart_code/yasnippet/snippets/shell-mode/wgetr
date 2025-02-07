@@ -3,4 +3,4 @@
 # key: wgetr
 # binding: direct-keybinding
 # --
-wget -r -nc -nH $1
+wget -r -nc -nH -np $1
