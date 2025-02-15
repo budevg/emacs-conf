@@ -7,16 +7,14 @@ with pkgs;
 mkShell {
   buildInputs = [ ];
   shellHook = ''
-    pkill ssh-agent
-    ssh-agent > ssh-agent.cfg
-    eval $(cat ssh-agent.cfg)
+    if ! [ -S agent.sock ] ; then
+      pkill ssh-agent
+      ssh-agent -a agent.sock > ssh-agent.cfg
+      ssh-keygen -f key -N "" -C key
 
-    ssh-keygen -f key -N "" -C key
-    ssh-add key
+      LABEL=$(tr -dc 'a-z' < /dev/urandom | head -c 6)
 
-    LABEL=$(tr -dc 'a-z' < /dev/urandom | head -c 6)
-
-    cat << EOF > tunnel.cmd
+      cat << EOF > tunnel.cmd
     echo "$(cat key.pub)" >> ~/.ssh/authorized_keys
     # servio
     ssh -R $LABEL:5901:localhost:22 serveo.net
@@ -26,8 +24,15 @@ mkShell {
     ssh -p 5900 root@localhost
 
     # pinggy
+    # on remote host run and copy url
     ssh -p 443 -R0:localhost:22 -o ServerAliveInterval=30 tcp@a.pinggy.io
+    # on local host run tcp://rnlps-74-220-27-36.a.free.pinggy.link:34533
+    ssh -p <url port> <url host>
     EOF
+    fi
+
+    eval $(cat ssh-agent.cfg)
+    ssh-add key
   '';
 }
 $0
