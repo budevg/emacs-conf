@@ -40,35 +40,71 @@
                   (:copier nil)
                   (:include gptel-backend)))
 
-(cl-defmethod gptel-curl--parse-stream ((_backend gptel-gemini) _info)
+;; TODO: Using alt=sse in the query url generates an OpenAI style streaming
+;; response, with more immediate updates.  Maybe we should switch to that and
+;; rewrite the stream parser?
+(cl-defmethod gptel-curl--parse-stream ((_backend gptel-gemini) info)
+  "Parse a Gemini data stream.
+
+Return the text response accumulated since the last call to this
+function.  Additionally, mutate state INFO to add tool-use
+information if the stream contains it."
   (let* ((content-strs))
     (condition-case nil
-        ;; while-let is Emacs 29.1+ only
-        (while (prog1 (search-forward "{" nil t)
+        (while (prog1 (search-forward "{" nil t) ; while-let is Emacs 29.1+ only
                  (backward-char 1))
           (save-match-data
-            (when-let*
-                ((response (gptel--json-read))
-                 (text (map-nested-elt
-                        response '(:candidates 0 :content :parts 0 :text))))
+            (when-let* ((response (gptel--json-read))
+                        (text (gptel--parse-response
+                               (plist-get info :backend)
+                               response info 'include)))
               (push text content-strs))))
       (error
        (goto-char (match-beginning 0))))
     (apply #'concat (nreverse content-strs))))
 
-(cl-defmethod gptel--parse-response ((_backend gptel-gemini) response _info)
-  (map-nested-elt response '(:candidates 0 :content :parts 0 :text)))
+(cl-defmethod gptel--parse-response ((_backend gptel-gemini) response info
+                                     &optional include-text)
+  "Parse an Gemini (non-streaming) RESPONSE and return response text.
 
-(cl-defmethod gptel--request-data ((_backend gptel-gemini) prompts)
+Mutate state INFO with response metadata.
+
+If INCLUDE-TEXT is non-nil, include response text in the prompts
+list."
+  (let* ((cand0 (map-nested-elt response '(:candidates 0)))
+         (parts (map-nested-elt cand0 '(:content :parts))))
+    (plist-put info :stop-reason (plist-get cand0 :finishReason))
+    (plist-put info :output-tokens
+               (map-nested-elt
+                response '(:usageMetadata :candidatesTokenCount)))
+    (cl-loop
+     for part across parts
+     for tx = (plist-get part :text)
+     if (and tx (not (eq tx :null))) collect tx into content-strs
+     else if (plist-get part :functionCall)
+     collect (copy-sequence it) into tool-use
+     finally do                         ;Add text and tool-calls to prompts list
+     (when (or tool-use include-text)
+       (let* ((data (plist-get info :data))
+              (prompts (plist-get data :contents))
+              (last-prompt (aref prompts (1- (length prompts)))))
+         (if (equal (plist-get last-prompt :role) "model")
+             ;; When streaming, the last prompt may already have the role
+             ;; "model" from prior calls to this function.  Append to its parts
+             ;; instead of adding a new model role then.
+             (plist-put last-prompt :parts
+                        (vconcat (plist-get last-prompt :parts) parts))
+           (plist-put                   ;otherwise create a new "model" role
+            data :contents
+            (vconcat prompts `((:role "model" :parts ,parts)))))))
+     (when tool-use                    ;Capture tool call data for running tools
+       (plist-put info :tool-use
+                  (nconc (plist-get info :tool-use) tool-use)))
+     finally return
+     (and content-strs (apply #'concat content-strs)))))
+
+(cl-defmethod gptel--request-data ((backend gptel-gemini) prompts)
   "JSON encode PROMPTS for sending to Gemini."
-  ;; HACK (backwards compatibility) Prepend the system message to the first user
-  ;; prompt, but only for gemini-pro.
-  (when (and (equal gptel-model 'gemini-pro) gptel--system-message)
-    (cl-callf
-        (lambda (msg)
-          (vconcat `((:text ,(concat gptel--system-message "\n\n"))) msg))
-        (thread-first (car prompts)
-                      (plist-get :parts))))
   (let ((prompts-plist
          `(:contents [,@prompts]
            :safetySettings [(:category "HARM_CATEGORY_HARASSMENT"
@@ -80,13 +116,16 @@
                             (:category "HARM_CATEGORY_HATE_SPEECH"
                              :threshold "BLOCK_NONE")]))
         params)
-    ;; HACK only gemini-pro doesn't support system messages.  Need a less hacky
-    ;; way to do this.
-    (if (and gptel--system-message
-             (not (gptel--model-capable-p 'nosystem))
-             (not (equal gptel-model 'gemini-pro)))
-      (plist-put prompts-plist :system_instruction
-                 `(:parts (:text ,gptel--system-message))))
+    (if gptel--system-message
+        (plist-put prompts-plist :system_instruction
+                   `(:parts (:text ,gptel--system-message))))
+    (when gptel-use-tools
+      (when (eq gptel-use-tools 'force)
+        (plist-put prompts-plist :tool_config
+                   '(:function_calling_config (:mode "ANY"))))
+      (when gptel-tools
+        (plist-put prompts-plist :tools
+                   (gptel--parse-tools backend gptel-tools))))
     (when gptel-temperature
       (setq params
             (plist-put params
@@ -104,6 +143,68 @@
      (gptel-backend-request-params gptel-backend)
      (gptel--model-request-params  gptel-model))))
 
+(cl-defmethod gptel--parse-tools ((_backend gptel-gemini) tools)
+  "Parse TOOLS to the Gemini API tool definition spec.
+
+TOOLS is a list of `gptel-tool' structs, which see."
+  (cl-loop
+   for tool in (ensure-list tools)
+   collect
+   (list
+    :name (gptel-tool-name tool)
+    :description (gptel-tool-description tool)
+    :parameters
+    (if (not (gptel-tool-args tool))
+         :null           ;NOTE: Gemini wants :null if the function takes no args
+      (list :type "object"
+            :properties
+            (cl-loop
+             for arg in (gptel-tool-args tool)
+             for name = (plist-get arg :name)
+             for type = (plist-get arg :type)
+             for newname = (or (and (keywordp name) name)
+                               (make-symbol (concat ":" name)))
+             for enum = (plist-get arg :enum)
+             append (list newname
+                          `(:type ,(plist-get arg :type)
+                            :description ,(plist-get arg :description)
+                            ,@(if enum (list :enum (vconcat enum)))
+                            ,@(cond
+                               ((equal type "object")
+                                (list :parameters (plist-get arg :parameters)))
+                               ((equal type "array")
+                                (list :items (plist-get arg :items)))))))
+            :required
+            (vconcat
+             (delq nil (mapcar
+                        (lambda (arg) (and (not (plist-get arg :optional))
+                                      (plist-get arg :name)))
+                        (gptel-tool-args tool)))))))
+   into tool-specs
+   finally return `[(:function_declarations ,(vconcat tool-specs))]))
+
+(cl-defmethod gptel--parse-tool-results ((_backend gptel-gemini) tool-use)
+  "Return a prompt containing tool call results in TOOL-USE."
+  (list
+   :role "user"
+   :parts
+   (vconcat
+    (mapcar
+     (lambda (tool-call)
+       (let ((result (plist-get tool-call :result))
+             (name (plist-get tool-call :name)))
+         `(:functionResponse
+           (:name ,name :response
+            (:name ,name :content ,result)))))
+     tool-use))))
+
+(cl-defmethod gptel--inject-prompt ((_backend gptel-gemini) data new-prompt &optional _position)
+  "Append NEW-PROMPT to existing prompts in query DATA.
+
+See generic implementation for full documentation."
+  (let ((prompts (plist-get data :contents)))
+    (plist-put data :contents (vconcat prompts (list new-prompt)))))
+
 (cl-defmethod gptel--parse-list ((_backend gptel-gemini) prompt-list)
   (cl-loop for text in prompt-list
            for role = t then (not role)
@@ -113,41 +214,55 @@
            else collect (list :role "model" :parts `(:text ,text)) into prompts
            finally return prompts))
 
-(cl-defmethod gptel--parse-buffer ((_backend gptel-gemini) &optional max-entries)
-  (let ((prompts) (prop)
+(cl-defmethod gptel--parse-buffer ((backend gptel-gemini) &optional max-entries)
+  (let ((prompts) (prev-pt (point))
         (include-media (and gptel-track-media (or (gptel--model-capable-p 'media)
                                                   (gptel--model-capable-p 'url)))))
     (if (or gptel-mode gptel-track-response)
-        (while (and
-                (or (not max-entries) (>= max-entries 0))
-                (setq prop (text-property-search-backward
-                            'gptel 'response
-                            (when (get-char-property (max (point-min) (1- (point)))
-                                                     'gptel)
-                              t))))
-          (if (prop-match-value prop)   ;assistant role
-              (push (list :role "model"
-                          :parts
-                          (list :text (buffer-substring-no-properties (prop-match-beginning prop)
-                                                                      (prop-match-end prop))))
-                    prompts)
-            (if include-media
-                (push (list :role "user"
-                            :parts (gptel--gemini-parse-multipart
-                                    (gptel--parse-media-links
-                                     major-mode (prop-match-beginning prop) (prop-match-end prop))))
-                      prompts)
-              (push (list :role "user"
-                          :parts
-                          `[(:text ,(gptel--trim-prefixes
-                                     (buffer-substring-no-properties (prop-match-beginning prop)
-                                      (prop-match-end prop))))])
-                    prompts)))
+        (while (and (or (not max-entries) (>= max-entries 0))
+                    (goto-char (previous-single-property-change
+                                (point) 'gptel nil (point-min)))
+                    (not (= (point) prev-pt)))
+          (pcase (get-char-property (point) 'gptel)
+            ('response
+             (when-let* ((content (gptel--trim-prefixes
+                                   (buffer-substring-no-properties (point) prev-pt))))
+               (push (list :role "model" :parts (list :text content)) prompts)))
+            (`(tool . ,_id)
+             (save-excursion
+               (condition-case nil
+                   (let* ((tool-call (read (current-buffer)))
+                          (name (plist-get tool-call :name))
+                          (arguments  (plist-get tool-call :args)))
+                     (plist-put tool-call :result
+                                (string-trim (buffer-substring-no-properties
+                                              (point) prev-pt)))
+                     (push (gptel--parse-tool-results backend (list tool-call))
+                           prompts)
+                     (push (list :role "model"
+                                 :parts
+                                 (vector `(:functionCall ( :name ,name
+                                                           :args ,arguments))))
+                           prompts))
+                 ((end-of-file invalid-read-syntax)
+                  (message (format "Could not parse tool-call on line %s"
+                                   (line-number-at-pos (point))))))))
+            ('ignore)
+            ('nil
+             (if include-media
+                 (when-let* ((content (gptel--gemini-parse-multipart
+                                       (gptel--parse-media-links major-mode (point) prev-pt))))
+                   (when (> (length content) 0)
+                     (push (list :role "user" :parts content) prompts)))
+               (when-let* ((content (gptel--trim-prefixes
+                                     (buffer-substring-no-properties
+                                      (point) prev-pt))))
+                 (push (list :role "user" :parts `[(:text ,content)]) prompts)))))
+          (setq prev-pt (point))
           (and max-entries (cl-decf max-entries)))
-      (push (list :role "user"
-                  :parts
-                  `[(:text ,(string-trim (buffer-substring-no-properties (point-min) (point-max))))])
-            prompts))
+      (let ((content (string-trim (buffer-substring-no-properties
+                                   (point-min) (point-max)))))
+        (push (list :role "user" :parts `[(:text ,content)]) prompts)))
     prompts))
 
 (defun gptel--gemini-parse-multipart (parts)
@@ -168,7 +283,7 @@ format."
    for media = (plist-get part :media)
    if text do
    (and (or (= n 1) (= n last)) (setq text (gptel--trim-prefixes text))) and
-   unless (string-empty-p text)
+   if text
    collect (list :text text) into parts-array end
    else if media
    collect
@@ -186,14 +301,14 @@ If INJECT-MEDIA is non-nil wrap it with base64-encoded media
 files in the context."
   (if inject-media
       ;; Wrap the first user prompt with included media files/contexts
-      (when-let ((media-list (gptel-context--collect-media)))
+      (when-let* ((media-list (gptel-context--collect-media)))
         (cl-callf (lambda (current)
                     (vconcat (gptel--gemini-parse-multipart media-list)
                              current))
             (plist-get (car prompts) :parts)))
     ;; Wrap the last user prompt with included text contexts
     (cl-callf (lambda (current)
-                (if-let ((wrapped (gptel-context--wrap nil)))
+                (if-let* ((wrapped (gptel-context--wrap nil)))
                     (vconcat `((:text ,wrapped)) current)
                   current))
         (plist-get (car (last prompts)) :parts))))
@@ -201,7 +316,7 @@ files in the context."
 (defconst gptel--gemini-models
   '((gemini-1.5-pro-latest
      :description "Google's latest model with enhanced capabilities across various tasks"
-     :capabilities (tool json media)
+     :capabilities (tool-use json media)
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
      :context-window 2000
@@ -211,14 +326,14 @@ files in the context."
      :cutoff-date "2024-05")
     (gemini-2.0-flash-exp
      :description "Next generation features, superior speed, native tool use"
-     :capabilities (tool json media)
+     :capabilities (tool-use json media)
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
      :context-window 1000
      :cutoff-date "2024-12")
     (gemini-1.5-flash
      :description "A faster, more efficient version of Gemini 1.5 optimized for speed"
-     :capabilities (tool json media)
+     :capabilities (tool-use json media)
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
      :context-window 1000
@@ -228,7 +343,7 @@ files in the context."
      :cutoff-date "2024-05")
     (gemini-1.5-flash-8b
      :description "High volume and lower intelligence tasks"
-     :capabilities (tool json media)
+     :capabilities (tool-use json media)
      :context-window 1000
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
@@ -238,19 +353,55 @@ files in the context."
      :cutoff-date "2024-10")
     (gemini-exp-1206
      :description "Improved coding, reasoning and vision capabilities"
-     :capabilities (tool json media)
+     :capabilities (tool-use json media)
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
      :cutoff-date "2024-12")
-    (gemini-pro
-     :description "The previous generation of Google's multimodal AI model"
-     :capabilities (tool json media)
+    (gemini-2.0-flash
+     :description "Next gen, high speed, multimodal for a diverse variety of tasks"
+     :capabilities (tool-use json media)
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
+     :context-window 1000
+     :input-cost 0.10
+     :output-cost 0.40
+     :cutoff-date "2024-08")
+    (gemini-2.0-flash-lite-preview-02-05
+     :description "Gemini 2.0 Flash model optimized for cost efficiency and low latency"
+     :capabilities (json)
+     :context-window 1000
+     :input-cost 0.075
+     :output-cost 0.30
+     :cutoff-date "2024-08")
+    (gemini-2.0-pro-exp-02-05
+     :description "Next gen, high speed, multimodal for a diverse variety of tasks"
+     :capabilities (tool-use json)
+     :context-window 2000
+     :input-cost 0.00
+     :output-cost 0.00
+     :cutoff-date "2024-08")
+    (gemini-2.0-flash-thinking-exp-01-21
+     :description "Next gen, high speed, multimodal for a diverse variety of tasks"
+     :capabilities (json)
+     :input-cost 0.00
+     :output-cost 0.00
+     :cutoff-date "2024-08")
+    (gemini-2.0-flash-exp
+     :description "Multi-modal, streaming, tool use 2000 RPM"
+     :capabilities (tool-use json media)
+     :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
+                  "application/pdf" "text/plain" "text/csv" "text/html")
+     :context-window 1000
+     :input-cost 0.00
+     :output-cost 0.00
+     :cutoff-date "2024-08")
+    (gemini-2.0-flash-thinking-exp
+     :description "DEPRECATED: Please use gemini-2.0-flash-thinking-exp-01-21 instead."
+     :capabilities (tool-use media)
      :context-window 32
-     :input-cost 0.50
-     :output-cost 1.50
-     :cutoff-date "2023-02"))
+     :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
+                  "text/plain" "text/csv" "text/html")
+     :cutoff-date "2024-08"))
   "List of available Gemini models and associated properties.
 Keys:
 
@@ -307,7 +458,7 @@ For a list of currently recognized plist keys, see
 including both kinds of specs:
 
 :models
-\\='(gemini-pro                            ;Simple specs
+\\='(gemini-2.0-flash-lite              ;Simple specs
   gemini-1.5-flash
   (gemini-1.5-pro-latest                ;Full spec
    :description

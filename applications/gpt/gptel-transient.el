@@ -52,12 +52,25 @@ Affects the system message too.")
 (defun gptel--set-with-scope (sym value &optional scope)
   "Set SYMBOL's symbol-value to VALUE with SCOPE.
 
-If SCOPE is non-nil, set it buffer-locally, else clear any
-buffer-local value and set its default global value."
-  (if scope
-      (set (make-local-variable sym) value)
-    (kill-local-variable sym)
-    (set sym value)))
+If SCOPE is t, set it buffer-locally.
+If SCOPE is 1, reset it after the next gptel-request. (oneshot)
+Otherwise, clear any buffer-local value and set its default
+global value."
+  (pcase scope
+    (1 (put sym 'gptel-history (symbol-value sym))
+       (set sym value)
+       (letrec ((restore-value
+                 (lambda ()
+                   (remove-hook 'gptel-post-request-hook restore-value)
+                   (run-at-time         ; Required to work around let bindings
+                    0 nil (lambda (s)        ; otherwise this change is overwritten!
+                            (set s (get s 'gptel-history))
+                            (put s 'gptel-history nil))
+                    sym))))
+         (add-hook 'gptel-post-request-hook restore-value)))
+    ('t (set (make-local-variable sym) value))
+    (_ (kill-local-variable sym)
+       (set sym value))))
 
 (defun gptel--get-directive (args)
   "Find the additional directive in the transient ARGS.
@@ -99,11 +112,11 @@ Meant to be called when `gptel-menu' is active."
   (concat
    (propertize "(" 'face 'default)
    (propertize "TAB" 'face 'help-key-binding)
-   (propertize " to expand, " 'face 'default)
+   (propertize ": expand, " 'face 'default)
    (propertize "M-n" 'face 'help-key-binding)
    (propertize "/" 'face 'default)
    (propertize "M-p" 'face 'help-key-binding)
-   (propertize " for next/previous): " 'face 'default))
+   (propertize ": next/previous) " 'face 'default))
   "Help string ;TODO: ")
 
 (defun gptel--read-with-prefix (prefix)
@@ -161,13 +174,19 @@ will toggle its visibility state."
                                  prefix max-width nil nil
                                  'ellipsis))))))))
 
-(defun gptel--transient-read-variable (prompt initial-input history)
-  "Read value from minibuffer and interpret the result as a Lisp object.
+(defun gptel--transient-read-number (prompt _initial-input history)
+  "Read a numeric value from the minibuffer.
 
-PROMPT, INITIAL-INPUT and HISTORY are as in the Transient reader
-documention."
-  (ignore-errors
-    (read-from-minibuffer prompt initial-input read-expression-map t history)))
+PROMPT, _INITIAL-INPUT and HISTORY are as in the transient reader
+documention.  Return nil if user does not provide a number, for default."
+  ;; Workaround for buggy transient behaviour when dealing with
+  ;; non-string values.  See: https://github.com/magit/transient/issues/172
+  (when-let* ((val (symbol-value history)))
+    (when (not (stringp (car val)))
+      (setcar val (number-to-string (car val)))))
+  (let* ((minibuffer-default-prompt-format "")
+	 (num (read-number prompt -1 history)))
+    (if (= num -1) nil num)))
 
 (defun gptel-system-prompt--format (&optional message)
   "Format the system MESSAGE for display in gptel's transient menus.
@@ -186,6 +205,14 @@ Handle formatting for system messages when the active
          message (max (- (window-width) 12) 14) "⮐ ")
       "[No system message set]")))
 
+(defun gptel--tools-init-value (obj)
+  "Set the initial state of a tool OBJ in `gptel-tools'.
+
+OBJ is a tool-infix of type `gptel--switch'."
+  (when-let* ((name (car (member (oref obj argument)
+                                 (mapcar #'gptel-tool-name gptel-tools)))))
+    (oset obj value (list (oref obj category) name))))
+
 (defvar gptel--crowdsourced-prompts-url
   "https://raw.githubusercontent.com/f/awesome-chatgpt-prompts/main/prompts.csv"
   "URL for crowdsourced LLM system prompts.")
@@ -193,6 +220,22 @@ Handle formatting for system messages when the active
 (defvar gptel--crowdsourced-prompts
   (make-hash-table :test #'equal)
   "Crowdsourced LLM system prompts.")
+
+(defun gptel--read-csv-column ()
+  "Read next CSV column in the current buffer.
+
+Supports both quoted and non-quoted columns (RFC 4180)."
+  (let ((start (point)))
+    (unless (eolp)
+      (let ((column
+	     (if (eq (char-after) ?\")
+		 (when (re-search-forward "\",\\|\"$" nil t)
+		   (let ((end (match-beginning 0)))
+		     (buffer-substring-no-properties (+ start 1) (if (eolp) (- end 1) end))))
+	       (when (search-forward "," (line-end-position) t)
+		 (let ((end (match-beginning 0)))
+		   (buffer-substring-no-properties start end))))))
+	(string-replace "\"\"" "\"" column)))))
 
 (defun gptel--crowdsourced-prompts ()
   "Acquire and read crowdsourced LLM system prompts.
@@ -231,15 +274,114 @@ which see."
           (goto-char (point-min))
           (forward-line 1)
           (while (not (eobp))
-            (when-let ((act (read (current-buffer))))
-              (forward-char)
-              (save-excursion
-                (while (re-search-forward "\"\"" (line-end-position) t)
-                  (replace-match "\\\\\"")))
-              (when-let ((prompt (read (current-buffer))))
-                (puthash act prompt gptel--crowdsourced-prompts)))
-            (forward-line 1)))))
+	    (when-let* ((act (gptel--read-csv-column))
+			(prompt (gptel--read-csv-column)))
+		(puthash act prompt gptel--crowdsourced-prompts))
+	      (forward-line 1)))))
     gptel--crowdsourced-prompts))
+
+(defun gptel--describe-infix-context ()
+  (if (null gptel-context--alist) "Context"
+    (pcase-let*
+        ((contexts (gptel-context--collect))
+         (buffer-count (length contexts))
+         (`(,file-count ,ov-count)
+          (if (> buffer-count 0)
+              (cl-loop for (buf-file . ovs) in contexts
+                       if (bufferp buf-file)
+                       sum (length ovs) into ov-count
+                       else count (stringp buf-file) into file-count
+                       finally return (list file-count ov-count))
+            (list 0 0))))
+      (concat "Context ("
+              (propertize
+               (concat
+                (and (> ov-count 0)
+                     (format "%d region%s in %d buffer%s"
+                             ov-count (if (> ov-count 1) "s" "")
+                             (- buffer-count file-count)
+                             (if (> ( - buffer-count file-count) 1) "s" "")))
+                (and (> file-count 0)
+                     (format "%s%d file%s"
+                             (if (> ov-count 0) ", " "") file-count
+                             (if (> file-count 1) "s" ""))))
+               'face 'warning)
+              ")"))))
+
+(defun gptel--describe-suffix-send ()
+  "Describe the action of `gptel--suffix-send'."
+  (cl-flet ((ptv (s) (propertize s 'face 'warning))
+            (pth (s) (propertize s 'face 'transient-heading)))
+    (let* ((args (or (and transient-current-command
+                          (transient-args transient-current-command))
+	             ;; Not yet exported, simulate.  HACK: We are accessing
+	             ;; Transient's internal variables here for live updates.
+	             (let* ((transient-current-command (oref transient--prefix command))
+	                    (transient-current-suffixes transient--suffixes))
+	               (transient-args transient-current-command))))
+           (lbeg (line-number-at-pos (if (use-region-p) (region-beginning)
+                                       (point-min))))
+           (lend (line-number-at-pos (if (use-region-p) (region-end)
+                                       (point))))
+           (ltext (ptv (if (> lend lbeg)
+                           (format " (lines %d-%d)" lbeg lend)
+                         (format " (line %d)" lbeg))))
+           (dest) (context))
+      (setq dest (cond
+                  ((member "e" args) (ptv "echo area"))
+                  ((member "k" args) (ptv "kill-ring"))
+                  ((cl-some (lambda (s)
+                              (and (stringp s) (memq (aref s 0) '(?g ?b))
+                                   (not (equal (substring s 1) (buffer-name)))
+                                   (concat (pth "buffer ") (ptv (substring s 1)))))
+                            args))))
+      (setq context
+            (and gptel-context--alist
+                 (let ((lc (length gptel-context--alist)))
+                   (concat (pth " along with ") (ptv (format "%d" lc))
+                           (pth (concat " context source" (and (/= lc 1) "s")))))))
+      (cond ((member "m" args)
+             (concat (pth "Read prompt from ") (ptv "minibuffer")
+                     context
+                     (if dest (concat (pth ", response to ") dest)
+                       (concat (pth ", insert response at point")))))
+            ((member "y" args)
+             (concat (pth "Send prompt from ")
+		     (concat (ptv "kill-ring (")
+			     (if-let* ((val (car-safe kill-ring))
+				       (val (substring-no-properties val))
+				       (len (length val)))
+				 (ptv (concat
+                                       "\"" (string-replace
+					     "\n" "⮐"
+					     (truncate-string-to-width
+					      val 20 nil nil t))
+				       "\"" (when (> len 20)
+					      (concat
+					       ", "
+					       (file-size-human-readable len 'si " ")
+					       " chars"))))
+			     (propertize "empty" 'face 'error))
+			   (ptv ")"))
+                     context
+                     (if dest (concat (pth ", response to ") dest)
+                       (concat (pth ", insert response at point")))))
+            ((member "i" args)
+             (let* ((reg (use-region-p))
+                    (src (ptv (if reg "selection" (buffer-name)))))
+               (if dest (concat (pth "Send ") src ltext context (pth ", with response to ")
+                                (ptv dest) (pth "; kill") ltext
+                                (and (not reg) (concat (pth " in ") src)))
+                 (concat (pth "Replace ") src ltext (pth " with response")
+                         (and context
+                              (concat (pth " ( with") (substring context 11) " )"))))))
+            ((use-region-p)
+             (concat (pth "Send ") (ptv "selection") ltext
+                     context (if dest (concat (pth ", with response to ") dest)
+                               (concat (pth ", insert response at region end")))))
+            (t (concat (pth "Send ") (ptv (buffer-name)) ltext
+                       context (if dest (concat (pth ", with response to ") dest)
+                                 (concat (pth ", insert response at point")))))))))
 
 
 ;; * Transient classes and methods for gptel
@@ -253,7 +395,7 @@ which see."
   (let ((display-value
          (with-slots (value display-nil display-map) obj
            (cond ((null value) display-nil)
-                 (display-map (cdr (assoc value display-map)))
+                 (display-map (or (cdr (assoc value display-map)) value))
                  (t value)))))
     (propertize
      (if (stringp display-value) display-value (prin1-to-string display-value))
@@ -264,6 +406,40 @@ which see."
            (oref obj variable)
            (oset obj value value)
            gptel--set-buffer-locally))
+
+(defclass gptel--switch (transient-switch)
+  ((category :initarg :category))
+  "Class used for arguments that share a category.")
+
+(cl-defmethod transient-infix-set ((obj gptel--switch) value)
+  "The VALUE of a gptel--switch OBJ is a list of the category
+ and argument, e.g. (\"filesystem\" \"read_file\")."
+  (if value
+      (oset obj value (list (oref obj category) value))
+    (oset obj value nil)))
+
+(defclass gptel--switch-category (transient-switch)
+  ((category :initarg :category))
+  "Class used for arguments that switch a group of other arguments.
+
+Their own value is ignored")
+
+(cl-defmethod transient-infix-set ((obj gptel--switch-category) value)
+  "When setting VALUE, set all options in the category of OBJ."
+  (dolist (suffix-obj transient--suffixes)
+    ;; Find all suffixes that have this category
+    (when-let* (((cl-typep suffix-obj 'gptel--switch))
+                ((equal (oref suffix-obj category)
+                        (oref obj category)))
+                (arg (if (slot-boundp suffix-obj 'argument)
+                         (oref suffix-obj argument)
+                       (oref obj argument-format))))
+      ;; Turn on/off all members in category
+      (if value
+          (transient-infix-set suffix-obj arg)
+        (transient-infix-set suffix-obj nil))))
+  ;; Finally set the "value" of the category itself
+  (oset obj value value))
 
 (defclass gptel--switches (gptel-lisp-variable)
   ((display-if-true :initarg :display-if-true :initform "True")
@@ -286,11 +462,34 @@ which see."
                     'face (if value 'transient-value 'transient-inactive-value))))))
 
 (defclass gptel--scope (gptel--switches)
-  ((display-if-true :initarg :display-if-true :initform "for this buffer")
-   (display-if-false :initarg :display-if-false :initform "globally"))
+  ((display-if-true :initarg :display-if-true :initform "buffer")
+   (display-if-false :initarg :display-if-false :initform "global"))
   "Singleton lisp variable class for `gptel--set-buffer-locally'.
 
 This is used only for setting this variable via `gptel-menu'.")
+
+(cl-defmethod transient-infix-read ((obj gptel--scope))
+  "Cycle through the mutually exclusive switches."
+  (with-slots (value) obj
+    (pcase value
+      ('t (message "Parameters will be set for the next request only"))
+      ('nil (message "Parameters will be set buffer-locally"))
+      (1 (message "Parameters will be set globally")))
+    (pcase value ('t 1) ('nil t) (1 nil))))
+
+(cl-defmethod transient-format-value ((obj gptel--scope))
+  (with-slots (value display-if-true display-if-false) obj
+      (format
+       (propertize "(%s)" 'face 'transient-delimiter)
+       (concat
+        (propertize display-if-false
+                    'face (if (null value) 'transient-value 'transient-inactive-value))
+        (propertize "|" 'face 'transient-delimiter)
+        (propertize display-if-true
+                    'face (if (eq value t) 'transient-value 'transient-inactive-value))
+        (propertize "|" 'face 'transient-delimiter)
+        (propertize "oneshot" 'face
+                    (if (eql value 1) 'transient-value 'transient-inactive-value))))))
 
 (cl-defmethod transient-infix-set ((obj gptel--scope) value)
   (funcall (oref obj set-value)
@@ -298,28 +497,28 @@ This is used only for setting this variable via `gptel-menu'.")
            (oset obj value value)))
 
 (defclass gptel-provider-variable (transient-lisp-variable)
-  ((model       :initarg :model)
-   (model-value :initarg :model-value)
+  ((backend       :initarg :backend)
+   (backend-value :initarg :backend-value)
    (always-read :initform t)
    (set-value :initarg :set-value :initform #'set))
   "Class used for gptel-backends.")
 
 (cl-defmethod transient-format-value ((obj gptel-provider-variable))
   (propertize (concat
-               (gptel-backend-name (oref obj value)) ":"
-               (gptel--model-name
-                (buffer-local-value (oref obj model) transient--original-buffer)))
+               (gptel-backend-name
+                (buffer-local-value (oref obj backend) transient--original-buffer)) ":"
+               (gptel--model-name (oref obj value)))
               'face 'transient-value))
 
 (cl-defmethod transient-infix-set ((obj gptel-provider-variable) value)
   (pcase-let ((`(,backend-value ,model-value) value))
     (funcall (oref obj set-value)
              (oref obj variable)
-             (oset obj value backend-value)
+             (oset obj value model-value)
              gptel--set-buffer-locally)
     (funcall (oref obj set-value)
-             (oref obj model)
-             (oset obj model-value model-value)
+             (oref obj backend)
+             (oset obj backend-value backend-value)
              gptel--set-buffer-locally))
   (transient-setup))
 
@@ -329,7 +528,7 @@ This is used only for setting this variable via `gptel-menu'.")
   "Transient options for overlays displayed in the working buffer.")
 
 (cl-defmethod transient-format-value ((obj gptel-option-overlaid))
-  "set up the in-buffer overlay for additional directive, a string.
+  "Set up the in-buffer overlay for additional directive, a string.
 
 Also format its value in the Transient menu."
   (let ((value (oref obj value))
@@ -349,7 +548,7 @@ Also format its value in the Transient menu."
         (add-hook 'transient-exit-hook ov-clear-hook)))
     ;; Updating transient menu display
     (if value
-        (propertize (concat argument (truncate-string-to-width value 25 nil nil "..."))
+        (propertize (concat argument (truncate-string-to-width value 35 nil nil t))
                     'face 'transient-value)
       (propertize
        (concat "(" (symbol-name (oref obj display-nil)) ")")
@@ -358,36 +557,52 @@ Also format its value in the Transient menu."
 
 ;; * Transient Prefixes
 
-(define-obsolete-function-alias 'gptel-send-menu 'gptel-menu "0.3.2")
-
-;; BUG: The `:incompatible' spec doesn't work if there's a `:description' below it.
 ;;;###autoload (autoload 'gptel-menu "gptel-transient" nil t)
 (transient-define-prefix gptel-menu ()
   "Change parameters of prompt to send to the LLM."
-  ;; :incompatible '(("-m" "-n" "-k" "-e"))
+  :incompatible '(("m" "y" "i") ("e" "g" "b" "k"))
+  ;; :value (list (concat "b" (buffer-name)))
   [:description gptel-system-prompt--format
    [""
     :if (lambda () (not (gptel--model-capable-p 'nosystem)))
     "Instructions"
     ("s" "Set system message" gptel-system-prompt :transient t)
     (gptel--infix-add-directive)]
-   [:pad-keys t
-    ""
-    "Context"
+   [:pad-keys t ""
+    (:info #'gptel--describe-infix-context
+     :face transient-heading :format "%d")
     (gptel--infix-context-add-region)
     (gptel--infix-context-add-buffer)
     (gptel--infix-context-add-file)
     (gptel--infix-context-remove-all)
-    (gptel--suffix-context-buffer)]]
+    (gptel--suffix-context-buffer)]
+   [:pad-keys t
+    :if (lambda () (and gptel-use-tools gptel--known-tools))
+    "" (:info
+        (lambda ()
+          (concat
+           "Tools" (and gptel-tools
+                        (concat " (" (propertize (format "%d selected"
+                                                         (length gptel-tools))
+                                                 'face 'warning)
+                                ")"))))
+        :format "%d" :face transient-heading)
+    ("t" "Select tools" gptel-tools :transient t)
+    ("T" "Continue tool calls"
+     (lambda () (interactive) (gptel--handle-tool-use gptel--fsm-last))
+     :if (lambda () (and gptel--fsm-last
+                    (eq (gptel-fsm-state gptel--fsm-last) 'TOOL))))]]
   [["Request Parameters"
-    :pad-keys t
     (gptel--infix-variable-scope)
     (gptel--infix-provider)
     (gptel--infix-max-tokens)
     (gptel--infix-num-messages-to-send
-     :if (lambda () (or gptel-mode gptel-track-response)))
+     :if (lambda () (and gptel-expert-commands
+                    (or gptel-mode gptel-track-response))))
     (gptel--infix-temperature :if (lambda () gptel-expert-commands))
     (gptel--infix-use-context)
+    (gptel--infix-include-reasoning)
+    (gptel--infix-use-tools)
     (gptel--infix-track-response
      :if (lambda () (and gptel-expert-commands (not gptel-mode))))
     (gptel--infix-track-media
@@ -397,8 +612,13 @@ Also format its value in the Transient menu."
     ("y" "Kill-ring instead" "y")
     ""
     ("i" "Respond in place" "i")]
-    [" >Response to"
+   [" >Response to"
     ("e" "Echo area" "e")
+    ("b" "Other buffer" "b"
+     :class transient-option
+     :prompt "Output to buffer: "
+     :reader (lambda (prompt _ _history)
+               (read-buffer prompt (buffer-name (other-buffer)) nil)))
     ("g" "gptel session" "g"
      :class transient-option
      :prompt "Existing or new gptel session: "
@@ -412,17 +632,8 @@ Also format its value in the Transient menu."
               (let ((buf (get-buffer buf-name)))
                 (and (buffer-local-value 'gptel-mode buf)
                      (not (eq (current-buffer) buf))))))))
-    ("b" "Any buffer" "b"
-     :class transient-option
-     :prompt "Output to buffer: "
-     :reader
-     (lambda (prompt _ _history)
-       (read-buffer prompt (buffer-name (other-buffer)) nil)))
     ("k" "Kill-ring" "k")]]
-  [["Send"
-    (gptel--suffix-send)
-    ("M-RET" "Regenerate" gptel--regenerate :if gptel--in-response-p)]
-   [:description (lambda () (concat (and gptel--rewrite-overlays "Continue ")
+  [[:description (lambda () (concat (and gptel--rewrite-overlays "Continue ")
                                "Rewrite"))
     :if (lambda () (or (use-region-p)
                   (and gptel--rewrite-overlays
@@ -433,6 +644,7 @@ Also format its value in the Transient menu."
      gptel-rewrite)]
    ["Tweak Response" :if gptel--in-response-p :pad-keys t
     ("SPC" "Mark" gptel--mark-response)
+    ("M-RET" "Regenerate" gptel--regenerate :if gptel--in-response-p)
     ("P" "Previous variant" gptel--previous-variant
      :if gptel--at-response-history-p
      :transient t)
@@ -459,6 +671,7 @@ Also format its value in the Transient menu."
         (gptel--suffix-send
          (cons "I" (transient-args transient-current-command)))
         'json)))]]
+  [(gptel--suffix-send)]
   (interactive)
   (gptel--sanitize-model)
   (transient-setup 'gptel-menu))
@@ -502,7 +715,7 @@ If EXTERNAL is non-nil, include external sources of directives."
             (list (list "<delete>" "None"
                         `(lambda () (interactive)
                            (message "%s unset" ,msg)
-                           (gptel--set-with-scope ',sym "" gptel--set-buffer-locally))
+                           (gptel--set-with-scope ',sym nil gptel--set-buffer-locally))
                         :transient 'transient--do-return))
             (and external
                  (list (list "SPC" "Pick crowdsourced prompt"
@@ -537,6 +750,87 @@ Customize `gptel-directives' for task-specific prompts."
             (gptel--setup-directive-menu
              'gptel--system-message "Directive" t)))
     :pad-keys t])
+
+;; ** Prefix for selecting tools
+
+;;;###autoload (autoload 'gptel-tools "gptel-transient" nil t)
+(transient-define-prefix gptel-tools ()
+  "Select tools to include with gptel requests.
+
+Tools are organized into categories.  Selecting the category
+toggles all the tools with that category.
+
+To add tools to this list, use `gptel-make-tool', which see.
+
+Using the scope option, you can set tools to use with gptel
+requests globally, in this buffer or for the next request
+only (\"oneshot\")."
+  [:description "Provide the LLM with tools to run tasks for you"
+   [""
+    (gptel--infix-variable-scope)
+    (gptel--infix-use-tools)
+    (gptel--infix-confirm-tool-calls)
+    (gptel--infix-include-tool-results)]
+   [""
+    ("RET" "Confirm selection"
+     (lambda (args)
+       (interactive (list (transient-args transient-current-command)))
+       ;; There are two kinds of ARGS: categories with value "(*)", and lists of
+       ;; the type '("category" "tool_name").  We only want the latter, to use an
+       ;; index into `gptel--known-backends.'
+       (gptel--set-with-scope
+        'gptel-tools
+        (mapcar (lambda (category-and-name)
+                  (map-nested-elt gptel--known-tools category-and-name))
+                (cl-delete-if-not #'consp args))
+        gptel--set-buffer-locally))
+     :transient transient--do-return)
+    ("q" "Cancel" transient-quit-one)]]
+  [:class transient-column
+   :setup-children
+   (lambda (_)
+     (transient-parse-suffixes
+      'gptel-tools
+      (cdr
+       (cl-loop          ;loop through gptel--known tools and collect categories
+        for (category . tools-alist) in gptel--known-tools
+        with unused-keys = (delete ?q (number-sequence ?a ?z))
+        for category-key = (seq-find (lambda (k) (member k unused-keys)) category
+                                     (seq-first unused-keys))
+        do (setq unused-keys (delete category-key unused-keys))
+        nconc
+        (cl-loop                    ;for each category, collect tools as infixes
+         for (name . tool) in tools-alist
+         with tool-keys = (delete category-key (number-sequence ?a ?z))
+         for tool-key = (seq-find (lambda (k) (member k tool-keys)) name
+                                  (seq-first tool-keys))
+         do (setq tool-keys (delete tool-key tool-keys))
+         collect           ;Each list is a transient infix of type gptel--switch
+         (list (key-description (list category-key tool-key))
+               (concat (make-string (max (- 20 (length name)) 0) ? )
+                       (propertize
+                        (concat "(" (gptel--describe-directive
+                                     (gptel-tool-description tool) (- (window-width) 40))
+                                ")")
+                        'face 'shadow))
+               (gptel-tool-name tool)
+               :format " %k %v %d"
+               :init-value #'gptel--tools-init-value
+               :class 'gptel--switch
+               :category category)
+         into infixes-for-category
+         finally return
+         (identity ;TODO(tool): Replace with vconcat for groups separated by category
+          ;; Add a category header that can be used to toggle all tools in that category
+          (nconc (list " " (list (key-description (list category-key category-key))
+                                 (concat (propertize (concat (capitalize category) " tools")
+                                                     'face 'transient-heading)
+                                         (make-string (max (- 14 (length category)) 0) ? ))
+                                 "(*)"
+                                 :format " %k %d %v"
+                                 :class 'gptel--switch-category
+                                 :category category))
+                 infixes-for-category)))))))])
 
 
 ;; * Transient Infixes
@@ -578,7 +872,7 @@ value of `gptel-use-context', set from here."
   :class 'gptel--scope
   :format "  %k %d %v"
   :key "="
-  :description (propertize "Set" 'face 'transient-inactive-argument))
+  :description (propertize "Scope" 'face 'transient-inactive-argument))
 
 (transient-define-infix gptel--infix-num-messages-to-send ()
   "Number of recent messages to send with each exchange.
@@ -595,7 +889,7 @@ include."
   :format " %k %v %d"
   :key "-n"
   :prompt "Number of past messages to include for context (leave empty for all): "
-  :reader 'gptel--transient-read-variable)
+  :reader 'gptel--transient-read-number)
 
 (transient-define-infix gptel--infix-max-tokens ()
   "Max tokens per response.
@@ -610,16 +904,16 @@ responses."
   :display-nil 'auto
   :key "-c"
   :prompt "Response length in tokens (leave empty: default, 80-200: short, 200-500: long): "
-  :reader 'gptel--transient-read-variable)
+  :reader 'gptel--transient-read-number)
 
 (transient-define-infix gptel--infix-provider ()
   "AI Provider for Chat."
-  :description "GPT Model"
+  :description "Model"
   :class 'gptel-provider-variable
   :prompt "Model: "
-  :variable 'gptel-backend
+  :variable 'gptel-model
   :set-value #'gptel--set-with-scope
-  :model 'gptel-model
+  :backend 'gptel-backend
   :key "-m"
   :reader (lambda (prompt &rest _)
             (cl-loop
@@ -654,18 +948,21 @@ responses."
 		       " " (propertize " " 'display `(space :align-to 166))
 		       cutoff)))))
              finally return
-             (cdr (assoc (completing-read prompt models-alist nil t)
+             (cdr (assoc (completing-read prompt models-alist nil t nil nil
+					  (concat (gptel-backend-name gptel-backend) ":"
+						  (gptel--model-name gptel-model)))
                          models-alist)))))
 
 (transient-define-infix gptel--infix-temperature ()
   "Temperature of request."
   :description "Temperature (0 - 2.0)"
+  :display-nil "default"
   :class 'gptel-lisp-variable
   :variable 'gptel-temperature
   :set-value #'gptel--set-with-scope
-  :key "-t"
-  :prompt "Temperature controls the response randomness (0.0-2.0, leave empty for default): "
-  :reader 'gptel--transient-read-variable)
+  :key "-T"
+  :prompt "Temperature controls the response randomness (0.0-2.0, leave empty for API default): "
+  :reader 'gptel--transient-read-number)
 
 (transient-define-infix gptel--infix-track-response ()
   "Distinguish between user messages and LLM responses.
@@ -685,7 +982,7 @@ querying the LLM."
   :set-value #'gptel--set-with-scope
   :display-if-true "Yes"
   :display-if-false "No"
-  :key "-v")
+  :key "-R")
 
 (transient-define-infix gptel--infix-track-media ()
   "Send media from \"standalone\" links in the prompt.
@@ -755,9 +1052,8 @@ supports.  See `gptel-track-media' for more information."
   :key "-d"
   :description "Remove all"
   (interactive)
-  (when (y-or-n-p "Remove all context? ")
-    (gptel-context-remove-all)
-    (transient-setup)))
+  (gptel-context-remove-all t)
+  (transient-setup))
 
 ;; ** Infix for additional directive
 
@@ -801,6 +1097,135 @@ Or in an extended conversation:
   :description "Add instruction"
   :transient t)
 
+;; ** Infix for reasoning block control
+
+(transient-define-infix gptel--infix-include-reasoning ()
+  "How to handle reasoning/thinking response blocks.
+
+Some LLMs include in their response a \"thinking\" section.  This
+text improves the quality of the LLM's final output, but may not
+be interesting to you by itself.
+
+You can control how gptel should handle the thinking blocks via
+this option, or by setting the variable `gptel-include-reasoning'
+via elisp, which see.
+
+Available behaviors are
+- to include thinking blocks with the response,
+- to omit them entirely,
+- to include them but ignore them in consequent conversation turns, and
+- to append them to a buffer of your choosing."
+  :description "Include reasoning"
+  :class 'gptel-lisp-variable
+  :variable 'gptel-include-reasoning
+  :format " %k %d %v"
+  :set-value #'gptel--set-with-scope
+  :display-nil "No"
+  :display-map '((nil    . "No")
+                 (ignore . "and ignore")
+                 (t      . "with response"))
+  :key "-v"
+  :prompt "Include reasoning: "
+  :reader (lambda (prompt &rest _)
+            (let* ((choices '(("no"     . nil)
+                              ("ignore" . ignore)
+                              ("yes"    . t)
+                              ("other buffer" . buffer)))
+                   (destination
+                    (completing-read prompt choices nil t)))
+              (if (equal destination "other buffer")
+                  (read-buffer "Append reasoning to buffer: ")
+                (cdr (assoc destination choices))))))
+
+;; ** Infixes for tool use
+
+(transient-define-infix gptel--infix-use-tools ()
+  "Whether LLM tool use with gptel is enabled.
+
+This is a three-way toggle.  Assuming one or more tools to be
+sent with requests have been selected, tool use can be
+
+- disabled,
+- enabled, where the LLM may choose to respond with tool calls
+- forced, where the LLM must respond with one or more tool calls.
+
+You can set this here or by customizing `gptel-use-tools', which
+see."
+  :description "Use tools"
+  :class 'gptel-lisp-variable
+  :variable 'gptel-use-tools
+  :set-value (lambda (sym value scope)
+               (gptel--set-with-scope sym value scope)
+               (transient-setup))
+  :display-nil "off"
+  :display-map '((nil   . "off")
+                 (t     . "on")
+                 (force . "force"))
+  :prompt "Use tools? "
+  :reader (lambda (prompt &rest _)
+            (let* ((choices '(("disable" . nil)
+                              ("enable"  . t)
+                              ("force"   . force)))
+                   (pref (completing-read prompt choices nil t)))
+              (cdr (assoc pref choices))))
+  :key "-t")
+
+(transient-define-infix gptel--infix-confirm-tool-calls ()
+  "Whether tool calls should wait for the user to run them.
+
+This is a three-way toggle between these behaviors:
+
+- All tool calls run without confirmation.
+- All tool calls wait for confirmation.
+- Decided per-tool, according to the value of the tool spec's
+  :confirm slot.
+
+This sets the variable `gptel-confirm-tool-calls', which see."
+  :key "-c"
+  :description "Confirm tool calls"
+  :class 'gptel-lisp-variable
+  :variable 'gptel-confirm-tool-calls
+  :set-value #'gptel--set-with-scope
+  :display-nil "never"
+  :display-map '((nil . "never")
+                 (t   . "always")
+                 (auto . "auto"))
+  :prompt "Tool calls require confirmation? "
+  :reader (lambda (prompt &rest _)
+            (let* ((choices '(("no"   . nil)
+                              ("always" . t)
+                              ("tool decides" . auto)))
+                   (pref (completing-read prompt choices nil t)))
+              (cdr (assoc pref choices)))))
+
+(transient-define-infix gptel--infix-include-tool-results ()
+  "Whether tool call results should be included in the response.
+
+This is a three-way toggle between these behaviors:
+
+- All tool results are included.
+- No tool results are included.
+- Decided per-tool, according to the value of the tool spec's
+  :include slot.
+
+This sets the variable `gptel-include-tool-results', which see."
+  :key "-i"
+  :description "Include results   "
+  :class 'gptel-lisp-variable
+  :variable 'gptel-include-tool-results
+  :set-value #'gptel--set-with-scope
+  :display-nil "never"
+  :display-map '((nil . "never")
+                 (t   . "always")
+                 (auto . "auto"))
+  :prompt "Include tool results in LLM response? "
+  :reader (lambda (prompt &rest _)
+            (let* ((choices '(("never"   . nil)
+                              ("always" . t)
+                              ("tool decides" . auto)))
+                   (pref (completing-read prompt choices nil t)))
+              (cdr (assoc pref choices)))))
+
 
 ;; * Transient Suffixes
 
@@ -809,7 +1234,7 @@ Or in an extended conversation:
 (transient-define-suffix gptel--suffix-send (args)
   "Send ARGS."
   :key "RET"
-  :description "Send prompt"
+  :description #'gptel--describe-suffix-send
   (interactive (list (transient-args
                       (or transient-current-command 'gptel-menu))))
   (let ((stream gptel-stream)
@@ -843,20 +1268,27 @@ Or in an extended conversation:
      ((member "e" args)
       (setq stream nil)
       (setq callback
-            (lambda (resp info)
-              (if resp
-                  (message "%s response: %s" backend-name resp)
-                (message "%s response error: %s" backend-name (plist-get info :status))))))
+            (lambda (resp info &optional _raw)
+              (pcase resp
+                ((pred stringp) (message "%s response: %s" backend-name resp))
+                (`(tool-call . ,tool-calls) (gptel--display-tool-calls tool-calls info 'minibuffer))
+                (`(tool-result . ,tool-results) (gptel--display-tool-results tool-results info))
+                (_ (when (and (null resp) (plist-get info :error))
+                     (message "%s response error: %s"
+                              backend-name (plist-get info :status))))))))
      ((member "k" args)
       (setq stream nil)
       (setq callback
-            (lambda (resp info)
-              (if (not resp)
-                  (message "%s response error: %s" backend-name (plist-get info :status))
-                (kill-new resp)
-                (message "%s response: \"%s\" copied to kill-ring."
-                         backend-name
-                         (truncate-string-to-width resp 30))))))
+            (lambda (resp info &optional _raw)
+              (pcase resp
+                ((pred stringp) (kill-new resp)
+                 (message "%s response: \"%s\" copied to kill-ring." backend-name
+                          (truncate-string-to-width resp 30)))
+                (`(tool-call . ,tool-calls) (gptel--display-tool-calls tool-calls info 'minibuffer))
+                (`(tool-result . ,tool-results) (gptel--display-tool-results tool-results info))
+                (_ (when (and (null resp) (plist-get info :error))
+                     (message "%s response error: %s" backend-name
+                              (plist-get info :status))))))))
      ((setq gptel-buffer-name
             (cl-some (lambda (s) (and (stringp s) (string-prefix-p "g" s)
                                  (substring s 1)))
@@ -928,6 +1360,7 @@ Or in an extended conversation:
                  (gptel--merge-additional-directive system-extra)
                gptel--system-message)
              :callback callback
+             :fsm (gptel-make-fsm :handlers gptel-send--handlers)
              :dry-run dry-run)
 
       (unless dry-run
@@ -937,23 +1370,20 @@ Or in an extended conversation:
       ;; The HTTP request callback might modify the buffer before the in-place
       ;; text is killed below.
       (when in-place
-        ;; Kill the latest prompt
-        (let ((beg
-               (if (use-region-p)
-                   (region-beginning)
-                 (save-excursion
-                   (text-property-search-backward
-                    'gptel 'response
-                    (when (get-char-property (max (point-min) (1- (point)))
-                                             'gptel)
-                      t))
-                   (point))))
-              (end (if (use-region-p) (region-end) (point))))
-          (unless output-to-other-buffer-p
-            ;; store the killed text in gptel-history
-            (gptel--attach-response-history
-             (list (buffer-substring-no-properties beg end))))
-          (kill-region beg end)))
+        (if (or buffer-read-only (get-char-property (point) 'read-only))
+            (message "Not replacing prompt: region is read-only")
+          (let ((beg (if (use-region-p)
+                         (region-beginning)
+                       (max (previous-single-property-change
+                             (point) 'gptel nil (point-min))
+                            (previous-single-property-change
+                             (point) 'read-only nil (point-min)))))
+                (end (if (use-region-p) (region-end) (point))))
+            (unless output-to-other-buffer-p
+              ;; store the killed text in gptel-history
+              (gptel--attach-response-history
+               (list (buffer-substring-no-properties beg end))))
+            (kill-region beg end))))
 
       (when output-to-other-buffer-p
         (message (concat "Prompt sent to buffer: "
@@ -992,7 +1422,7 @@ for details."
   "Regenerate gptel response at point."
   (interactive)
   (when (gptel--in-response-p)
-    (pcase-let* ((`(,beg . ,end) (gptel--get-bounds))
+    (pcase-let* ((`(,beg . ,end) (gptel--get-response-bounds))
                  (history (get-char-property (point) 'gptel-history))
                  (prev-responses (cons (buffer-substring-no-properties beg end)
                                        history)))
@@ -1035,9 +1465,10 @@ This uses the prompts in the variable
                           cands))))
                   (complete-with-action action gptel--crowdsourced-prompts str pred)))
               nil t)))
-        (when-let ((prompt (gethash choice gptel--crowdsourced-prompts)))
-            (setq gptel--system-message prompt)
-            (call-interactively #'gptel--suffix-system-message)))
+        (when-let* ((prompt (gethash choice gptel--crowdsourced-prompts)))
+          (gptel--set-with-scope
+           'gptel--system-message prompt gptel--set-buffer-locally)
+          (gptel--edit-directive 'gptel--system-message)))
     (message "No prompts available.")))
 
 (transient-define-suffix gptel--suffix-system-message (&optional cancel)
@@ -1055,47 +1486,51 @@ generated from functions."
                     "Active directive is dynamically generated: Edit its current value instead?")))))
   (if cancel (progn (message "Edit canceled")
                     (call-interactively #'gptel-menu))
-    (gptel--edit-directive 'gptel--system-message)))
+    (gptel--edit-directive 'gptel--system-message :setup #'activate-mark)))
 
 ;; MAYBE: Eventually can be simplified with string-edit, after we drop support
 ;; for Emacs 28.2.
-(defun gptel--edit-directive (sym &optional callback-cmd)
+(cl-defun gptel--edit-directive (sym &key prompt initial callback setup buffer)
   "Edit a gptel directive in a dedicated buffer.
 
-Store the result in SYM, a symbol.  If CALLBACK-CMD is specified,
-it is run after exiting the edit."
-  (let ((orig-buf (current-buffer))
+Store the result in SYM, a symbol.  PROMPT and INITIAL are the
+heading and initial text.  If CALLBACK is specified, it is run
+after exiting the edit.  If SETUP is a function, run it after
+setting up the buffer."
+  (declare (indent 1))
+  (let ((orig-buf (or buffer (current-buffer)))
         (msg-start (make-marker))
         (directive (symbol-value sym)))
     (when (functionp directive)
       (setq directive (funcall directive)))
     ;; TODO: Handle editing list-of-strings directives
     (with-current-buffer (get-buffer-create "*gptel-system*")
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t) (inhibit-message t))
         (erase-buffer)
         (text-mode)
+        (visual-line-mode 1)
         (setq header-line-format
-              (concat
-               "Edit your system message below and press "
-               (propertize "C-c C-c" 'face 'help-key-binding)
-               " when ready, or "
-               (propertize "C-c C-k" 'face 'help-key-binding)
-               " to abort."))
+              (concat "Edit your instructions below and press "
+                      (propertize "C-c C-c" 'face 'help-key-binding)
+                      " when ready, or "
+                      (propertize "C-c C-k" 'face 'help-key-binding)
+                      " to abort."))
         (insert
-         "# Example: You are a helpful assistant. Answer as concisely as possible.\n"
-         "# Example: Reply only with shell commands and no prose.\n"
-         "# Example: You are a poet. Reply only in verse.\n\n")
+         (or prompt
+             (concat
+              "# Example: You are a helpful assistant. Answer as concisely as possible.\n"
+              "# Example: Reply only with shell commands and no prose.\n"
+              "# Example: You are a poet. Reply only in verse."))
+         "\n\n")
         (add-text-properties
-         (point-min) (1- (point))
-         (list 'read-only t 'face 'font-lock-comment-face))
-        ;; TODO: make-separator-line requires Emacs 28.1+.
-        ;; (insert (propertize (make-separator-line) 'rear-nonsticky t))
+         (point-min) (point)
+         (list 'read-only t 'face 'font-lock-comment-face 'front-sticky t 'rear-nonsticky t))
         (set-marker msg-start (point))
         (save-excursion
           ;; If it's a list, insert only the system message part
-          (insert (car-safe (gptel--parse-directive directive 'raw)))
+          (insert (or initial (car-safe (gptel--parse-directive directive 'raw))))
           (push-mark nil 'nomsg))
-        (activate-mark))
+        (and (functionp setup) (funcall setup)))
       (display-buffer (current-buffer)
                       `((display-buffer-below-selected)
                         (body-function . ,#'select-window)
@@ -1105,28 +1540,29 @@ it is run after exiting the edit."
                "Cancel system message update and return."
                (interactive)
                (quit-window)
-               (display-buffer
-                orig-buf
-                `((display-buffer-reuse-window
-                   display-buffer-use-some-window)
-                  (body-function . ,#'select-window)))
-               (when (commandp callback-cmd)
-                 (call-interactively callback-cmd)))))
+               (unless (minibufferp)
+                 (display-buffer orig-buf
+                                 `((display-buffer-reuse-window
+                                    display-buffer-use-some-window)
+                                   (body-function . ,#'select-window))))
+               (cond ((commandp callback) (call-interactively callback))
+                     ((functionp callback) (funcall callback))))))
         (use-local-map
          (make-composed-keymap
           (define-keymap
-            "C-c C-c" (lambda ()
-                        "Confirm system message and return."
-                        (interactive)
-                        (let ((system-message
-                               (buffer-substring-no-properties msg-start (point-max))))
-                          (with-current-buffer orig-buf
-                            (gptel--set-with-scope sym
-                                                   (if (cdr-safe directive) ;Handle list of strings
-                                                       (prog1 directive (setcar directive system-message))
-                                                     system-message)
-                                                   gptel--set-buffer-locally)))
-                        (funcall quit-to-menu))
+            "C-c C-c"
+            (lambda ()
+              "Confirm system message and return."
+              (interactive)
+              (let ((system-message
+                     (buffer-substring-no-properties msg-start (point-max))))
+                (with-current-buffer orig-buf
+                  (gptel--set-with-scope sym
+                                         (if (cdr-safe directive) ;Handle list of strings
+                                             (prog1 directive (setcar directive system-message))
+                                           system-message)
+                                         gptel--set-buffer-locally)))
+              (funcall quit-to-menu))
             "C-c C-k" quit-to-menu)
           text-mode-map))))))
 
@@ -1139,37 +1575,7 @@ it is run after exiting the edit."
   :transient 'transient--do-exit
   :key " C"
   :if (lambda () gptel-context--alist)
-  :description
-  (lambda ()
-    (pcase-let*
-        ((contexts (and gptel-context--alist (gptel-context--collect)))
-         (buffer-count (length contexts))
-         (`(,file-count ,ov-count)
-          (if (> buffer-count 0)
-              (cl-loop for (buf-file . ovs) in contexts
-                       if (bufferp buf-file)
-                       sum (length ovs) into ov-count
-                       else count (stringp buf-file) into file-count
-                       finally return (list file-count ov-count))
-            (list 0 0))))
-      (concat "Inspect "
-              (format
-               (propertize "(%s)" 'face 'transient-delimiter)
-               (propertize
-                (concat
-                 (and (> ov-count 0)
-                      (format "%d region%s in %d buffer%s"
-                              ov-count (if (> ov-count 1) "s" "")
-                              (- buffer-count file-count)
-                              (if (> ( - buffer-count file-count) 1) "s" "")))
-                 (and (> file-count 0)
-                      (propertize
-                       (format "%s%d file%s"
-                               (if (> ov-count 0) ", " "") file-count
-                               (if (> file-count 1) "s" "")))))
-                'face (if (zerop (length contexts))
-                          'transient-inactive-value
-                        'transient-value))))))
+  :description "Inspect context"
   (interactive)
   (gptel-context--buffer-setup))
 
