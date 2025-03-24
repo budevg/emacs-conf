@@ -1,11 +1,3 @@
-
-(autoload 'switch-file-major-mode "switch-file" nil t)
-
-(eval-after-load "cc-mode"
-  '(progn
-     (define-key c-mode-map [(control meta o)] 'switch-file-major-mode)
-     (define-key c++-mode-map [(control meta o)] 'switch-file-major-mode)))
-
 (eval-after-load "ido"
   '(progn
      (defun ido-occasional-completing-read

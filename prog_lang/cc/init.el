@@ -1,45 +1,46 @@
-(eval-after-load "cc-mode"
-  '(progn
-     (defun my-c-mode-hook ()
-       (c-set-style "linux")
-       (setq c-basic-offset 2)
-       (setq tab-width 2)
-       (font-lock-add-keywords nil
-                               '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
+(use-package cc-mode
+  :mode (("\\.cu[h]?\\'" . c++-mode))
 
-     (defun my-c++-mode-hook ()
-       (c-set-style "linux")
-       (setq c-basic-offset 2)
-       (setq tab-width 2)
-       (font-lock-add-keywords nil
-                               '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
+  :config
+  (defun c-lineup-arglist-tabs-only (ignored)
+    "Line up argument lists by tabs, not spaces"
+    (let* ((anchor (c-langelem-pos c-syntactic-element))
+           (column (c-langelem-2nd-pos c-syntactic-element))
+           (offset (- (1+ column) anchor))
+           (steps (floor offset c-basic-offset)))
+      (* (max steps 1)
+         c-basic-offset)))
 
-     (defun c-lineup-arglist-tabs-only (ignored)
-       "Line up argument lists by tabs, not spaces"
-       (let* ((anchor (c-langelem-pos c-syntactic-element))
-              (column (c-langelem-2nd-pos c-syntactic-element))
-              (offset (- (1+ column) anchor))
-              (steps (floor offset c-basic-offset)))
-         (* (max steps 1)
-            c-basic-offset)))
+  (c-add-style
+   "linux-tabs-only"
+   '("linux" (c-offsets-alist
+              (arglist-cont-nonempty
+               c-lineup-gcc-asm-reg
+               c-lineup-arglist-tabs-only))))
 
-     (add-hook 'c-mode-common-hook
-               (lambda ()
-                 ;; Add kernel style
-                 (c-add-style
-                  "linux-tabs-only"
-                  '("linux" (c-offsets-alist
-                             (arglist-cont-nonempty
-                              c-lineup-gcc-asm-reg
-                              c-lineup-arglist-tabs-only))))))
+  (defun default-c-mode-hook ()
+    (c-set-style "linux")
+    (setq c-basic-offset 4
+          tab-width 4
+          indent-tabs-mode nil)
+    (font-lock-add-keywords
+     nil
+     '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t))))
 
-     (add-hook 'c-mode-hook 'my-c-mode-hook)
-     (add-hook 'c++-mode-hook 'my-c++-mode-hook)
+  :hook
+  ((c-mode-common-hook . default-c-mode-hook)
+   (c++-mode-common-hook . default-c-mode-hook))
 
-
-     (define-key c-mode-map "\C-m" 'newline-and-indent)
-     (define-key c-mode-base-map "\C-d" nil)
-     (define-key c++-mode-map "\C-m" 'newline-and-indent)))
-
-(autoload 'systemtap-mode "systemtap-mode")
-(add-to-list 'auto-mode-alist '("\\.stp\\'" . systemtap-mode))
+  :bind (:map c-mode-base-map
+         ("C-d" . nil)
+         ("C-M-o" . (lambda ()
+                      (interactive)
+                      (let ((inhibit-message t)
+                            (ff-always-try-to-create nil))
+                        (ff-find-other-file))))
+         :map c-mode-map
+         ("C-m" . newline-and-indent)
+         :map c++-mode-map
+         ("C-m" . newline-and-indent)
+         )
+)
