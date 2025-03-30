@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: rcp
+# key: rcp
+# --
+rsync -zavL --progress -e "ssh -t -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" ${1:src} ${2:dst}$0
