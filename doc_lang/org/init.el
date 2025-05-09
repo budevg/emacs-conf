@@ -67,6 +67,7 @@
   (org-defkey org-mode-map [(meta right)] nil)
   (org-defkey org-mode-map [(meta up)]    nil)
   (org-defkey org-mode-map [(meta down)]  nil)
+  (org-defkey org-mode-map (kbd "C-x n") nil)
 
   (org-defkey org-mode-map [(meta shift left)]   nil)
   (org-defkey org-mode-map [(meta shift right)]  nil)
