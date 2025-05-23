@@ -109,9 +109,9 @@ See option `magit-section-initial-visibility-alist' for how to
 control the initial visibility of the jumped to section."
   :package-version '(magit . "2.90.0")
   :group 'magit-status
-  :type '(choice (const :tag "as usual" nil)
-                 (repeat (choice (number :tag "nth top-level section")
-                                 (sexp   :tag "section identity")))))
+  :type '(choice (const :tag "As usual" nil)
+                 (repeat (choice (number :tag "Nth top-level section")
+                                 (sexp   :tag "Section identity")))))
 
 (defcustom magit-status-goto-file-position nil
   "Whether to go to position corresponding to file position.
@@ -174,8 +174,10 @@ of the work Git is responsible for.  Turning that list into sections is
 also not free, so Magit only lists `magit-status-file-list-limit' files."
   :package-version '(magit . "4.3.0")
   :group 'magit-status
-  :type 'boolean
-  :safe 'booleanp)
+  :type '(choice (const :tag "Do not list untracked files" nil)
+                 (const :tag "List mixture of files and directories" t)
+                 (const :tag "List individual files (slow)" all))
+  :safe (##memq % '(nil t all)))
 
 (defcustom magit-status-file-list-limit 100
   "How many files to list in file list sections in the status buffer.
@@ -237,10 +239,10 @@ Valid values are:
   :group 'magit-buffers
   :group 'magit-commands
   :type '(choice
-          (const :tag "always use args from buffer" always)
-          (const :tag "use args from buffer if displayed in frame" selected)
-          (const :tag "use args from buffer if it is current" current)
-          (const :tag "never use args from buffer" never)))
+          (const :tag "Always use args from buffer" always)
+          (const :tag "Use args from buffer if displayed in frame" selected)
+          (const :tag "Use args from buffer if it is current" current)
+          (const :tag "Never use args from buffer" never)))
 
 ;;; Commands
 
@@ -568,13 +570,12 @@ the status buffer causes this section to disappear again."
   "Insert a header line about the current branch.
 If `HEAD' is detached, then insert information about that commit
 instead.  The optional BRANCH argument is for internal use only."
-  (let ((branch (or branch (magit-get-current-branch)))
-        (output (magit-rev-format "%h %s" (or branch "HEAD"))))
+  (let ((output (magit-rev-format "%h %s" (or branch "HEAD"))))
     (string-match "^\\([^ ]+\\) \\(.*\\)" output)
     (magit-bind-match-strings (commit summary) output
       (when (equal summary "")
         (setq summary "(no commit message)"))
-      (if branch
+      (if-let ((branch (or branch (magit-get-current-branch))))
           (magit-insert-section (branch branch)
             (insert (format "%-10s" "Head: "))
             (when magit-status-show-hashes-in-headers
@@ -726,7 +727,7 @@ remote in alphabetic order."
 (defvar-keymap magit-untracked-section-map
   :doc "Keymap for the `untracked' section."
   "<remap> <magit-delete-thing>" #'magit-discard
-  "<remap> <magit-stage-file>"   #'magit-stage
+  "<remap> <magit-stage-files>"  #'magit-stage
   "<2>" (magit-menu-item "Discard files" #'magit-discard)
   "<1>" (magit-menu-item "Stage files"   #'magit-stage))
 
@@ -766,9 +767,8 @@ is always ignored."
     (magit-insert-files
      'untracked
      (lambda (files)
-       (mapcan (lambda (line)
-                 (and (eq (aref line 0) ??)
-                      (list (substring line 3))))
+       (mapcan (##and (eq (aref % 0) ??)
+                      (list (substring % 3)))
                (apply #'magit-git-items "status" "-z" "--porcelain"
                       (format "--untracked-files=%s"
                               (if (eq value 'all) "all" "normal"))
@@ -782,8 +782,7 @@ Honor the buffer's file filter, which can be set using \"D - -\"."
 (defun magit-insert-ignored-files ()
   "Insert a list of ignored files.
 Honor the buffer's file filter, which can be set using \"D - -\"."
-  (magit-insert-files 'ignored
-                      (lambda (args) (magit-ignored-files "--directory" args))))
+  (magit-insert-files 'ignored (##magit-ignored-files "--directory" %)))
 
 (defun magit-insert-skip-worktree-files ()
   "Insert a list of skip-worktree files.
@@ -812,7 +811,8 @@ Honor the buffer's file filter, which can be set using \"D - -\"."
             (cl-decf limit)
             (let ((file (pop files)))
               (magit-insert-section (file file)
-                (insert (propertize file 'font-lock-face 'magit-filename))
+                (insert (funcall magit-format-file-function
+                                 'list file 'magit-filename))
                 (insert ?\n))))
           (when files
             (magit-insert-section (info)

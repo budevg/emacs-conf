@@ -174,19 +174,21 @@ full loading."
 The major mode configured here is turned on by the minor mode
 `git-commit-mode'."
   :group 'git-commit
-  :type '(choice (function-item text-mode)
-                 (function-item markdown-mode)
-                 (function-item org-mode)
-                 (function-item fundamental-mode)
-                 (function-item git-commit-elisp-text-mode)
-                 (function :tag "Another mode")
-                 (const :tag "No major mode")))
+  :type '(radio (function-item text-mode)
+                (function-item markdown-mode)
+                (function-item org-mode)
+                (function-item fundamental-mode)
+                (function-item log-edit-mode)
+                (function-item git-commit-elisp-text-mode)
+                (function :tag "Another mode")
+                (const :tag "No major mode")))
 ;;;###autoload(put 'git-commit-major-mode 'safe-local-variable
 ;;;###autoload     (lambda (val)
 ;;;###autoload       (memq val '(text-mode
 ;;;###autoload                   markdown-mode
 ;;;###autoload                   org-mode
 ;;;###autoload                   fundamental-mode
+;;;###autoload                   log-edit-mode
 ;;;###autoload                   git-commit-elisp-text-mode))))
 
 (defvaralias 'git-commit-mode-hook 'git-commit-setup-hook
@@ -300,7 +302,7 @@ See also manpage git-interpret-trailer(1).  This package does
 not use that Git command, but the initial description still
 serves as a good introduction."
   :group 'git-commit
-  :safe (lambda (val) (and (listp val) (seq-every-p #'stringp val)))
+  :safe (##and (listp %) (seq-every-p #'stringp %))
   :type '(repeat string))
 
 (defcustom git-commit-use-local-message-ring nil
@@ -434,7 +436,7 @@ the redundant bindings, then set this to nil, before loading
 
 (require 'easymenu)
 (easy-menu-define git-commit-mode-menu git-commit-mode-map
-  "Git Commit Mode Menu"
+  "Git Commit Mode Menu."
   '("Commit"
     ["Previous" git-commit-prev-message t]
     ["Next" git-commit-next-message t]
@@ -658,7 +660,7 @@ the input isn't tacked to the comment."
 (defun git-commit-turn-on-auto-fill ()
   "Unconditionally turn on Auto Fill mode.
 Ensure auto filling happens everywhere, except in the summary line."
-  (turn-on-auto-fill)
+  (auto-fill-mode 1)
   (setq-local comment-auto-fill-only-comments nil)
   (when git-commit-need-summary-line
     (setq-local auto-fill-function #'git-commit-auto-fill-except-summary)))
@@ -683,7 +685,7 @@ Also check text that is already in the buffer, while avoiding to check
 most text that Git will strip from the final message, such as the last
 comment and anything below the cut line (\"--- >8 ---\")."
   (require 'flyspell)
-  (turn-on-flyspell)
+  (flyspell-mode 1)
   (setq flyspell-generic-check-word-predicate
         #'git-commit-flyspell-verify)
   (let ((end nil)
@@ -846,10 +848,9 @@ Save current message first."
 See also manpage git-interpret-trailer(1).  This command does
 not use that Git command, but the initial description still
 serves as a good introduction."
-  [[:description (lambda ()
-                   (cond (prefix-arg
+  [[:description (##cond (prefix-arg
                           "Insert ... by someone ")
-                         ("Insert ... by yourself")))
+                         ("Insert ... by yourself"))
     ("a"   "Ack"          git-commit-ack)
     ("m"   "Modified"     git-commit-modified)
     ("r"   "Reviewed"     git-commit-review)
@@ -1048,10 +1049,10 @@ Added to `font-lock-extend-region-functions'."
 (defconst git-commit-font-lock-keywords-1
   '(;; Trailers
     (eval . `(,(git-commit--trailer-regexp)
-              (1 'git-commit-trailer-token)
-              (2 'git-commit-trailer-value)
-              (3 'git-commit-trailer-token)
-              (4 'git-commit-trailer-value)))
+              (1 'git-commit-trailer-token nil t)
+              (2 'git-commit-trailer-value nil t)
+              (3 'git-commit-trailer-token nil t)
+              (4 'git-commit-trailer-value nil t)))
     ;; Summary
     (eval . `(,(git-commit-summary-regexp)
               (1 'git-commit-summary)))

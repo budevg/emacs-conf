@@ -28,14 +28,10 @@
 
 (require 'magit)
 
-;; For `magit-do-async-shell-command'.
-(declare-function dired-read-shell-command "dired-aux" (prompt arg files))
 ;; For `magit-project-status'.
 (declare-function vc-git-command "vc-git"
                   (buffer okstatus file-or-list &rest flags))
 
-(defvar ido-exit)
-(defvar ido-fallback)
 (defvar project-prefix-map)
 (defvar project-switch-commands)
 
@@ -64,7 +60,7 @@ alternative commands."
   ["Actions"
    (" m" "Invoke mergetool" magit-git-mergetool)]
   (interactive
-   (if (and (not (eq transient-current-prefix 'magit-git-mergetool))
+   (if (and (not (eq transient-current-command 'magit-git-mergetool))
             current-prefix-arg)
        (list nil nil t)
      (list (magit-read-unmerged-file "Resolve")
@@ -194,19 +190,6 @@ blame to center around the line point is on."
 ;;; Emacs Tools
 
 ;;;###autoload
-(defun ido-enter-magit-status ()
-  "Drop into `magit-status' from file switching.
-
-To make this command available use something like:
-
-  (keymap-set ido-common-completion-map
-              \"C-x g\" \\='ido-enter-magit-status)"
-  (interactive)
-  (setq ido-exit 'fallback)
-  (setq ido-fallback #'magit-status)
-  (exit-minibuffer))
-
-;;;###autoload
 (defun magit-project-status ()
   "Run `magit-status' in the current project's root."
   (interactive)
@@ -231,62 +214,6 @@ to nil before loading Magit to prevent \"m\" from being bound.")
                           t)))
     (keymap-set project-prefix-map "m" #'magit-project-status)
     (add-to-list 'project-switch-commands '(magit-project-status "Magit") t)))
-
-;;;###autoload
-(defun magit-dired-jump (&optional other-window)
-  "Visit file at point using Dired.
-With a prefix argument, visit in another window.  If there
-is no file at point, then instead visit `default-directory'."
-  (interactive "P")
-  (dired-jump other-window
-              (and-let* ((file (magit-file-at-point)))
-                (expand-file-name (if (file-directory-p file)
-                                      (file-name-as-directory file)
-                                    file)))))
-
-;;;###autoload
-(defun magit-dired-log (&optional follow)
-  "Show log for all marked files, or the current file."
-  (interactive "P")
-  (if-let ((topdir (magit-toplevel default-directory)))
-      (let ((args (car (magit-log-arguments)))
-            (files (dired-get-marked-files nil nil #'magit-file-tracked-p)))
-        (unless files
-          (user-error "No marked file is being tracked by Git"))
-        (when (and follow
-                   (not (member "--follow" args))
-                   (not (cdr files)))
-          (push "--follow" args))
-        (magit-log-setup-buffer
-         (list (or (magit-get-current-branch) "HEAD"))
-         args
-         (let ((default-directory topdir))
-           (mapcar #'file-relative-name files))
-         magit-log-buffer-file-locked))
-    (magit--not-inside-repository-error)))
-
-;;;###autoload
-(defun magit-dired-am-apply-patches (repo &optional arg)
-  "In Dired, apply the marked (or next ARG) files as patches.
-If inside a repository, then apply in that.  Otherwise prompt
-for a repository."
-  (interactive (list (or (magit-toplevel)
-                         (magit-read-repository t))
-                     current-prefix-arg))
-  (let ((files (dired-get-marked-files nil arg nil nil t)))
-    (magit-status-setup-buffer repo)
-    (magit-am-apply-patches files)))
-
-;;;###autoload
-(defun magit-do-async-shell-command (file)
-  "Open FILE with `dired-do-async-shell-command'.
-Interactively, open the file at point."
-  (interactive (list (or (magit-file-at-point)
-                         (magit-read-file "Act on file"))))
-  (require 'dired-aux)
-  (dired-do-async-shell-command
-   (dired-read-shell-command "& on %s: " current-prefix-arg (list file))
-   nil (list file)))
 
 ;;; Shift Selection
 

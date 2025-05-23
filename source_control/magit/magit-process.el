@@ -41,6 +41,12 @@
 (defvar messages-buffer-name)
 (defvar y-or-n-p-map)
 
+(define-obsolete-variable-alias 'magit-process-finish-apply-ansi-colors
+  'magit-process-apply-ansi-colors "Magit-Section 4.3.2")
+
+(defclass magit-process-section (magit-section)
+  ((process :initform nil)))
+
 ;;; Options
 
 (defcustom magit-process-connection-type (not (eq system-type 'cygwin))
@@ -49,8 +55,8 @@
 If nil, use pipes: this is usually more efficient, and works on Cygwin.
 If t, use ptys: this enables Magit to prompt for passphrases when needed."
   :group 'magit-process
-  :type '(choice (const :tag "pipe" nil)
-                 (const :tag "pty" t)))
+  :type '(choice (const :tag "Pipe" nil)
+                 (const :tag "Pty" t)))
 
 (defcustom magit-need-cygwin-noglob
   (and (eq system-type 'windows-nt)
@@ -111,9 +117,7 @@ displays the text of `magit-process-error-summary' instead."
                 (and prog
                      (string-match-p
                       "\\`\\(?:\\(?:/.*/\\)?git-credential-\\)?cache\\'" prog)
-                     (or (cl-loop for (opt val) on args
-                                  if (string= opt "--socket")
-                                  return val)
+                     (or (cadr (member "--socket" args))
                          (expand-file-name "~/.git-credential-cache/socket")))))
             ;; Note: `magit-process-file' is not yet defined when
             ;; evaluating this form, so we use `process-lines'.
@@ -250,6 +254,24 @@ implement such functions."
   :group 'magit-process
   :type 'boolean)
 
+(defcustom magit-process-apply-ansi-colors nil
+  "Whether and when to apply color escapes in the process buffer.
+
+Magit instructs Git to not colorize its output, but third-party Git
+hooks may do so anyway.  We recommend you figure out how to prevent
+such hooks from colorizing their output instead of customizing this
+option.
+
+If `nil' (the default), do not apply color escape sequences.  If `t',
+apply them once the subprocess has finished.  If `filter', apply them
+as input arrives (which is more expensive and potentially fragile).
+This is a footgun; starter-kits should leave this option untouched."
+  :package-version '(magit . "4.3.2")
+  :group 'magit-process
+  :type '(choice (const :tag "Do not apply" nil)
+                 (const :tag "Apply when subprocess has finished" t)
+                 (const :tag "Apply using process filter" filter)))
+
 (defcustom magit-process-timestamp-format nil
   "Format of timestamp for each process in the process buffer.
 If non-nil, pass this to `format-time-string' when creating a
@@ -257,7 +279,7 @@ process section in the process buffer, and insert the returned
 string in the heading of its section."
   :package-version '(magit . "4.0.0")
   :group 'magit-process
-  :type '(choice (const :tag "none" nil) string))
+  :type '(choice (const :tag "None" nil) string))
 
 (defvar tramp-pipe-stty-settings)
 (defvar magit-tramp-pipe-stty-settings ""
@@ -705,9 +727,6 @@ Magit status buffer."
 
 ;;; Process Internals
 
-(defclass magit-process-section (magit-section)
-  ((process :initform nil)))
-
 (setf (alist-get 'process magit--section-type-alist) 'magit-process-section)
 
 (defun magit-process-setup (program args)
@@ -843,6 +862,8 @@ Magit status buffer."
         (setq string (substring string (1+ ret-pos)))
         (delete-region (line-beginning-position) (point)))
       (setq string (magit-process-remove-bogus-errors string))
+      (when (eq magit-process-apply-ansi-colors 'filter)
+        (setq string (ansi-color-apply string)))
       (insert (propertize string 'magit-section
                           (process-get proc 'section)))
       (set-marker (process-mark proc) (point))
@@ -923,7 +944,7 @@ respective documentation.
 
 After manually editing ~/.authinfo.gpg you must reset
 the cache using
-  M-x auth-source-forget-all-cached RET
+  \\`M-x' `auth-source-forget-all-cached' \\`RET'
 
 The above will save you from having to repeatedly type
 your token or password, but you might still repeatedly
@@ -1195,8 +1216,6 @@ Limited by `magit-process-error-tooltip-max-lines'."
 
 (defvar-local magit-this-error nil)
 
-(defvar magit-process-finish-apply-ansi-colors nil)
-
 (defun magit-process-finish (arg &optional process-buf command-buf
                                  default-dir section)
   (unless (integerp arg)
@@ -1256,7 +1275,7 @@ Limited by `magit-process-error-tooltip-max-lines'."
                                               'magit-process-ok
                                             'magit-process-ng)))
       (set-marker-insertion-type marker t))
-    (when magit-process-finish-apply-ansi-colors
+    (when (eq magit-process-apply-ansi-colors t)
       (ansi-color-apply-on-region (oref section content)
                                   (oref section end)))
     (if (= (oref section end)

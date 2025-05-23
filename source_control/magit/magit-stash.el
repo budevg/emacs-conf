@@ -129,8 +129,8 @@ while two prefix arguments are equivalent to `--all'."
   (interactive
    (progn (when (and (magit-merge-in-progress-p)
                      (not (magit-y-or-n-p "\
-Stashing and resetting during a merge conflict. \
-Applying the resulting stash won't restore the merge state. \
+Stashing and resetting during a merge conflict.  \
+Applying the resulting stash won't restore the merge state.  \
 Proceed anyway? ")))
             (user-error "Abort"))
           (magit-stash-read-args)))
@@ -330,7 +330,7 @@ want to fall back to using \"--3way\", without being prompted."
                      (concat
                       "Could not apply stash because of unstaged changes.\n\n"
                       "To do a tree-way merge, these files have to be staged\n"
-                      (mapconcat (lambda (f) (format "  %s" f)) conflicts "\n")
+                      (mapconcat (##format "  %s" %) conflicts "\n")
                       "\n")
                      nil
                    (?s (format
@@ -412,7 +412,7 @@ Then apply STASH, dropping it if it applies cleanly."
 
 ;;;###autoload
 (defun magit-stash-format-patch (stash)
-  "Create a patch from STASH"
+  "Create a patch from STASH."
   (interactive (list (magit-read-stash "Create patch from stash")))
   (with-temp-file (magit-rev-format "0001-%f.patch" stash)
     (magit-git-insert "stash" "show" "-p" stash))

@@ -69,21 +69,17 @@
 (defcustom magit-completing-read-function #'magit-builtin-completing-read
   "Function to be called when requesting input from the user.
 
-If you have enabled `ivy-mode' or `helm-mode', then you don't
-have to customize this option; `magit-builtin-completing-read'
-will work just fine.  However, if you use Ido completion, then
-you do have to use `magit-ido-completing-read', because Ido is
-less well behaved than the former, more modern alternatives.
+The default, `magit-builtin-completing-read', support third-party
+completion frameworks, including `vertico-mode', `ivy-mode' and
+`helm-mode'.
 
-If you would like to use Ivy or Helm completion with Magit but
-not enable the respective modes globally, then customize this
-option to use `ivy-completing-read' or
-`helm--completing-read-default'.  If you choose to use
-`ivy-completing-read', note that the items may always be shown in
-alphabetical order, depending on your version of Ivy."
+However, if you would like to use Ivy or Helm completion with Magit but
+not enable the respective modes globally, then customize this option to
+use `ivy-completing-read' or `helm--completing-read-default'.
+
+If you still use `ido-mode', you'll likely need the `magit-ido' package."
   :group 'magit-essentials
   :type `(radio (function-item ,#'magit-builtin-completing-read)
-                (function-item ,#'magit-ido-completing-read)
                 (function-item ivy-completing-read)
                 (function-item helm--completing-read-default)
                 (function :tag "Other function")))
@@ -129,11 +125,11 @@ The value has the form ((COMMAND nil|PROMPT DEFAULT)...).
   :group 'magit-commands
   :type '(repeat
           (list (symbol :tag "Command") ; It might not be fboundp yet.
-                (choice (const  :tag "for all prompts" nil)
-                        (regexp :tag "for prompts matching regexp"))
-                (choice (const  :tag "offer other choices" nil)
-                        (const  :tag "require confirmation" ask)
-                        (const  :tag "use default without confirmation" t)))))
+                (choice (const  :tag "For all prompts" nil)
+                        (regexp :tag "For prompts matching regexp"))
+                (choice (const  :tag "Offer other choices" nil)
+                        (const  :tag "Require confirmation" ask)
+                        (const  :tag "Use default without confirmation" t)))))
 
 (defconst magit--confirm-actions
   '((const discard)
@@ -467,9 +463,9 @@ and delay of your graphical environment or operating system."
 `woman' View the respective man-page using the `woman' package."
   :package-version '(magit . "2.9.0")
   :group 'magit-miscellaneous
-  :type '(choice (const :tag "view info manual" info)
-                 (const :tag "view manpage using `man'" man)
-                 (const :tag "view manpage using `woman'" woman)))
+  :type '(choice (const :tag "View info manual" info)
+                 (const :tag "View manpage using `man'" man)
+                 (const :tag "View manpage using `woman'" woman)))
 
 ;;; Section Classes
 
@@ -604,21 +600,21 @@ acts similarly to `completing-read', except for the following:
         def)
     (unless def
       (setq def fallback))
+    (when (and def
+               (not (functionp collection))
+               (not (member def collection)))
+      (setq collection (cons def collection)))
     (let ((command this-command)
-          (reply (funcall
-                  magit-completing-read-function
-                  (magit--format-prompt prompt def)
-                  (if (and (not (functionp collection))
-                           def
-                           (not (member def collection)))
-                      (cons def collection)
-                    collection)
-                  predicate
-                  require-match initial-input hist def)))
+          (reply (funcall magit-completing-read-function
+                          (magit--format-prompt prompt def)
+                          collection predicate
+                          require-match initial-input hist def)))
       (setq this-command command)
       ;; Note: Avoid `string=' to support `helm-comp-read-use-marked'.
       (if (equal reply "")
-          (if require-match
+          (if (and require-match
+                   (not (and (listp collection)
+                             (member "" collection))))
               (user-error "Nothing selected")
             nil)
         reply))))
@@ -642,9 +638,13 @@ acts similarly to `completing-read', except for the following:
   (unless (or (bound-and-true-p helm-mode)
               (bound-and-true-p ivy-mode))
     (setq choices (magit--completion-table choices)))
-  (let ((ivy-sort-functions-alist nil)
-        (vertico-sort-function nil))
-    (completing-read prompt choices
+  (let ((ivy-sort-functions-alist nil))
+    (completing-read prompt
+                     (lambda (str pred action)
+                       (if (eq action 'metadata)
+                           '(metadata (display-sort-function . identity)
+                                      (cycle-sort-function . identity))
+                         (complete-with-action action choices str pred)))
                      predicate require-match
                      initial-input hist def)))
 
@@ -694,27 +694,6 @@ third-party completion frameworks."
                 table predicate require-match initial-input
                 hist def inherit-input-method)))
     (if no-split input values)))
-
-(defun magit-ido-completing-read
-    (prompt choices &optional predicate require-match initial-input hist def)
-  "Ido-based `completing-read' almost-replacement.
-
-Unfortunately `ido-completing-read' is not suitable as a
-drop-in replacement for `completing-read', instead we use
-`ido-completing-read+' from the third-party package by the
-same name."
-  (if (and (require 'ido-completing-read+ nil t)
-           (fboundp 'ido-completing-read+))
-      (ido-completing-read+ prompt choices predicate require-match
-                            initial-input hist
-                            (or def (and require-match (car choices))))
-    (display-warning 'magit "ido-completing-read+ is not installed
-
-To use Ido completion with Magit you need to install the
-third-party `ido-completing-read+' packages.  Falling
-back to built-in `completing-read' for now." :error)
-    (magit-builtin-completing-read prompt choices predicate require-match
-                                   initial-input hist def)))
 
 (defvar-keymap magit-minibuffer-local-ns-map
   :parent minibuffer-local-map
@@ -804,12 +783,12 @@ ACTION is a member of option `magit-slow-confirm'."
   (when (and prompt (listp prompt))
     (setq prompt
           (apply #'format (car prompt)
-                 (mapcar (lambda (a) (if (stringp a) (string-replace "%" "%%" a) a))
+                 (mapcar (##if (stringp %) (string-replace "%" "%%" %) %)
                          (cdr prompt)))))
   (when (and prompt-n (listp prompt-n))
     (setq prompt-n
           (apply #'format (car prompt-n)
-                 (mapcar (lambda (a) (if (stringp a) (string-replace "%" "%%" a) a))
+                 (mapcar (##if (stringp %) (string-replace "%" "%%" %) %)
                          (cdr prompt-n)))))
   (setq prompt-n (format (concat (or prompt-n prompt) "? ") (length items)))
   (setq prompt   (format (concat (or prompt (magit-confirm-make-prompt action))
@@ -874,7 +853,7 @@ See info node `(magit)Debugging Tools' for more information."
               `(,(concat invocation-directory invocation-name)
                 "-Q" "--eval" "(setq debug-on-error t)"
                 ,@(mapcan
-                   (lambda (dir) (list "-L" dir))
+                   (##list "-L" %)
                    (delete-dups
                     (mapcan
                      (lambda (lib)
@@ -908,7 +887,7 @@ data, starting with 1 and incrementing by 1 for each symbol.  If
 the last match was against a string, then that has to be provided
 as STRING."
   (declare (indent 2) (debug (listp form body)))
-  (let ((s (cl-gensym "string"))
+  (let ((s (gensym "string"))
         (i 0))
     `(let ((,s ,string))
        (let ,(save-match-data
@@ -1043,7 +1022,7 @@ This function should be named `version>=' and be part of Emacs."
 ;;; Kludges for Emacs Bugs
 
 (defun magit-which-function ()
-  "Return current function name based on point.
+  "Return current function name based on point, without caching.
 
 This is a simple wrapper around `which-function', that resets
 Imenu's potentially outdated and therefore unreliable cache by
@@ -1202,15 +1181,14 @@ Like `message', except that `message-log-max' is bound to nil."
               ellipsis)))
       (user-error "Variable magit-ellipsis is invalid"))))
 
-(defun magit--ext-regexp-quote (str)
+(defun magit--ext-regexp-quote (string)
   "Like `reqexp-quote', but for Extended Regular Expressions."
   (let ((special (string-to-list "[*.\\?+^$({"))
         (quoted nil))
-    (mapc (lambda (c)
-            (when (memq c special)
-              (push ?\\ quoted))
-            (push c quoted))
-          str)
+    (dolist (char string)
+      (when (memq char special)
+        (push ?\\ quoted))
+      (push char quoted))
     (concat (nreverse quoted))))
 
 ;;; _

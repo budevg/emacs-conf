@@ -17,14 +17,14 @@
 ;; Homepage: https://github.com/magit/magit
 ;; Keywords: git tools vc
 
-;; Package-Version: 4.3.0
+;; Package-Version: 4.3.5
 ;; Package-Requires: (
 ;;     (emacs "27.1")
-;;     (compat "30.0.2.0")
-;;     (llama "0.6.0")
-;;     (magit-section "4.3.0")
+;;     (compat "30.1.0.0")
+;;     (llama "0.6.2")
+;;     (magit-section "4.3.5")
 ;;     (seq "2.24")
-;;     (transient "0.8.4")
+;;     (transient "0.8.8")
 ;;     (with-editor "3.4.3"))
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -258,20 +258,20 @@ the current Emacs session.
 
 If the value is nil, no bindings are added.
 
-If `default', maybe add:
+If \\+`default', maybe add:
 
-    C-x g     `magit-status'
-    C-x M-g   `magit-dispatch'
-    C-c M-g   `magit-file-dispatch'
+    \\`C-x' \\`g'     `magit-status'
+    \\`C-x' \\`M-g'   `magit-dispatch'
+    \\`C-c' \\`M-g'   `magit-file-dispatch'
 
 If `recommended', maybe add:
 
-    C-x g     `magit-status'
-    C-c g     `magit-dispatch'
-    C-c f     `magit-file-dispatch'
+    \\`C-x' \\`g'     `magit-status'
+    \\`C-c' \\`g'     `magit-dispatch'
+    \\`C-c' \\`f'     `magit-file-dispatch'
 
     These bindings are strongly recommended, but we cannot use
-    them by default, because the \"C-c <LETTER>\" namespace is
+    them by default, because the \\`C-c <LETTER>' namespace is
     strictly reserved for bindings added by the user.
 
 The bindings in the chosen set may be added when
@@ -439,7 +439,7 @@ This affects `magit-git-command', `magit-git-command-topdir',
 (defun magit-git-command (command)
   "Execute COMMAND asynchronously; display output.
 
-Interactively, prompt for COMMAND in the minibuffer. \"git \" is
+Interactively, prompt for COMMAND in the minibuffer.  \"git \" is
 used as initial input, but can be deleted to run another command.
 
 With a prefix argument COMMAND is run in the top-level directory
@@ -451,7 +451,7 @@ of the current working tree, otherwise in `default-directory'."
 (defun magit-git-command-topdir (command)
   "Execute COMMAND asynchronously; display output.
 
-Interactively, prompt for COMMAND in the minibuffer. \"git \" is
+Interactively, prompt for COMMAND in the minibuffer.  \"git \" is
 used as initial input, but can be deleted to run another command.
 
 COMMAND is run in the top-level directory of the current
@@ -504,6 +504,7 @@ is run in the top-level directory of the current working tree."
 (transient-define-argument magit:--signoff ()
   :description "Add Signed-off-by trailer"
   :class 'transient-switch
+  :key "+s"
   :shortarg "-s"
   :argument "--signoff"
   :level 6)
@@ -569,6 +570,7 @@ is run in the top-level directory of the current working tree."
        (1 'font-lock-keyword-face)
        (2 'font-lock-function-name-face nil t))
       (,(concat "(" (regexp-opt '("magit-insert-section"
+                                  "magit-insert-heading"
                                   "magit-section-case"
                                   "magit-bind-match-strings"
                                   "magit-with-temp-index"
@@ -780,6 +782,7 @@ For X11 something like ~/.xinitrc should work.\n"
     (require 'magit-gitignore)
     (require 'magit-sparse-checkout)
     (require 'magit-extras)
+    (require 'magit-dired)
     (require 'git-rebase)
     (require 'magit-bookmark)))
 

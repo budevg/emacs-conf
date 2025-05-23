@@ -181,8 +181,8 @@ is put in FILE."
     (setq get  (nreverse get))
     (setq make (nreverse make))
     (setq kill (nreverse kill))
-    (let ((mconf (cl-gensym "conf"))
-          (mfile (cl-gensym "file")))
+    (let ((mconf (gensym "conf"))
+          (mfile (gensym "file")))
       `(magit-with-toplevel
          (let ((,mconf (current-window-configuration))
                (,mfile ,file)
@@ -224,8 +224,7 @@ and alternative commands."
     (let* ((dir   (magit-gitdir))
            (revA  (or (magit-name-branch "HEAD")
                       (magit-commit-p "HEAD")))
-           (revB  (cl-find-if (lambda (head)
-                                (file-exists-p (expand-file-name head dir)))
+           (revB  (cl-find-if (##file-exists-p (expand-file-name % dir))
                               '("MERGE_HEAD" "CHERRY_PICK_HEAD" "REVERT_HEAD")))
            (revB  (or (magit-name-branch revB)
                       (magit-commit-p revB)))
@@ -266,7 +265,7 @@ and alternative commands."
                          (save-excursion
                            (goto-char (point-min))
                            (unless (re-search-forward "^<<<<<<< " nil t)
-                             (magit-stage-file file))))))))
+                             (magit-stage-files (list file)))))))))
         (if fileC
             (magit-ediff-buffers
              ((magit-get-revision-buffer revA fileA)

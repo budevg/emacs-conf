@@ -94,11 +94,16 @@ The following %-specs can be used in `heading-format' and
 `margin-format':
 
   %H    hash              using face `magit-blame-hash'
+  %h    truncated hash    using face `magit-blame-hash'
   %s    summary           using face `magit-blame-summary'
   %a    author            using face `magit-blame-name'
   %A    author time       using face `magit-blame-date'
   %c    committer         using face `magit-blame-name'
   %C    committer time    using face `magit-blame-date'
+
+Note that for performance reasons %h results in truncated
+hashes, as opposed to properly abbreviated hashes that are
+guaranteed to uniquely identify a commit.
 
 Additionally if `margin-format' ends with %f, then the string
 that is displayed in the margin is made at least `margin-width'
@@ -107,7 +112,7 @@ the background color.
 
 Blame information is displayed using overlays.  Such extensive
 use of overlays is known to slow down even basic operations, such
-as moving the cursor. To reduce the number of overlays the margin
+as moving the cursor.  To reduce the number of overlays the margin
 style had to be removed from the default value of this option.
 
 Note that the margin overlays are created even if another style
@@ -343,8 +348,7 @@ in `magit-blame-read-only-mode-map' instead."
          (unless magit-blame--style
            (setq magit-blame--style (car magit-blame-styles)))
          (setq magit-blame--make-margin-overlays
-               (and (cl-find-if (lambda (style)
-                                  (assq 'margin-format (cdr style)))
+               (and (cl-find-if (##assq 'margin-format (cdr %))
                                 magit-blame-styles)))
          (magit-blame--update-margin 'enable))
         (t
@@ -702,6 +706,7 @@ modes is toggled, then this mode also gets toggled automatically.
                               (cdr (assoc k2 revinfo)))
                              f)))
               `((?H . ,(p0 rev         'magit-blame-hash))
+                (?h . ,(p0 (magit-blame--abbrev-hash rev)  'magit-blame-hash))
                 (?s . ,(p1 "summary"   'magit-blame-summary))
                 (?a . ,(p1 "author"    'magit-blame-name))
                 (?c . ,(p1 "committer" 'magit-blame-name))
@@ -732,6 +737,13 @@ modes is toggled, then this mode also gets toggled automatically.
                         (seconds-to-time (string-to-number time))
                         tz-in-second)))
 
+(defvar-local magit-blame--abbrev-length nil)
+
+(defun magit-blame--abbrev-hash (rev)
+  (substring rev 0 (or magit-blame--abbrev-length
+                       (setq magit-blame--abbrev-length
+                             (magit-abbrev-length)))))
+
 (defun magit-blame--remove-overlays (&optional beg end)
   (save-restriction
     (widen)
@@ -758,10 +770,9 @@ modes is toggled, then this mode also gets toggled automatically.
 Show the information about the chunk at point in the echo area
 when moving between chunks.  Unlike other blaming commands, do
 not turn on `read-only-mode'."
-  :if (lambda ()
-        (and buffer-file-name
+  :if (##and buffer-file-name
              (or (not magit-blame-mode)
-                 buffer-read-only)))
+                 buffer-read-only))
   (interactive (list (magit-blame-arguments)))
   (when magit-buffer-file-name
     (user-error "Blob buffers aren't supported"))
@@ -815,7 +826,7 @@ not turn on `read-only-mode'."
       (if-let ((chunk (magit-current-blame-chunk)))
           (unless (oref chunk prev-rev)
             (user-error "Chunk has no further history"))
-        (user-error "Commit data not available yet.  Still blaming."))
+        (user-error "Still blaming, commit data not available yet"))
     (unless (magit-file-relative-name nil (not magit-buffer-file-name))
       (if buffer-file-name
           (user-error "Buffer isn't visiting a tracked file")
@@ -883,7 +894,8 @@ then also kill the buffer."
     (user-error "No more chunks")))
 
 (defun magit-blame-next-chunk-same-commit (&optional previous)
-  "Move to the next chunk from the same commit.\n\n(fn)"
+  "Move to the next chunk from the same commit.
+\n(fn)"
   (interactive)
   (if-let ((rev (oref (magit-current-blame-chunk) orig-rev)))
       (let ((pos (point)) ov)

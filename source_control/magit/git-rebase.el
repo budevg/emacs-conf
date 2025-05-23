@@ -181,7 +181,7 @@
 (put 'git-rebase-kill-line    :advertised-binding (kbd "k"))
 
 (easy-menu-define git-rebase-mode-menu git-rebase-mode-map
-  "Git-Rebase mode menu"
+  "Git-Rebase mode menu."
   '("Rebase"
     ["Pick" git-rebase-pick t]
     ["Reword" git-rebase-reword t]
@@ -275,7 +275,8 @@ If the region is active, act on all lines touched by the region."
    (action-options :initarg :action-options :initform nil)
    (target         :initarg :target         :initform nil)
    (trailer        :initarg :trailer        :initform nil)
-   (comment-p      :initarg :comment-p      :initform nil)))
+   (comment-p      :initarg :comment-p      :initform nil)
+   (abbrev)))
 
 (defvar git-rebase-line-regexps
   `((commit . ,(concat
@@ -329,8 +330,8 @@ instance with all nil values is returned."
   "Set action of commit line to ACTION.
 If the region is active, operate on all lines that it touches.
 Otherwise, operate on the current line.  As a special case, an
-ACTION of nil comments the rebase line, regardless of its action
-type."
+ACTION of nil comments or uncomments the rebase line, regardless
+of its action type."
   (pcase (git-rebase-region-bounds t)
     (`(,beg ,end)
      (let ((end-marker (copy-marker end))
@@ -345,9 +346,11 @@ type."
              (let ((inhibit-read-only t))
                (magit-delete-line)
                (insert (concat action " " target " " trailer "\n"))))
-            ((and action-type (not (or action comment-p)))
+            ((and (not action) action-type)
              (let ((inhibit-read-only t))
-               (insert comment-start " "))
+               (if comment-p
+                   (delete-region beg (+ beg 2))
+                 (insert comment-start " ")))
              (forward-line))
             (t
              ;; In the case of --rebase-merges, commit lines may have
@@ -453,7 +456,8 @@ current line."
   (funcall (default-value 'redisplay-unhighlight-region-function) rol))
 
 (defun git-rebase-kill-line ()
-  "Kill the current action line.
+  "Comment the current action line.
+If the action line is already commented, then uncomment it.
 If the region is active, act on all lines touched by the region."
   (interactive)
   (git-rebase-set-action nil))
@@ -588,8 +592,7 @@ commit.  For an upper-case -C, the message will be used as is."
           (insert
            (format "merge %s %s %s\n"
                    (replace-regexp-in-string
-                    "-[cC]" (lambda (c)
-                              (if (equal c "-c") "-C" "-c"))
+                    "-[cC]" (##if (equal % "-c") "-C" "-c")
                     action-options t t)
                    target
                    trailer)))
@@ -787,10 +790,10 @@ running \"man git-rebase\" at the command line) for details."
      (1 'git-rebase-label t))))
 
 (defun git-rebase-mode-show-keybindings ()
-  "Modify the \"Commands:\" section of the comment Git generates
-at the bottom of the file so that in place of the one-letter
-abbreviation for the command, it shows the command's keybinding.
-By default, this is the same except for the \"pick\" command."
+  "Modify the \"Commands:\" section of the comment Git generates.
+Modify that section to replace Git's one-letter command abbreviation,
+with the key bindings used in Magit.  By default, these are the same,
+except for the \"pick\" command."
   (let ((inhibit-read-only t))
     (save-excursion
       (goto-char (point-min))

@@ -58,7 +58,7 @@
    [("p" "Preview merge"          magit-merge-preview)
     ""
     ("s" "Squash merge"           magit-merge-squash)
-    ("i" "Dissolve"               magit-merge-into)]]
+    ("d" "Dissolve"               magit-merge-dissolve)]]
   ["Actions"
    :if magit-merge-in-progress-p
    ("m" "Commit merge" magit-commit-create)
@@ -129,7 +129,7 @@ inspect the merge and change the commit message.
   (magit-run-git-async "merge" "--no-commit" args rev))
 
 ;;;###autoload
-(defun magit-merge-into (branch &optional args)
+(defun magit-merge-dissolve (branch &optional args)
   "Merge the current branch into BRANCH and remove the former.
 
 Before merging, force push the source branch to its push-remote,
@@ -139,14 +139,11 @@ obsolete version of the commits that are being merged.  Finally
 if `forge-branch-pullreq' was used to create the merged branch,
 then also remove the respective remote branch."
   (interactive
-   (list (magit-read-other-local-branch
-          (format "Merge `%s' into"
-                  (or (magit-get-current-branch)
-                      (magit-rev-parse "HEAD")))
-          nil
-          (and-let* ((upstream (magit-get-upstream-branch))
-                     (upstream (cdr (magit-split-branch-name upstream))))
-            (and (magit-branch-p upstream) upstream)))
+   (list (let ((branch (magit-get-current-branch)))
+           (magit-read-other-local-branch
+            (format "Merge `%s' into" (or branch (magit-rev-parse "HEAD")))
+            nil
+            (and branch (magit-get-local-upstream-branch branch))))
          (magit-merge-arguments)))
   (let ((current (magit-get-current-branch))
         (head (magit-rev-parse "HEAD")))
@@ -169,7 +166,7 @@ then also remove the respective remote branch."
                      (magit-merge-arguments)))
   (magit--merge-absorb branch args))
 
-(defun magit--merge-absorb (branch args)
+(defun magit--merge-absorb (branch args &optional message)
   (when (equal branch (magit-main-branch))
     (unless (yes-or-no-p
              (format "Do you really want to merge `%s' into another branch? "
@@ -186,7 +183,9 @@ then also remove the respective remote branch."
                  (magit-process-sentinel process event)
                (process-put process 'inhibit-refresh t)
                (magit-process-sentinel process event)
-               (magit--merge-absorb-1 branch args))))))
+               (magit--merge-absorb-1 branch args))
+             (when message
+               (message message))))))
     (magit--merge-absorb-1 branch args)))
 
 (defun magit--merge-absorb-1 (branch args)

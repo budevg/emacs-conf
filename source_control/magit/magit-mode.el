@@ -234,10 +234,10 @@ and Buffer Variables'."
   :group 'magit-diff
   :group 'magit-log
   :type '(choice
-          (const :tag "always use args from buffer" always)
-          (const :tag "use args from buffer if displayed in frame" selected)
-          (const :tag "use args from buffer if it is current" current)
-          (const :tag "never use args from buffer" never)))
+          (const :tag "Always use args from buffer" always)
+          (const :tag "Use args from buffer if displayed in frame" selected)
+          (const :tag "Use args from buffer if it is current" current)
+          (const :tag "Never use args from buffer" never)))
 
 (defcustom magit-direct-use-buffer-arguments 'selected
   "Whether certain commands reuse arguments active in relevant buffer.
@@ -267,10 +267,10 @@ and Buffer Variables'."
   :group 'magit-diff
   :group 'magit-log
   :type '(choice
-          (const :tag "always use args from buffer" always)
-          (const :tag "use args from buffer if displayed in frame" selected)
-          (const :tag "use args from buffer if it is current" current)
-          (const :tag "never use args from buffer" never)))
+          (const :tag "Always use args from buffer" always)
+          (const :tag "Use args from buffer if displayed in frame" selected)
+          (const :tag "Use args from buffer if it is current" current)
+          (const :tag "Never use args from buffer" never)))
 
 (defcustom magit-region-highlight-hook
   '(magit-diff-update-hunk-region) ; from magit-diff.el
@@ -398,11 +398,11 @@ recommended value."
   ":" 'magit-git-command
   "r" 'magit-rebase
   "R" 'magit-file-rename
-  "s" 'magit-stage-file
+  "s" 'magit-stage-files
   "S" 'magit-stage-modified
   "t" 'magit-tag
   "T" 'magit-notes
-  "u" 'magit-unstage-file
+  "u" 'magit-unstage-files
   "U" 'magit-unstage-all
   "v" 'magit-revert-no-commit
   "V" 'magit-revert
@@ -419,6 +419,7 @@ recommended value."
   "!" 'magit-run
   ">" 'magit-sparse-checkout
   "C-c C-c" 'magit-dispatch
+  "C-c C-r" 'magit-next-reference
   "C-c C-e" 'magit-edit-thing
   "C-c C-o" 'magit-browse-thing
   "C-c C-w" 'magit-copy-thing
@@ -493,7 +494,7 @@ to the kill ring."
               'bug-reference-push-button))
 
 (easy-menu-define magit-mode-menu magit-mode-map
-  "Magit menu"
+  "Magit menu."
   ;; Similar to `magit-dispatch' but exclude:
   ;; - commands that are available from context menus:
   ;;   apply, reverse, discard, stage, unstage,
@@ -888,17 +889,7 @@ If a frame, then only consider buffers on that frame."
       (setq magit--default-directory default-directory)
       (setq magit-buffer-locked-p (and value t))
       (magit-restore-section-visibility-cache mode))
-    (when magit-uniquify-buffer-names
-      (cl-pushnew mode uniquify-list-buffers-directory-modes)
-      (with-current-buffer buffer
-        (setq list-buffers-directory (abbreviate-file-name default-directory)))
-      (let ((uniquify-buffer-name-style
-             (if (memq uniquify-buffer-name-style '(nil forward))
-                 'post-forward-angle-brackets
-               uniquify-buffer-name-style)))
-        (uniquify-rationalize-file-buffer-names
-         name (file-name-directory (directory-file-name default-directory))
-         buffer)))
+    (magit--maybe-uniquify-buffer-names buffer name mode)
     buffer))
 
 (defun magit-generate-buffer-name-default-function (mode &optional value)
@@ -920,6 +911,19 @@ account."
        (?V . ,(if v (concat " " v) ""))
        (?t . ,n)
        (?x . ,(if magit-uniquify-buffer-names "" "*"))))))
+
+(defun magit--maybe-uniquify-buffer-names (buffer name mode)
+  (when magit-uniquify-buffer-names
+    (cl-pushnew mode uniquify-list-buffers-directory-modes)
+    (with-current-buffer buffer
+      (setq list-buffers-directory (abbreviate-file-name default-directory)))
+    (let ((uniquify-buffer-name-style
+           (if (memq uniquify-buffer-name-style '(nil forward))
+               'post-forward-angle-brackets
+             uniquify-buffer-name-style)))
+      (uniquify-rationalize-file-buffer-names
+       name (file-name-directory (directory-file-name default-directory))
+       buffer))))
 
 ;;; Buffer Lock
 
@@ -946,16 +950,25 @@ latter is displayed in its place."
             (switch-to-buffer unlocked nil t)
             (kill-buffer locked))
         (setq magit-buffer-locked-p nil)
-        (rename-buffer (funcall magit-generate-buffer-name-function
-                                major-mode)))
+        (let ((name (funcall magit-generate-buffer-name-function major-mode))
+              (buffer (current-buffer))
+              (mode major-mode))
+          (rename-buffer (generate-new-buffer-name name))
+          (with-temp-buffer
+            (magit--maybe-uniquify-buffer-names buffer name mode))))
     (if-let ((value (magit-buffer-value)))
         (if-let ((locked (magit-get-mode-buffer major-mode value)))
             (let ((unlocked (current-buffer)))
               (switch-to-buffer locked nil t)
               (kill-buffer unlocked))
           (setq magit-buffer-locked-p t)
-          (rename-buffer (funcall magit-generate-buffer-name-function
-                                  major-mode value)))
+          (let ((name (funcall magit-generate-buffer-name-function
+                               major-mode value))
+                (buffer (current-buffer))
+                (mode major-mode))
+            (rename-buffer (generate-new-buffer-name name))
+            (with-temp-buffer
+              (magit--maybe-uniquify-buffer-names buffer name mode))))
       (user-error "Buffer has no value it could be locked to"))))
 
 ;;; Bury Buffer
@@ -1118,9 +1131,8 @@ Run hooks `magit-pre-refresh-hook' and `magit-post-refresh-hook'."
   (interactive)
   (require (quote elp))
   (cond ((catch 'in-progress
-           (mapatoms (lambda (symbol)
-                       (and (get symbol elp-timer-info-property)
-                            (throw 'in-progress t)))))
+           (mapatoms (##and (get % elp-timer-info-property)
+                            (throw 'in-progress t))))
          (message "Stop profiling and display results...")
          (elp-results)
          (elp-restore-all))
@@ -1141,12 +1153,13 @@ Run hooks `magit-pre-refresh-hook' and `magit-post-refresh-hook'."
 (defvar magit-after-save-refresh-buffers nil)
 
 (defun magit-after-save-refresh-buffers ()
-  (dolist (buffer magit-after-save-refresh-buffers)
-    (when (buffer-live-p buffer)
-      (with-current-buffer buffer
-        (magit-refresh-buffer))))
-  (setq magit-after-save-refresh-buffers nil)
-  (remove-hook 'post-command-hook #'magit-after-save-refresh-buffers))
+  (unless magit-inhibit-refresh
+    (dolist (buffer magit-after-save-refresh-buffers)
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (magit-refresh-buffer))))
+    (setq magit-after-save-refresh-buffers nil)
+    (remove-hook 'post-command-hook #'magit-after-save-refresh-buffers)))
 
 (defun magit-after-save-refresh-status ()
   "Refresh the status buffer of the current repository.
@@ -1195,14 +1208,12 @@ argument (the prefix) non-nil means save all with no questions."
   (when-let ((topdir (magit-rev-parse-safe "--show-toplevel")))
     (let ((remote (file-remote-p default-directory))
           (save-some-buffers-action-alist
-           `((?Y (lambda (buffer)
-                   (with-current-buffer buffer
-                     (setq buffer-save-without-query t)
-                     (save-buffer)))
+           `((?Y (##with-current-buffer %
+                   (setq buffer-save-without-query t)
+                   (save-buffer))
                  "to save the current buffer and remember choice")
-             (?N (lambda (buffer)
-                   (with-current-buffer buffer
-                     (setq magit-inhibit-refresh-save t)))
+             (?N (##with-current-buffer %
+                   (setq magit-inhibit-refresh-save t))
                  "to skip the current buffer and remember choice")
              ,@save-some-buffers-action-alist))
           (topdirs nil)
@@ -1425,7 +1436,7 @@ repositories."
 
 (defmacro magit--with-repository-local-cache (key &rest body)
   (declare (indent 1) (debug (form body)))
-  (let ((k (cl-gensym)))
+  (let ((k (gensym)))
     `(let ((,k ,key))
        (if-let ((kv (magit-repository-local-exists-p ,k)))
            (cdr kv)

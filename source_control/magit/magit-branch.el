@@ -46,9 +46,9 @@
            new branch and continue by reading the upstream next."
   :package-version '(magit . "2.2.0")
   :group 'magit-commands
-  :type '(choice (const :tag "read branch name first" nil)
-                 (const :tag "read upstream first" t)
-                 (const :tag "read upstream first, with fallback" fallback)))
+  :type '(choice (const :tag "Read branch name first" nil)
+                 (const :tag "Read upstream first" t)
+                 (const :tag "Read upstream first, with fallback" fallback)))
 
 (defcustom magit-branch-prefer-remote-upstream nil
   "Whether to favor remote upstreams when creating new branches.
@@ -154,10 +154,10 @@ However, I recommend that you use local branches as UPSTREAM."
   :package-version '(magit . "2.9.0")
   :group 'magit-commands
   :type '(repeat (cons (string :tag "Use upstream")
-                       (choice :tag "for branches"
-                               (regexp :tag "matching")
-                               (repeat :tag "except"
-                                       (string :tag "branch"))))))
+                       (choice :tag "For branches" ;???
+                               (regexp :tag "Matching")
+                               (repeat :tag "Except"
+                                       (string :tag "Branch"))))))
 
 (defcustom magit-branch-rename-push-target t
   "Whether the push-remote setup is preserved when renaming a branch.
@@ -208,11 +208,10 @@ has to be used to view and change branch related variables."
 (transient-define-prefix magit-branch (branch)
   "Add, configure or remove a branch."
   :man-page "git-branch"
-  [:if (lambda () (and magit-branch-direct-configure (transient-scope)))
-   :description
-   (lambda ()
-     (concat (propertize "Configure " 'face 'transient-heading)
-             (propertize (transient-scope) 'face 'magit-branch-local)))
+  [:if (##and magit-branch-direct-configure (transient-scope))
+   :description (##concat
+                 (propertize "Configure " 'face 'transient-heading)
+                 (propertize (transient-scope) 'face 'magit-branch-local))
    ("d" magit-branch.<branch>.description)
    ("u" magit-branch.<branch>.merge/remote)
    ("r" magit-branch.<branch>.rebase)
@@ -612,7 +611,7 @@ prompt is confusing."
     ;; the respective branch name is ambiguous.
     (when-let ((ambiguous (seq-filter #'null refs)))
       (user-error
-       "%s ambiguous.  Please cleanup using git directly."
+       "%s ambiguous; please cleanup using git directly"
        (let ((len (length ambiguous)))
          (cond
           ((= len 1)
@@ -796,7 +795,7 @@ the remote."
               (remote (magit-get-push-remote new)))
           (when (and old-target
                      (not new-target)
-                     (magit-y-or-n-p (format "Also rename %S to %S on \"%s\""
+                     (magit-y-or-n-p (format "Also rename %S to %S on \"%s\"?"
                                              old new remote)))
             ;; Rename on (i.e., within) the remote, but only if the
             ;; destination ref doesn't exist yet.  If that ref already
@@ -813,11 +812,13 @@ the remote."
 ;;;###autoload
 (defun magit-branch-shelve (branch)
   "Shelve a BRANCH.
-Rename \"refs/heads/BRANCH\" to \"refs/shelved/BRANCH\",
+Rename \"refs/heads/BRANCH\" to \"refs/shelved/YYYY-MM-DD-BRANCH\",
 and also rename the respective reflog file."
   (interactive (list (magit-read-other-local-branch "Shelve branch")))
-  (let ((old (concat "refs/heads/"   branch))
-        (new (concat "refs/shelved/" branch)))
+  (let ((old (concat "refs/heads/" branch))
+        (new (format "refs/shelved/%s-%s"
+                     (magit-rev-format "%cs" branch)
+                     branch)))
     (magit-git "update-ref" new old "")
     (magit--rename-reflog-file old new)
     (magit-branch-unset-pushRemote branch)
@@ -825,17 +826,22 @@ and also rename the respective reflog file."
 
 ;;;###autoload
 (defun magit-branch-unshelve (branch)
-  "Unshelve a BRANCH
-Rename \"refs/shelved/BRANCH\" to \"refs/heads/BRANCH\",
-and also rename the respective reflog file."
+  "Unshelve a BRANCH.
+Rename \"refs/shelved/BRANCH\" to \"refs/heads/BRANCH\".  If BRANCH
+is prefixed with \"YYYY-MM-DD\", then drop that part of the name.
+Also rename the respective reflog file."
   (interactive
    (list (magit-completing-read
           "Unshelve branch"
           (mapcar (##substring % 8)
-                  (magit-list-refnames "refs/shelved"))
+                  (nreverse (magit-list-refnames "refs/shelved")))
           nil t)))
   (let ((old (concat "refs/shelved/" branch))
-        (new (concat "refs/heads/"   branch)))
+        (new (concat "refs/heads/"
+                     (if (string-match-p
+                          "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}-" branch)
+                         (substring branch 11)
+                       branch))))
     (magit-git "update-ref" new old "")
     (magit--rename-reflog-file old new)
     (magit-run-git "update-ref" "-d" old)))
@@ -854,10 +860,9 @@ and also rename the respective reflog file."
 (transient-define-prefix magit-branch-configure (branch)
   "Configure a branch."
   :man-page "git-branch"
-  [:description
-   (lambda ()
-     (concat (propertize "Configure " 'face 'transient-heading)
-             (propertize (transient-scope) 'face 'magit-branch-local)))
+  [:description (##concat
+                 (propertize "Configure " 'face 'transient-heading)
+                 (propertize (transient-scope) 'face 'magit-branch-local))
    ("d" magit-branch.<branch>.description)
    ("u" magit-branch.<branch>.merge/remote)
    ("r" magit-branch.<branch>.rebase)

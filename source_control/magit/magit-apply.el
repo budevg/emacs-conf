@@ -137,11 +137,9 @@ so causes the change to be applied to the index as well."
 (defun magit-apply-diffs (sections &rest args)
   (setq sections (magit-apply--get-diffs sections))
   (magit-apply-patch sections args
-                     (mapconcat
-                      (lambda (s)
-                        (concat (magit-diff-file-header s)
-                                (magit-apply--section-content s)))
-                      sections "")))
+                     (mapconcat (##concat (magit-diff-file-header %)
+                                          (magit-apply--section-content %))
+                                sections "")))
 
 (defun magit-apply-diff (section &rest args)
   (setq section (car (magit-apply--get-diffs (list section))))
@@ -229,10 +227,11 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
       (magit-wip-commit-before-change files (concat " before " command)))
     (with-temp-buffer
       (insert patch)
-      (magit-run-git-with-input
-       "apply" args "-p0"
-       (and ignore-context "-C0")
-       "--ignore-space-change" "-"))
+      (let ((magit-inhibit-refresh t))
+        (magit-run-git-with-input
+         "apply" args "-p0"
+         (and ignore-context "-C0")
+         "--ignore-space-change" "-")))
     (unless magit-inhibit-refresh
       (when magit-wip-after-apply-mode
         (magit-wip-commit-after-apply files (concat " after " command)))
@@ -243,9 +242,10 @@ adjusted as \"@@ -10,6 +10,7 @@\" and \"@@ -18,6 +19,7 @@\"."
       (let ((section (magit-current-section)))
         (pcase (oref section type)
           ((or 'hunk 'file 'module) section)
-          ((or 'staged 'unstaged 'untracked
+          ((or 'staged 'unstaged
                'stashed-index 'stashed-worktree 'stashed-untracked)
            (oref section children))
+          ('untracked t)
           (_ (user-error "Cannot apply this, it's not a change"))))))
 
 (defun magit-apply--get-diffs (sections)
@@ -273,8 +273,7 @@ return nil, possibly causing whitespace changes to be applied."
                                    "--ignore-all-space"
                                    "--ignore-blank-lines")))
                    magit-buffer-diff-args)
-       (not (cl-find-if (lambda (section)
-                          (oref section binary))
+       (not (cl-find-if (##oref % binary)
                         (ensure-list selection)))))
 
 ;;;; Stage
@@ -303,23 +302,10 @@ at point, stage the file but not its content."
         (`(staged        ,_  ,_) (user-error "Already staged"))
         (`(committed     ,_  ,_) (user-error "Cannot stage committed changes"))
         (`(undefined     ,_  ,_) (user-error "Cannot stage this change")))
-    (call-interactively #'magit-stage-file)))
+    (call-interactively #'magit-stage-files)))
 
 ;;;###autoload
-(defun magit-stage-buffer-file ()
-  "Stage all changes to the file being visited in the current buffer."
-  (interactive)
-  (unless buffer-file-name
-    (user-error "Not visiting a file"))
-  (magit-with-toplevel
-    (magit-stage-1 (and (magit-file-ignored-p buffer-file-name)
-                        (if (y-or-n-p "Visited file is ignored; stage anyway?")
-                            "--force"
-                          (user-error "Abort")))
-                   (list (magit-file-relative-name)))))
-
-;;;###autoload
-(defun magit-stage-file (files &optional force)
+(defun magit-stage-files (files &optional force)
   "Read one or more files and stage all changes in those files.
 With prefix argument FORCE, offer ignored files for completion."
   (interactive
@@ -335,10 +321,7 @@ With prefix argument FORCE, offer ignored files for completion."
             choices nil t nil nil default)
            current-prefix-arg)))
   (magit-with-toplevel
-    ;; For backward compatibility, and because of
-    ;; the function's name, don't require a list.
-    (magit-stage-1 (and force "--force")
-                   (ensure-list files))))
+    (magit-stage-1 (and force "--force") files)))
 
 ;;;###autoload
 (defun magit-stage-modified (&optional all)
@@ -378,39 +361,39 @@ ignored) files."
                      "--" plain)
       (when magit-auto-revert-mode
         (mapc #'magit-turn-on-auto-revert-mode-if-desired plain)))
-    (dolist (repo repos)
-      (save-excursion
-        (goto-char (oref (magit-get-section
-                          `((file . ,repo) (untracked) (status)))
-                         start))
-        (when (and (fboundp 'borg-assimilate)
-                   (fboundp 'borg--maybe-absorb-gitdir)
-                   (fboundp 'borg--sort-submodule-sections))
-          (let* ((topdir (magit-toplevel))
-                 (url (let ((default-directory
-                             (file-name-as-directory (expand-file-name repo))))
-                        (or (magit-get "remote" (magit-get-some-remote) "url")
-                            (concat (file-name-as-directory ".") repo))))
-                 (package
-                  (and (equal borg-user-emacs-directory topdir)
-                       (file-name-nondirectory (directory-file-name repo)))))
-            (if (and package
-                     (y-or-n-p (format "Also assimilate `%s' drone?" package)))
-                (borg-assimilate package url)
-              (magit-submodule-add-1
-               url repo (magit-submodule-read-name-for-path repo package))
-              (when package
-                (borg--sort-submodule-sections
-                 (expand-file-name ".gitmodules" topdir))
-                (let ((default-directory borg-user-emacs-directory))
-                  (borg--maybe-absorb-gitdir package))))))))
+    (when (and (fboundp 'borg-assimilate)
+               (fboundp 'borg--maybe-absorb-gitdir)
+               (fboundp 'borg--sort-submodule-sections))
+      (dolist (repo repos)
+        (save-excursion
+          (when-let ((section (magit-get-section
+                               `((file . ,repo) (untracked) (status)))))
+            (goto-char (oref section start))
+            (let* ((topdir (magit-toplevel))
+                   (url (let ((default-directory
+                               (file-name-as-directory (expand-file-name repo))))
+                          (or (magit-get "remote" (magit-get-some-remote) "url")
+                              (concat (file-name-as-directory ".") repo))))
+                   (package
+                    (and (equal borg-user-emacs-directory topdir)
+                         (file-name-nondirectory (directory-file-name repo)))))
+              (if (and package
+                       (y-or-n-p (format "Also assimilate `%s' drone?" package)))
+                  (borg-assimilate package url)
+                (magit-submodule-add-1
+                 url repo (magit-submodule-read-name-for-path repo package))
+                (when package
+                  (borg--sort-submodule-sections
+                   (expand-file-name ".gitmodules" topdir))
+                  (let ((default-directory borg-user-emacs-directory))
+                    (borg--maybe-absorb-gitdir package)))))))))
     (magit-wip-commit-after-apply files " after stage")))
 
 (defvar magit-post-stage-hook-commands
   (list #'magit-stage
-        #'magit-stage-buffer-file
-        #'magit-stage-file
-        #'magit-stage-modified))
+        #'magit-stage-files
+        #'magit-stage-modified
+        'magit-file-stage))
 
 (defun magit-run-post-stage-hook ()
   (when (memq this-command magit-post-stage-hook-commands)
@@ -445,16 +428,7 @@ ignored) files."
       (`(undefined     ,_  ,_) (user-error "Cannot unstage this change")))))
 
 ;;;###autoload
-(defun magit-unstage-buffer-file ()
-  "Unstage all changes to the file being visited in the current buffer."
-  (interactive)
-  (unless buffer-file-name
-    (user-error "Not visiting a file"))
-  (magit-with-toplevel
-    (magit-unstage-1 (list (magit-file-relative-name)))))
-
-;;;###autoload
-(defun magit-unstage-file (files)
+(defun magit-unstage-files (files)
   "Read one or more files and unstage all changes to those files."
   (interactive
    (let* ((choices (magit-staged-files))
@@ -464,9 +438,7 @@ ignored) files."
      (list (magit-completing-read-multiple "Unstage file,s: " choices
                                            nil t nil nil default))))
   (magit-with-toplevel
-    ;; For backward compatibility, and because of
-    ;; the function's name, don't require a list.
-    (magit-unstage-1 (ensure-list files))))
+    (magit-unstage-1 files)))
 
 (defun magit-unstage-1 (files)
   (magit-wip-commit-before-change files " before unstage")
@@ -496,9 +468,9 @@ ignored) files."
 
 (defvar magit-post-unstage-hook-commands
   (list #'magit-unstage
-        #'magit-unstage-buffer-file
-        #'magit-unstage-file
-        #'magit-unstage-all))
+        #'magit-unstage-files
+        #'magit-unstage-all
+        'magit-file-unstage))
 
 (defun magit-run-post-unstage-hook ()
   (when (memq this-command magit-post-unstage-hook-commands)
@@ -515,14 +487,18 @@ of a side, then keep that side without prompting."
   (interactive)
   (when-let ((s (magit-apply--get-selection)))
     (pcase (list (magit-diff-type) (magit-diff-scope))
-      (`(committed ,_) (user-error "Cannot discard committed changes"))
-      (`(undefined ,_) (user-error "Cannot discard this change"))
-      (`(,_    region) (magit-discard-region s))
-      (`(,_      hunk) (magit-discard-hunk   s))
-      (`(,_     hunks) (magit-discard-hunks  s))
-      (`(,_      file) (magit-discard-file   s))
-      (`(,_     files) (magit-discard-files  s))
-      (`(,_      list) (magit-discard-files  s)))))
+      (`(committed   ,_) (user-error "Cannot discard committed changes"))
+      (`(undefined   ,_) (user-error "Cannot discard this change"))
+      (`(untracked list) (magit-discard-files--delete
+                          (magit-with-toplevel
+                            (magit-untracked-files nil nil "--directory"))
+                          nil))
+      (`(,_      region) (magit-discard-region s))
+      (`(,_        hunk) (magit-discard-hunk   s))
+      (`(,_       hunks) (magit-discard-hunks  s))
+      (`(,_        file) (magit-discard-file   s))
+      (`(,_       files) (magit-discard-files  s))
+      (`(,_        list) (magit-discard-files  s)))))
 
 (defun magit-discard-region (section)
   (magit-confirm 'discard "Discard region")
@@ -623,9 +599,7 @@ of a side, then keep that side without prompting."
                      (magit-read-char-case
                          (format "For these %d files\n%s\ncheckout:\n"
                                  (length files)
-                                 (mapconcat (lambda (file)
-                                              (concat "  " file))
-                                            files "\n"))
+                                 (mapconcat (##concat "  " %) files "\n"))
                          t
                        (?o "[o]ur stage"   "--ours")
                        (?t "[t]heir stage" "--theirs")

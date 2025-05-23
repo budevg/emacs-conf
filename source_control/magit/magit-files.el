@@ -210,7 +210,7 @@ is done using `magit-find-index-noselect'."
   (let ((file (magit-file-relative-name)))
     (unless (equal magit-buffer-refname "{index}")
       (user-error "%s isn't visiting the index" file))
-    (if (y-or-n-p (format "Update index with contents of %s" (buffer-name)))
+    (if (y-or-n-p (format "Update index with contents of %s?" (buffer-name)))
         (let ((index (make-temp-name
                       (expand-file-name "magit-update-index-" (magit-gitdir))))
               (buffer (current-buffer)))
@@ -300,8 +300,10 @@ to `magit-dispatch'."
   :info-manual "(magit) Minor Mode for Buffers Visiting Files"
   [:if magit-file-relative-name
    ["File actions"
-    ("  s" "Stage"    magit-stage-buffer-file)
-    ("  u" "Unstage"  magit-unstage-buffer-file)
+    ("  s" "Stage"    magit-file-stage :if-not-derived dired-mode)
+    ("  s" "Stage"    magit-dired-stage :if-derived dired-mode)
+    ("  u" "Unstage"  magit-file-unstage :if-not-derived dired-mode)
+    ("  u" "Unstage"  magit-dired-unstage :if-derived dired-mode)
     (", x" "Untrack"  magit-file-untrack)
     (", r" "Rename"   magit-file-rename)
     (", k" "Delete"   magit-file-delete)
@@ -311,9 +313,10 @@ to `magit-dispatch'."
     ("d" "Diff"       magit-diff-buffer-file)]
    [""
     ("L" "Log..."     magit-log)
-    ("l" "Log"        magit-log-buffer-file)
+    ("l" "Log"        magit-log-buffer-file :if-not-derived dired-mode)
+    ("l" "Log"        magit-dired-log :if-derived dired-mode)
     ("t" "Trace"      magit-log-trace-definition)
-    (7 "M" "Merged"   magit-log-merged)]
+    ("M" "Merged"     magit-log-merged :level 7)]
    [""
     ("B" "Blame..."   magit-blame)
     ("b" "Blame"      magit-blame-addition)
@@ -333,8 +336,8 @@ to `magit-dispatch'."
     ("e" "Edit line"  magit-edit-line-commit)]]
   [:if-not magit-file-relative-name
    ["File actions"
-    ("s" "Stage"    magit-stage-file)
-    ("u" "Unstage"  magit-unstage-file)
+    ("s" "Stage"    magit-stage-files)
+    ("u" "Unstage"  magit-unstage-files)
     ("x" "Untrack"  magit-file-untrack)
     ("r" "Rename"   magit-file-rename)
     ("k" "Delete"   magit-file-delete)
@@ -419,6 +422,44 @@ the same location in the respective file in the working tree."
 
 ;;; File Commands
 
+;;;###autoload
+(defun magit-file-stage ()
+  "Stage all changes to the file being visited in the current buffer."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Not visiting a file"))
+  (magit-with-toplevel
+    (magit-stage-1 (and (magit-file-ignored-p buffer-file-name)
+                        (if (y-or-n-p "Visited file is ignored; stage anyway?")
+                            "--force"
+                          (user-error "Abort")))
+                   (list (magit-file-relative-name)))))
+
+;;;###autoload
+(defun magit-file-unstage ()
+  "Unstage all changes to the file being visited in the current buffer."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Not visiting a file"))
+  (magit-with-toplevel
+    (magit-unstage-1 (list (magit-file-relative-name)))))
+
+;;;###autoload
+(defun magit-file-untrack (files &optional force)
+  "Untrack the selected FILES or one file read in the minibuffer.
+
+With a prefix argument FORCE do so even when the files have
+staged as well as unstaged changes."
+  (interactive (list (or (if-let ((files (magit-region-values 'file t)))
+                             (if (magit-file-tracked-p (car files))
+                                 (magit-confirm-files 'untrack files "Untrack")
+                               (user-error "Already untracked"))
+                           (list (magit-read-tracked-file "Untrack file"))))
+                     current-prefix-arg))
+  (magit-with-toplevel
+    (magit-run-git "rm" "--cached" (and force "--force") "--" files)))
+
+;;;###autoload
 (defun magit-file-rename (file newname)
   "Rename or move FILE to NEWNAME.
 NEWNAME may be a file or directory name.  If FILE isn't tracked in
@@ -455,20 +496,7 @@ Git, fallback to using `rename-file'."
             (vc-find-file-hook))))))
   (magit-refresh))
 
-(defun magit-file-untrack (files &optional force)
-  "Untrack the selected FILES or one file read in the minibuffer.
-
-With a prefix argument FORCE do so even when the files have
-staged as well as unstaged changes."
-  (interactive (list (or (if-let ((files (magit-region-values 'file t)))
-                             (if (magit-file-tracked-p (car files))
-                                 (magit-confirm-files 'untrack files "Untrack")
-                               (user-error "Already untracked"))
-                           (list (magit-read-tracked-file "Untrack file"))))
-                     current-prefix-arg))
-  (magit-with-toplevel
-    (magit-run-git "rm" "--cached" (and force "--force") "--" files)))
-
+;;;###autoload
 (defun magit-file-delete (files &optional force)
   "Delete the selected FILES or one file read in the minibuffer.
 
@@ -556,5 +584,12 @@ If DEFAULT is non-nil, use this as the default value instead of
    (concat "No file changed in " rev-or-range)))
 
 ;;; _
+
+(define-obsolete-function-alias 'magit-stage-buffer-file
+  'magit-file-stage "Magit 4.3.2")
+
+(define-obsolete-function-alias 'magit-unstage-buffer-file
+  'magit-file-unstage "Magit 4.3.2")
+
 (provide 'magit-files)
 ;;; magit-files.el ends here

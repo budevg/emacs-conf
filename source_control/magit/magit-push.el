@@ -39,13 +39,13 @@
    ("-F" "Force"            ("-f" "--force"))
    ("-h" "Disable hooks"    "--no-verify")
    ("-n" "Dry run"          ("-n" "--dry-run"))
-   (5 "-u" "Set upstream"   "--set-upstream")
-   (7 "-t" "Follow tags"    "--follow-tags")]
+   ("-u" "Set upstream"   "--set-upstream" :level 5)
+   ("-T" "Include all tags" "--tags")
+   ("-t" "Include related annotated tags" "--follow-tags")]
   [:if magit-get-current-branch
-   :description (lambda ()
-                  (format (propertize "Push %s to" 'face 'transient-heading)
+   :description (##format (propertize "Push %s to" 'face 'transient-heading)
                           (propertize (magit-get-current-branch)
-                                      'face 'magit-branch-local)))
+                                      'face 'magit-branch-local))
    ("p" magit-push-current-to-pushremote)
    ("u" magit-push-current-to-upstream)
    ("e" "elsewhere" magit-push-current)]

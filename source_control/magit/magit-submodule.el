@@ -20,11 +20,15 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with Magit.  If not, see <https://www.gnu.org/licenses/>.
 
+;;; Commentary:
+
+;; This library implements support for "git submodule".
+
+;; See (info "(magit)Submodules").
+
 ;;; Code:
 
 (require 'magit)
-
-(defvar x-stretch-cursor)
 
 ;;; Options
 
@@ -214,25 +218,19 @@ it is nil, then PATH also becomes the name."
   (interactive
    (magit-with-toplevel
      (let* ((url (magit-read-string-ns "Add submodule (remote url)"))
-            (path (let ((read-file-name-function
-                         (if (or (eq read-file-name-function 'ido-read-file-name)
-                                 (advice-function-member-p
-                                  'ido-read-file-name
-                                  read-file-name-function))
-                             ;; The Ido variant doesn't work properly here.
-                             #'read-file-name-default
-                           read-file-name-function)))
-                    (directory-file-name
-                     (file-relative-name
-                      (read-directory-name
-                       "Add submodules at path: " nil nil nil
-                       (and (string-match "\\([^./]+\\)\\(\\.git\\)?$" url)
-                            (match-string 1 url))))))))
+            (path (magit-submodule-read-path "Add submodules at path: " url)))
        (list url
              (directory-file-name path)
              (magit-submodule-read-name-for-path path)
              (magit-submodule-arguments "--force")))))
   (magit-submodule-add-1 url path name args))
+
+(defun magit-submodule-read-path (prompt url)
+  (directory-file-name
+   (file-relative-name
+    (read-directory-name prompt nil nil nil
+                         (and (string-match "\\([^./]+\\)\\(\\.git\\)?$" url)
+                              (match-string 1 url))))))
 
 (defun magit-submodule-add-1 (url &optional path name args)
   (magit-with-toplevel
@@ -519,9 +517,9 @@ or, failing that, the abbreviated HEAD commit hash."
   :doc "Keymap for `module' sections."
   "C-j"        #'magit-submodule-visit
   "C-<return>" #'magit-submodule-visit
-  "<remap> <magit-unstage-file>" #'magit-unstage
-  "<remap> <magit-stage-file>"   #'magit-stage
-  "<remap> <magit-visit-thing>"  #'magit-submodule-visit
+  "<remap> <magit-unstage-files>" #'magit-unstage
+  "<remap> <magit-stage-files>"   #'magit-stage
+  "<remap> <magit-visit-thing>"   #'magit-submodule-visit
   "<5>" (magit-menu-item "Module commands..." #'magit-submodule)
   "<4>" '(menu-item "--")
   "<3>" (magit-menu-item "Unstage %T" #'magit-unstage

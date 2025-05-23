@@ -180,14 +180,14 @@ repositories are displayed."
   "Fetch all marked or listed repositories."
   (interactive (list (magit-repolist--get-repos ?*)))
   (run-hooks 'magit-credential-hook)
-  (magit-repolist--mapc (apply-partially #'magit-run-git "remote" "update")
+  (magit-repolist--mapc (##magit-run-git "remote" "update")
                         repos "Fetching in %s..."))
 
 (defun magit-repolist-find-file-other-frame (repos file)
   "Find a file in all marked or listed repositories."
   (interactive (list (magit-repolist--get-repos ?*)
                      (read-string "Find file in repositories: ")))
-  (magit-repolist--mapc (apply-partially #'find-file-other-frame file) repos))
+  (magit-repolist--mapc (##find-file-other-frame file) repos))
 
 (defun magit-repolist--ensure-padding ()
   "Set `tabulated-list-padding' to 2, unless that is already non-zero."
@@ -242,17 +242,16 @@ If it contains \"%s\" then the directory is substituted for that."
   (let ((base default-directory)
         (len (length repos))
         (i 0))
-    (mapc (lambda (repo)
-            (let ((default-directory
-                   (file-name-as-directory (expand-file-name repo base))))
-              (if msg
-                  (let ((msg (concat (format "(%s/%s) " (cl-incf i) len)
-                                     (format msg default-directory))))
-                    (message msg)
-                    (funcall fn)
-                    (message (concat msg "done")))
-                (funcall fn))))
-          repos)))
+    (dolist (repo repos)
+      (let ((default-directory
+             (file-name-as-directory (expand-file-name repo base))))
+        (if msg
+            (let ((msg (concat (format "(%s/%s) " (cl-incf i) len)
+                               (format msg default-directory))))
+              (message msg)
+              (funcall fn)
+              (message (concat msg "done")))
+          (funcall fn))))))
 
 ;;;; Mode
 
