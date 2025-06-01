@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: yt-dlp-get
+# key: mpv
+# --
+yt-dlp -f 'bestvideo[height<=?${1:$$(yas-choose-value '("480" "720" "1080"))}]+bestaudio/best' '${2:url}'$0

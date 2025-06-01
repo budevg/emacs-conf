@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: yt-dlp-ls
+# key: mpv
+# --
+yt-dlp -F '${1:url}'$0
