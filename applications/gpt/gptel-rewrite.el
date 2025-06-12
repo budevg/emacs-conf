@@ -87,9 +87,9 @@ overlay."
 
 (defface gptel-rewrite-highlight-face
   '((((class color) (min-colors 88) (background dark))
-     :background "#041714" :extend t)
+     :background "#041714" :extend t :inherit default)
     (((class color) (min-colors 88) (background light))
-     :background "light goldenrod yellow" :extend t)
+     :background "light goldenrod yellow" :extend t :inherit default)
     (t :inherit secondary-selection))
   "Face for highlighting regions with pending rewrites."
   :group 'gptel)
@@ -292,10 +292,7 @@ BUF is the buffer to modify, defaults to the overlay buffer."
               ((buffer-live-p ov-buf)))
     (require 'diff)
     (let* ((newbuf (gptel--rewrite-prepare-buffer ovs))
-           (diff-buf (diff-no-select
-                      (if-let* ((buf-file (buffer-file-name ov-buf)))
-                          (expand-file-name buf-file) ov-buf)
-                      newbuf switches)))
+           (diff-buf (diff-no-select ov-buf newbuf switches)))
       (with-current-buffer diff-buf
         (setq-local diff-jump-to-old-file t))
       (display-buffer diff-buf))))
@@ -363,7 +360,8 @@ OV is the rewrite overlay, CI is true for interactive calls."
            (concat
             (unless (eq (char-before (overlay-start ov)) ?\n) "\n")
             (propertize "REWRITE READY: " 'face 'success)
-            (mapconcat (lambda (e) (cdr e)) (mapcar #'rmc--add-key-description choices) ", ")
+	    (when (fboundp #'rmc--add-key-description)  ; introduced in Emacs 29
+              (mapconcat (lambda (e) (cdr e)) (mapcar #'rmc--add-key-description choices) ", "))
             (propertize
              " " 'display `(space :align-to (- right ,(1+ (length hint-str)))))
             (propertize hint-str 'face 'success)))
@@ -398,7 +396,7 @@ INFO is the async communication channel for the rewrite request."
             (insert-buffer-substring buf (overlay-start ov) (overlay-end ov))
             (when (eq (char-before (point-max)) ?\n)
               (plist-put info :newline t))
-            (delay-mode-hooks (funcall (buffer-local-value 'major-mode buf)))
+            (setq major-mode (buffer-local-value 'major-mode buf)) ;Don't turn on major-mode (#730, #722)
             (add-text-properties (point-min) (point-max) '(face shadow font-lock-face shadow))
             (goto-char (point-min)))
           (insert response)
@@ -421,7 +419,8 @@ INFO is the async communication channel for the rewrite request."
             (let ((inhibit-read-only t))
               (delete-region (point) (point-max))
               ;; Run post-rewrite-functions on rewritten text in its buffer
-              (run-hook-with-args 'gptel-post-rewrite-functions (point-min) (point-max))
+              (with-demoted-errors "gptel-post-rewrite-functions: %S"
+                (run-hook-with-args 'gptel-post-rewrite-functions (point-min) (point-max)))
               (when (and (plist-get info :newline)
                          (not (eq (char-before (point-max)) ?\n)))
                 (insert "\n"))
@@ -435,6 +434,7 @@ INFO is the async communication channel for the rewrite request."
               (add-hook 'eldoc-documentation-functions #'gptel--rewrite-key-help nil 'local)
               ;; (overlay-put ov 'gptel-rewrite response)
               (overlay-put ov 'face 'gptel-rewrite-highlight-face)
+	      (overlay-put ov 'priority 2000)
               (overlay-put ov 'keymap gptel-rewrite-actions-map)
               (overlay-put ov 'mouse-face 'highlight)
               (overlay-put
@@ -483,6 +483,14 @@ By default, gptel uses the directive associated with the `rewrite'
      (gptel--describe-directive
       gptel--rewrite-directive (max (- (window-width) 14) 20) " "))
    [""
+    (gptel--preset
+     :if (lambda () (or (get-char-property (point) 'gptel-rewrite)
+                   (use-region-p)))
+     :key "@" :format "%d"
+     :description
+     (lambda ()
+       (concat (propertize "Instructions" 'face 'transient-heading)
+               (gptel--format-preset-string))))
     ("s" "Set full directive" gptel--rewrite-directive-menu)
     (gptel--infix-rewrite-extra)]]
   ;; FIXME: We are requiring `gptel-transient' because of this suffix, perhaps
@@ -632,7 +640,9 @@ generated from functions."
                            (make-overlay (region-beginning) (region-end) nil t))))
                (overlay-put ov 'category 'gptel)
                (overlay-put ov 'evaporate t)
-               (cons ov (generate-new-buffer "*gptel-rewrite*")))
+               ;; NOTE: Switch to `generate-new-buffer' after we drop Emacs 27.1 (#724)
+               (cons ov (gptel--temp-buffer " *gptel-rewrite*")))
+             :transforms gptel-prompt-transform-functions
              :callback #'gptel--rewrite-callback)
       ;; Move back so that the cursor is on the overlay when done.
       (unless (get-char-property (point) 'gptel-rewrite)

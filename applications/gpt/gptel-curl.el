@@ -1,6 +1,6 @@
-;;; gptel-curl.el --- Curl support for GPTel         -*- lexical-binding: t; -*-
+;;; gptel-curl.el --- Curl support for gptel         -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023  Karthik Chikmagalur
+;; Copyright (C) 2023-2025  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur;; <karthikchikmagalur@gmail.com>
 ;; Keywords: convenience
@@ -22,7 +22,7 @@
 
 ;;; Commentary:
 
-;; Curl support for GPTel.  Utility functions.
+;; Curl support for gptel.  Utility functions.
 
 ;;; Code:
 
@@ -55,9 +55,9 @@ See `gptel-backend'."
 (defconst gptel-curl--common-args
   (if (memq system-type '(windows-nt ms-dos))
       '("--disable" "--location" "--silent" "-XPOST"
-        "-y300" "-Y1" "-D-")
+        "-y7200" "-Y1" "-D-")
     '("--disable" "--location" "--silent" "--compressed"
-      "-XPOST" "-y300" "-Y1" "-D-"))
+      "-XPOST" "-y7200" "-Y1" "-D-"))
   "Arguments always passed to Curl for gptel queries.")
 
 (defun gptel-curl--get-args (info token)
@@ -71,7 +71,9 @@ REQUEST-DATA is the data to send, TOKEN is a unique identifier."
          (gptel-stream (plist-get info :stream))
          (url (let ((backend-url (gptel-backend-url gptel-backend)))
                 (if (functionp backend-url)
-                    (funcall backend-url) backend-url)))
+                    (with-current-buffer (plist-get info :buffer)
+                      (funcall backend-url))
+                  backend-url)))
          (data-json (encode-coding-string (gptel--json-encode data) 'utf-8))
          (headers
           (append '(("Content-Type" . "application/json"))
@@ -88,7 +90,8 @@ REQUEST-DATA is the data to send, TOKEN is a unique identifier."
     (append
      gptel-curl--common-args
      gptel-curl-extra-args
-     (gptel-backend-curl-args gptel-backend)
+     (and-let* ((curl-args (gptel-backend-curl-args gptel-backend)))
+       (if (functionp curl-args) (funcall curl-args) curl-args))
      (list (format "-w(%s . %%{size_header})" token))
      (if (length< data-json gptel-curl-file-size-threshold)
          (list (format "-d%s" data-json))
@@ -131,18 +134,25 @@ the response is inserted into the current buffer after point."
                              (random) (emacs-pid) (user-full-name)
                              (recent-keys))))
          (info (gptel-fsm-info fsm))
+         (backend (plist-get info :backend))
          (args (gptel-curl--get-args info token))
          (stream (plist-get info :stream))
          (process (apply #'start-process "gptel-curl"
-                         (generate-new-buffer "*gptel-curl*") "curl" args)))
-    (when (memq system-type '(windows-nt ms-dos))
-      ;; Don't try to convert cr-lf to cr on Windows so that curl's "header size
-      ;; in bytes" stays correct
-      (set-process-coding-system process 'utf-8-unix 'utf-8-unix))
+                         (gptel--temp-buffer " *gptel-curl*") (gptel--curl-path) args)))
     (when (eq gptel-log-level 'debug)
-      (gptel--log (mapconcat #'shell-quote-argument (cons "curl" args) " \\\n")
+      (gptel--log (mapconcat #'shell-quote-argument (cons (gptel--curl-path) args) " \\\n")
                   "request Curl command" 'no-json))
     (with-current-buffer (process-buffer process)
+      (cond
+       ((eq (gptel-backend-coding-system backend) 'binary)
+        ;; set-buffer-file-coding-system is not needed since we don't save this buffer
+        (set-buffer-multibyte nil)
+        (set-process-coding-system process 'binary 'binary))
+       (t
+	;; Don't try to convert cr-lf to cr on Windows so that curl's "header size
+	;; in bytes" stays correct. Explicitly set utf-8 for non-win systems too,
+	;; for cases when buffer coding system is not set to utf-8.
+	(set-process-coding-system process 'utf-8-unix 'utf-8-unix)))
       (set-process-query-on-exit-flag process nil)
       (if (plist-get info :token)       ;not the first run, set only the token
           (plist-put info :token token)
@@ -163,7 +173,13 @@ the response is inserted into the current buffer after point."
           (progn (set-process-sentinel process #'gptel-curl--stream-cleanup)
                  (set-process-filter process #'gptel-curl--stream-filter))
         (set-process-sentinel process #'gptel-curl--sentinel))
-      (setf (alist-get process gptel--request-alist) fsm))))
+      (setf (alist-get process gptel--request-alist)
+            (cons fsm
+                  #'(lambda ()
+                      ;; Clean up Curl process
+                      (set-process-sentinel process #'ignore)
+                      (delete-process process)
+                      (kill-buffer (process-buffer process))))))))
 
 ;; ;; Ahead-Of-Time dispatch code for the parsers
 ;; :parser ; FIXME `cl--generic-*' are internal functions
@@ -205,11 +221,11 @@ PROC-INFO is the plist containing process metadata."
 
 ;; TODO: Separate user-messaging from this function
 (defun gptel-curl--stream-cleanup (process _status)
-  "Process sentinel for GPTel curl requests.
+  "Process sentinel for gptel curl requests.
 
 PROCESS and _STATUS are process parameters."
   (let ((proc-buf (process-buffer process)))
-    (let* ((fsm (alist-get process gptel--request-alist))
+    (let* ((fsm (car (alist-get process gptel--request-alist)))
            (info (gptel-fsm-info fsm))
            (http-status (plist-get info :http-status)))
       (when gptel-log-level (gptel-curl--log-response proc-buf info)) ;logging
@@ -281,7 +297,7 @@ Optional RAW disables text properties and transformation."
      (gptel--display-tool-results tool-results info))))
 
 (defun gptel-curl--stream-filter (process output)
-  (let* ((fsm (alist-get process gptel--request-alist))
+  (let* ((fsm (car (alist-get process gptel--request-alist)))
          (proc-info (gptel-fsm-info fsm))
          (callback (or (plist-get proc-info :callback)
                        #'gptel-curl--stream-insert-response)))
@@ -384,7 +400,7 @@ See `gptel-curl--get-response' for its contents.")
 PROCESS and _STATUS are process parameters."
   (let ((proc-buf (process-buffer process)))
     (when-let* (((eq (process-status process) 'exit))
-                (fsm (alist-get process gptel--request-alist))
+                (fsm (car (alist-get process gptel--request-alist)))
                 (proc-info (gptel-fsm-info fsm))
                 (proc-callback (plist-get proc-info :callback)))
       (when gptel-log-level (gptel-curl--log-response proc-buf proc-info)) ;logging
@@ -439,9 +455,9 @@ PROC-INFO is a plist with contextual information."
           (cond
            ;; FIXME Handle the case where HTTP 100 is followed by HTTP (not 200) BUG #194
            ((member http-status '("200" "100"))
-            (list (and-let* ((resp ;; (funcall parser nil response proc-info)
-                              (gptel--parse-response (plist-get proc-info :backend)
-                                                     response proc-info)))
+            (list (and-let* ((resp (gptel--parse-response
+                                    (plist-get proc-info :backend) response proc-info))
+                             ((not (string-blank-p resp))))
                     (string-trim resp))
                   http-status http-msg))
            ((plist-get response :error)

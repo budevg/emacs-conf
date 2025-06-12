@@ -1,6 +1,6 @@
 ;;; gptel-kagi.el --- Kagi support for gptel     -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023  Karthik Chikmagalur
+;; Copyright (C) 2023-2025  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthikchikmagalur@gmail.com>
 ;; Keywords: hypermedia
@@ -190,3 +190,7 @@ Example:
 
 (provide 'gptel-kagi)
 ;;; gptel-kagi.el ends here
+
+;; Local Variables:
+;; byte-compile-warnings: (not docstrings)
+;; End:

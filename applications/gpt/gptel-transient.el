@@ -1,6 +1,6 @@
-;;; gptel-transient.el --- Transient menu for GPTel  -*- lexical-binding: t; -*-
+;;; gptel-transient.el --- Transient menu for gptel  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023  Karthik Chikmagalur
+;; Copyright (C) 2023-2025  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthikchikmagalur@gmail.com>
 ;; Keywords: convenience
@@ -71,6 +71,49 @@ global value."
     ('t (set (make-local-variable sym) value))
     (_ (kill-local-variable sym)
        (set sym value))))
+
+(defvar gptel--preset nil
+  "Name of last applied gptel preset.
+
+For internal use only.")
+
+(defun gptel--preset-mismatch-p (name)
+  "Check if gptel preset with NAME is in effect."
+  (let ((elm (or (gptel-get-preset name)
+                 (gptel-get-preset (intern-soft name))))
+        key val)
+    (catch 'mismatch
+      (while elm
+        (setq key (pop elm) val (pop elm))
+        (cond
+         ((memq key '(:description :parents)) 'nil)
+         ((eq key :system)
+          (or (equal gptel--system-message val)
+              (and-let* (((symbolp val))
+                         (p (assq val gptel-directives)))
+                (equal gptel--system-message (cdr p)))
+              (throw 'mismatch t)))
+         ((eq key :backend)
+          (or (if (stringp val)
+                  (equal (gptel-backend-name gptel-backend) val)
+                (eq gptel-backend val))
+              (throw 'mismatch t)))
+         ((eq key :tools)
+          (if (eq (car-safe val) :append)
+              (cl-loop for name in (cdr val) ;preset tools contained in gptel-tools
+                       unless (memq (gptel-get-tool name) gptel-tools)
+                       do (throw 'mismatch t))
+            (or (equal (sort val #'string-lessp) ;preset tools same as gptel-tools
+                       (sort (mapcar #'gptel-tool-name gptel-tools)
+                             #'string-lessp))
+                (throw 'mismatch t))))
+         (t (let* ((suffix (substring
+                            (if (symbolp key) (symbol-name key) key) 1))
+                   (sym (or (intern-soft (concat "gptel-" suffix))
+                            (intern-soft (concat "gptel--" suffix)))))
+              (or (null sym)
+                  (and (boundp sym) (equal (eval sym) val))
+                  (throw 'mismatch t)))))))))
 
 (defun gptel--get-directive (args)
   "Find the additional directive in the transient ARGS.
@@ -210,7 +253,8 @@ Handle formatting for system messages when the active
 
 OBJ is a tool-infix of type `gptel--switch'."
   (when-let* ((name (car (member (oref obj argument)
-                                 (mapcar #'gptel-tool-name gptel-tools)))))
+                                 (mapcar #'cadr
+                                         (plist-get (transient-scope) :tools))))))
     (oset obj value (list (oref obj category) name))))
 
 (defvar gptel--crowdsourced-prompts-url
@@ -383,8 +427,28 @@ which see."
                        context (if dest (concat (pth ", with response to ") dest)
                                  (concat (pth ", insert response at point")))))))))
 
+(defun gptel--format-preset-string ()
+  "Format the preset indicator display for `gptel-menu'."
+  (if (and gptel--known-presets gptel--preset)
+      (apply
+       #'format " (%s%s)"
+       (let ((mismatch (gptel--preset-mismatch-p gptel--preset)))
+         (list (propertize "@" 'face (if mismatch 'transient-key
+                                       '( :inherit transient-key
+                                          :inherit secondary-selection
+                                          :box -1 :weight bold)))
+               (propertize (format "%s" gptel--preset) 'face
+                           (if mismatch
+                               '(:inherit warning :strike-through t)
+                             '(:inherit secondary-selection :box -1))))))
+    (format " (%s%s)"
+            (propertize "@" 'face 'transient-key)
+            (propertize "preset" 'face 'transient-inactive-value))))
+
 
 ;; * Transient classes and methods for gptel
+
+;; ** Class for generic gptel elisp variables
 
 (defclass gptel-lisp-variable (transient-lisp-variable)
   ((display-nil :initarg :display-nil)  ;String to display if value if nil
@@ -407,22 +471,65 @@ which see."
            (oset obj value value)
            gptel--set-buffer-locally))
 
+;; ** Class for managing gptel tools
+
 (defclass gptel--switch (transient-switch)
   ((category :initarg :category))
   "Class used for arguments that share a category.")
 
 (cl-defmethod transient-infix-set ((obj gptel--switch) value)
-  "The VALUE of a gptel--switch OBJ is a list of the category
- and argument, e.g. (\"filesystem\" \"read_file\")."
-  (if value
-      (oset obj value (list (oref obj category) value))
-    (oset obj value nil)))
+  "Set VALUE of a `gptel--switch' OBJ.
+
+It is a list of the category and argument, e.g.
+ (\"filesystem\" \"read_file\")."
+  (let ((state (transient-scope))
+        (category (oref obj category)))
+    (if value
+        (progn
+          (cl-pushnew (list category value)
+                      (plist-get state :tools) :test #'equal)
+          (oset obj value (list category value)))
+      (plist-put state :tools
+                 (delete (list category (oref obj argument))
+                         (plist-get state :tools)))
+      (oset obj value nil))
+    (oset transient--prefix scope state)))
+
+;; ** Class for managing gptel tool categories
 
 (defclass gptel--switch-category (transient-switch)
   ((category :initarg :category))
   "Class used for arguments that switch a group of other arguments.
 
 Their own value is ignored")
+
+(cl-defmethod transient-format-value ((obj gptel--switch-category))
+  (let* ((category (oref obj category))
+         (active-count
+          (cl-count-if (lambda (tl) (equal (car tl) category))
+                       (plist-get (transient-scope) :tools)))
+         (total-count (length (cdr (assoc category gptel--known-tools)))))
+    (if (> active-count 0)
+        (propertize (format "(%d/%d)" active-count total-count) 'face 'transient-value)
+      (propertize (format "(0/%d)" total-count) 'face 'transient-inactive-value))))
+
+;; Pressing a tool category key should have different behaviors in different
+;; contexts:
+;; - If the tools for the category are not shown, show them, do nothing else
+;; - If the tools are showing and any of them are selected, deselect all
+;; - If the tools are showing and none of them are selected, select all
+
+;; To do this we independently track whether the category tools are visible
+;; ("active"), and whether any category tools have been "selected":
+(cl-defmethod transient-infix-read ((obj gptel--switch-category))
+  "Determine OBJ value according to category toggle settings."
+  (let* ((category (oref obj category))
+         (active (equal category (plist-get (transient-scope) :category)))
+         (selected (cl-some (lambda (tool-spec) (equal category (car tool-spec)))
+                            (plist-get (transient-scope) :tools))))
+    (if (not active)
+        (oref obj value)
+      (if selected nil (oref obj argument)))))
 
 (cl-defmethod transient-infix-set ((obj gptel--switch-category) value)
   "When setting VALUE, set all options in the category of OBJ."
@@ -434,12 +541,16 @@ Their own value is ignored")
                 (arg (if (slot-boundp suffix-obj 'argument)
                          (oref suffix-obj argument)
                        (oref obj argument-format))))
-      ;; Turn on/off all members in category
-      (if value
+      (if value                         ; Turn on/off all members in category
           (transient-infix-set suffix-obj arg)
         (transient-infix-set suffix-obj nil))))
+  ;; Update the active menu category and key in the prefix scope
+  (plist-put (transient-scope) :category (oref obj category))
+  (plist-put (transient-scope) :key (oref obj key))
   ;; Finally set the "value" of the category itself
   (oset obj value value))
+
+;; ** Class for gptel options that are three-way switches
 
 (defclass gptel--switches (gptel-lisp-variable)
   ((display-if-true :initarg :display-if-true :initform "True")
@@ -460,6 +571,8 @@ Their own value is ignored")
         (propertize "|" 'face 'transient-delimiter)
         (propertize display-if-true
                     'face (if value 'transient-value 'transient-inactive-value))))))
+
+;; ** Class for gptel's scope management, singleton
 
 (defclass gptel--scope (gptel--switches)
   ((display-if-true :initarg :display-if-true :initform "buffer")
@@ -496,6 +609,8 @@ This is used only for setting this variable via `gptel-menu'.")
            (oref obj variable)
            (oset obj value value)))
 
+;; ** Class for managing gptel's backend and model, singleton
+
 (defclass gptel-provider-variable (transient-lisp-variable)
   ((backend       :initarg :backend)
    (backend-value :initarg :backend-value)
@@ -521,6 +636,8 @@ This is used only for setting this variable via `gptel-menu'.")
              (oset obj backend-value backend-value)
              gptel--set-buffer-locally))
   (transient-setup))
+
+;; ** Class for infix options with in-buffer overlay display
 
 (defclass gptel-option-overlaid (transient-option)
   ((display-nil :initarg :display-nil)
@@ -571,13 +688,15 @@ Also format its value in the Transient menu."
    [:pad-keys t ""
     (:info #'gptel--describe-infix-context
      :face transient-heading :format "%d")
+    (gptel--infix-context-add-current-kill)
     (gptel--infix-context-add-region)
     (gptel--infix-context-add-buffer)
     (gptel--infix-context-add-file)
     (gptel--infix-context-remove-all)
     (gptel--suffix-context-buffer)]
    [:pad-keys t
-    :if (lambda () (and gptel-use-tools gptel--known-tools))
+    :if (lambda () (and gptel-use-tools
+                   (or gptel--known-tools (featurep 'gptel-integrations))))
     "" (:info
         (lambda ()
           (concat
@@ -592,7 +711,12 @@ Also format its value in the Transient menu."
      (lambda () (interactive) (gptel--handle-tool-use gptel--fsm-last))
      :if (lambda () (and gptel--fsm-last
                     (eq (gptel-fsm-state gptel--fsm-last) 'TOOL))))]]
-  [["Request Parameters"
+  [[(gptel--preset
+     :key "@" :format "%d"
+     :description
+     (lambda ()
+       (concat (propertize "Request Parameters" 'face 'transient-heading)
+               (gptel--format-preset-string))))
     (gptel--infix-variable-scope)
     (gptel--infix-provider)
     (gptel--infix-max-tokens)
@@ -605,8 +729,7 @@ Also format its value in the Transient menu."
     (gptel--infix-use-tools)
     (gptel--infix-track-response
      :if (lambda () (and gptel-expert-commands (not gptel-mode))))
-    (gptel--infix-track-media
-     :if (lambda () (and gptel-mode (gptel--model-capable-p 'media))))]
+    (gptel--infix-track-media :if (lambda () gptel-mode))]
    [" <Prompt from"
     ("m" "Minibuffer instead" "m")
     ("y" "Kill-ring instead" "y")
@@ -687,7 +810,8 @@ MSG is the meaning of symbol, used when messaging.
 If EXTERNAL is non-nil, include external sources of directives."
   (cl-loop for (type . prompt) in gptel-directives
            ;; Avoid clashes with the custom directive key
-           with unused-keys = (delete ?s (number-sequence ?a ?z))
+           with unused-keys = (delete ?s (nconc (number-sequence ?a ?z)
+                                                (number-sequence ?0 ?9)))
            with width = (window-width)
            for name = (symbol-name type)
            for key = (seq-find (lambda (k) (member k unused-keys)) name (seq-first unused-keys))
@@ -712,7 +836,7 @@ If EXTERNAL is non-nil, include external sources of directives."
            finally return
            (nconc
             prompt-suffixes
-            (list (list "<delete>" "None"
+            (list (list "DEL" "None"
                         `(lambda () (interactive)
                            (message "%s unset" ,msg)
                            (gptel--set-with-scope ',sym nil gptel--set-buffer-locally))
@@ -751,7 +875,81 @@ Customize `gptel-directives' for task-specific prompts."
              'gptel--system-message "Directive" t)))
     :pad-keys t])
 
+;; ** Prefix for saving and applying presets
+
+(transient-define-prefix gptel--preset ()
+  "Apply a gptel preset, or save the current configuration as a preset.
+
+A \"preset\" is a collection of gptel settings, such as the model,
+backend, system message and enabled tools, that are applied and used
+together.  See `gptel-make-preset' for details."
+  :transient-suffix #'transient--do-return
+  [:description "Save or apply a preset collection of gptel options"
+   [:pad-keys t
+    ("C-s" "Save current settings to preset" gptel--save-preset)]]
+  [:if (lambda () gptel--known-presets)
+   :class transient-column
+   :setup-children
+   (lambda (_)
+     (transient-parse-suffixes
+      'gptel--preset
+      (cl-loop
+       for (name-sym . preset) in gptel--known-presets
+       for name = (format "%s" name-sym)
+       with unused-keys = (nconc (number-sequence ?a ?z)
+                                 (number-sequence ?0 ?9))
+       for description = (plist-get preset :description)
+       for key = (seq-find (lambda (k) (member k unused-keys))
+                           name (seq-first unused-keys))
+       do (setq unused-keys (delq key unused-keys))
+       collect
+       (list
+        (key-description (list key))
+        (concat name
+                (propertize " " 'display '(space :align-to 20))
+                (and description
+                     (propertize (concat
+                                  "(" (gptel--describe-directive
+                                       description (- (window-width) 30))
+                                  ")")
+                                 'face 'shadow)))
+        `(lambda () (interactive)
+           (gptel--set-with-scope 'gptel--preset ',name-sym
+            gptel--set-buffer-locally)
+           (gptel--apply-preset
+            ',(cons name-sym preset)
+            (lambda (sym val) (gptel--set-with-scope
+                               sym val gptel--set-buffer-locally)))
+           (message "Applied gptel preset %s"
+            (propertize ,name 'face 'transient-value))
+           (when transient--stack
+            (run-at-time 0 nil #'transient-setup))))
+       into generated
+       finally return
+       (nconc (list '(gptel--infix-variable-scope
+                      :format "%d %k %v"
+                      :description
+                      (lambda () (format "%s        %s"
+                             (propertize "Apply preset" 'face 'transient-heading)
+                             (propertize "Scope" 'face 'transient-active-prefix)))))
+              generated))))])
+
 ;; ** Prefix for selecting tools
+
+;; gptel-tools offers a two-level menu for selecting tools, its design is a
+;; little convoluted so here's an explanation:
+;;
+;; Normally a transient prefix exports its value via transient-args, to be
+;; consumed by suffixes, where these args are determined by the state of the
+;; menu at the time of export.  The gptel-tools menu is dynamic and needs to
+;; store tool selections that may not be visible in the meny any more, so we
+;; cannot use the transient-args.
+;;
+;; We can not (should not?) control the value of the prefix directly, so we
+;; instead use the scope (a secondary value) of the prefix to maintain the
+;; history of selections.  When running a suffix, we gather tool selections from
+;; the scope.  The scope is also used as a message channel for connecting the
+;; category menu and the tool list menu for that category.
 
 ;;;###autoload (autoload 'gptel-tools "gptel-transient" nil t)
 (transient-define-prefix gptel-tools ()
@@ -765,6 +963,7 @@ To add tools to this list, use `gptel-make-tool', which see.
 Using the scope option, you can set tools to use with gptel
 requests globally, in this buffer or for the next request
 only (\"oneshot\")."
+  :refresh-suffixes t
   [:description "Provide the LLM with tools to run tasks for you"
    [""
     (gptel--infix-variable-scope)
@@ -773,64 +972,82 @@ only (\"oneshot\")."
     (gptel--infix-include-tool-results)]
    [""
     ("RET" "Confirm selection"
-     (lambda (args)
-       (interactive (list (transient-args transient-current-command)))
-       ;; There are two kinds of ARGS: categories with value "(*)", and lists of
-       ;; the type '("category" "tool_name").  We only want the latter, to use an
-       ;; index into `gptel--known-backends.'
+     (lambda (tools)
+       ;; We don't care about the transient args of this prefix at all, since
+       ;; the state is managed entirely through its transient-scope:
+       (interactive (list (plist-get (transient-scope 'gptel-tools) :tools)))
        (gptel--set-with-scope
         'gptel-tools
         (mapcar (lambda (category-and-name)
                   (map-nested-elt gptel--known-tools category-and-name))
-                (cl-delete-if-not #'consp args))
+                (cl-delete-if-not #'consp tools))
         gptel--set-buffer-locally))
      :transient transient--do-return)
     ("q" "Cancel" transient-quit-one)]]
-  [:class transient-column
-   :setup-children
-   (lambda (_)
-     (transient-parse-suffixes
-      'gptel-tools
-      (cdr
+  [[:class transient-column             ;Display known categories
+    :setup-children
+    (lambda (_)
+      (transient-parse-suffixes
+       'gptel-tools
        (cl-loop          ;loop through gptel--known tools and collect categories
         for (category . tools-alist) in gptel--known-tools
-        with unused-keys = (delete ?q (number-sequence ?a ?z))
-        for category-key = (seq-find (lambda (k) (member k unused-keys)) category
+        with unused-keys = (nconc (delete ?q (number-sequence ?a ?z))
+                                  (number-sequence ?0 ?9)
+                                  (number-sequence ?A ?Z))
+        for category-key = (seq-find (lambda (k) (member k unused-keys))
+                                     (string-remove-prefix "mcp-" category)
                                      (seq-first unused-keys))
         do (setq unused-keys (delete category-key unused-keys))
-        nconc
-        (cl-loop                    ;for each category, collect tools as infixes
-         for (name . tool) in tools-alist
-         with tool-keys = (delete category-key (number-sequence ?a ?z))
-         for tool-key = (seq-find (lambda (k) (member k tool-keys)) name
-                                  (seq-first tool-keys))
-         do (setq tool-keys (delete tool-key tool-keys))
-         collect           ;Each list is a transient infix of type gptel--switch
-         (list (key-description (list category-key tool-key))
-               (concat (make-string (max (- 20 (length name)) 0) ? )
-                       (propertize
-                        (concat "(" (gptel--describe-directive
-                                     (gptel-tool-description tool) (- (window-width) 40))
-                                ")")
-                        'face 'shadow))
-               (gptel-tool-name tool)
-               :format " %k %v %d"
-               :init-value #'gptel--tools-init-value
-               :class 'gptel--switch
-               :category category)
-         into infixes-for-category
-         finally return
-         (identity ;TODO(tool): Replace with vconcat for groups separated by category
-          ;; Add a category header that can be used to toggle all tools in that category
-          (nconc (list " " (list (key-description (list category-key category-key))
-                                 (concat (propertize (concat (capitalize category) " tools")
-                                                     'face 'transient-heading)
-                                         (make-string (max (- 14 (length category)) 0) ? ))
-                                 "(*)"
-                                 :format " %k %d %v"
-                                 :class 'gptel--switch-category
-                                 :category category))
-                 infixes-for-category)))))))])
+        collect (list (key-description (list category-key))
+                      (concat (propertize category 'face 'transient-heading)
+                              (make-string (max (- 14 (length category)) 0) ? ))
+                      (char-to-string category-key)
+                      :format " %k %d %v"
+                      :class 'gptel--switch-category
+                      :category category)
+        into categories
+        finally do (plist-put (transient-scope) :keys unused-keys)
+        finally return categories)))]
+   [:class transient-column           ;Display known tools for selected category
+    :setup-children
+    (lambda (_)
+      (transient-parse-suffixes
+       'gptel-tools
+       (when-let* ((category (plist-get (transient-scope) :category))
+                   (tool-keys (plist-get (transient-scope) :keys)))
+         (cl-loop                   ;for each category, collect tools as infixes
+          with tools-alist = (cdr (assoc category gptel--known-tools))
+          for (name . tool) in tools-alist
+          for tool-key = (seq-find (lambda (k) (member k tool-keys)) name (seq-first tool-keys))
+          do (setq tool-keys (delete tool-key tool-keys))
+          collect          ;Each list is a transient infix of type gptel--switch
+          (list (key-description (list tool-key))
+                (concat (make-string (max (- 20 (length name)) 0) ? )
+                        (propertize
+                         (concat "(" (gptel--describe-directive
+                                      (gptel-tool-description tool) (- (window-width) 40))
+                                 ")")
+                         'face 'shadow))
+                (gptel-tool-name tool)
+                :format " %k %v %d"
+                :init-value #'gptel--tools-init-value
+                :class 'gptel--switch
+                :category category)
+          into infixes-for-category
+          finally return
+          (cons (list :info
+                      (lambda () (concat
+                             (propertize (plist-get (transient-scope) :key)
+                                         'face 'transient-key)
+                             (propertize " toggle all" 'face 'transient-heading)))
+                      :format " %d")
+                infixes-for-category)))))]]
+  (interactive)
+  (transient-setup
+   'gptel-tools nil nil
+   :scope (list :tools (mapcar (lambda (tool) (list (gptel-tool-category tool)
+                                               (gptel-tool-name tool)))
+                               gptel-tools))))
 
 
 ;; * Transient Infixes
@@ -1006,6 +1223,18 @@ supports.  See `gptel-track-media' for more information."
 
 (declare-function gptel-context--at-point "gptel-context")
 (declare-function gptel-add "gptel-context")
+(declare-function gptel-context-add-current-kill "gptel-context")
+
+(transient-define-suffix gptel--infix-context-add-current-kill (&optional arg)
+  "Add current kill to gptel's context."
+  :transient 'transient--do-stay
+  :key "C-y"
+  :if (lambda () gptel-expert-commands)
+  :description
+  "Yank to context"
+  (interactive "P")
+  (gptel-context-add-current-kill arg)
+  (transient-setup))
 
 (transient-define-suffix gptel--infix-context-add-region ()
   "Add current region to gptel's context."
@@ -1251,11 +1480,14 @@ This sets the variable `gptel-include-tool-results', which see."
         (prompt
          (cond
           ((member "m" args)
-           (read-string
-            (format "Ask %s: " (gptel-backend-name gptel-backend))
-            (and (use-region-p)
-                 (buffer-substring-no-properties
-                  (region-beginning) (region-end)))))
+           (minibuffer-with-setup-hook
+               (lambda () (add-hook 'completion-at-point-functions
+                               #'gptel-preset-capf nil t))
+             (read-string
+              (format "Ask %s: " (gptel-backend-name gptel-backend))
+              (and (use-region-p)
+                   (buffer-substring-no-properties
+                    (region-beginning) (region-end))))))
           ((member "y" args)
            (unless (car-safe kill-ring)
              (user-error "`kill-ring' is empty!  Nothing to send"))
@@ -1360,6 +1592,7 @@ This sets the variable `gptel-include-tool-results', which see."
                  (gptel--merge-additional-directive system-extra)
                gptel--system-message)
              :callback callback
+             :transforms gptel-prompt-transform-functions
              :fsm (gptel-make-fsm :handlers gptel-send--handlers)
              :dry-run dry-run)
 
