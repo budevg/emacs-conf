@@ -16,6 +16,8 @@
 
   (setq gptel--known-backends nil)
 
+  ;; ~/.authinfo
+  ;; machine generativelanguage.googleapis.com login apikey <KEY>
   (gptel-make-gemini "gemini"
                      :key 'gptel-api-key
                      :stream t
