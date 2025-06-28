@@ -38,3 +38,20 @@
           (local-set-key [(control c) (control a)] 'remote-edit-quit)
           (local-set-key [(control c) (control c)] 'remote-edit-commit)
           ))))
+
+(use-package tramp
+  :defer t
+  :init
+  (setq remote-file-name-inhibit-locks t
+        tramp-use-scp-direct-remote-copying t
+        tramp-copy-size-limit 1000000
+        tramp-verbose 2
+        remote-file-name-inhibit-auto-save-visited t))
+
+  (connection-local-set-profile-variables
+   'remote-direct-async-process
+   '((tramp-direct-async-process . t)))
+
+  (connection-local-set-profiles
+   '(:application tramp :protocol "scp")
+   'remote-direct-async-process)
