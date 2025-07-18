@@ -1,0 +1,8 @@
+(:name ag
+       :description "Emacs utilities for code split into cells, including Jupyter notebooks "
+       :type github
+       :pkgname "astoff/code-cells.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "prog_lang/python")))
+
+       )

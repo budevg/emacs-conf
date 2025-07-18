@@ -35,3 +35,18 @@
    (lambda ()
      (define-key yaml-mode-map "\C-m" 'newline-and-indent)))
   )
+
+(use-package code-cells
+  :mode ("\\.ipynb\\'" . code-cells-convert-ipynb)
+  :custom
+  (code-cells-convert-ipynb-style
+   '(("jupytext" "--to" "ipynb")
+     ("jupytext" "--to" "py:percent")
+     (lambda () #'python-mode)
+     code-cells-convert-ipynb-hook))
+  :bind (:map code-cells-mode-map
+         ("M-p" . code-cells-backward-cell)
+         ("M-n" . code-cells-forward-cell)
+         ("C-c C-c" . code-cells-eval)
+         )
+  )
