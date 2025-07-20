@@ -17,7 +17,10 @@
   :bind (("M-<f9>" . ggtags-find-other-symbol)
          ("C-/" . ggtags-find-definition)
          ("C-?" . xref-go-back)
-         ("C-." . ggtags-find-reference))
+         ("C-." . ggtags-find-reference)
+         :map ggtags-mode-map
+         ("M-]" . nil)
+         )
   )
 
 (defun ctags-build ()
