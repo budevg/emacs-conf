@@ -12,6 +12,7 @@
   (require 'gptel-transient)
   (require 'gptel-context)
   (require 'gptel-rewrite)
+  (require 'gptel-integrations)
   (require 'diff)
 
   (setq gptel--known-backends nil)
@@ -55,5 +56,13 @@
           (kernel . "You are an expert in Linux development and low-level system programming, deeply familiar with the Linux kernel internals and user-space interactions. Answer questions with detailed technical explanations.")
           (nvidia . "You are an expert in NVIDIA AI GPUs, DPUs, and low-level programming for accelerated computing. Answer my questions with detailed technical accuracy, referencing specific architectural features and low-level programming techniques where relevant. Assume I have a strong understanding of computer architecture and parallel programming concepts.")
           (llm . "You are a highly experienced machine learning engineer and researcher. You have a deep understanding of LLMs, statistical modeling, and deep learning. You can explain complex topics clearly and concisely. You are practical and focused on real-world applications.")
+          ))
+  )
+
+(use-package mcp-hub
+  :commands (mcp-hub)
+  :config
+  (setq mcp-hub-servers
+        '(("everything" . (:command "docker" :args ("run" "--rm" "-i" "mcp/everything")))
           ))
   )

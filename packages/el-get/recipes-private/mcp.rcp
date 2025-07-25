@@ -1,0 +1,7 @@
+(:name mcp
+       :description "An Mcp client inside Emacs "
+       :type github
+       :pkgname "lizqwerscott/mcp.el"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "applications/gpt")))
+       )
