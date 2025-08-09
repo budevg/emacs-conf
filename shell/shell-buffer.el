@@ -64,30 +64,37 @@ If N is negative, search forwards for the -Nth following match."
   )
 
 
-(autoload 'vterm-mode "vterm" nil t)
-(defun new-vterm ()
-  (interactive)
-  (let ((buf (generate-new-buffer "*vterm*")))
-    (pop-to-buffer-same-window buf)
-    (with-current-buffer buf
-      (unless (derived-mode-p 'vterm-mode)
-        (vterm-mode)))
-    ))
-
-(global-set-key [f3] 'new-vterm)
-(eval-after-load "vterm"
-  '(progn
-     (defun vterm-cua-paste (&optional arg)
-       (interactive "P")
-       (vterm-goto-char (point))
-       (let ((inhibit-read-only t)
-             (buffer-read-only nil))
-         (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
-           (cua-paste arg))))
-     (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-cua-paste)
-     )
+(use-package vterm
+  :commands (vterm)
+  :config
+  (defun new-vterm ()
+    (interactive)
+    (let ((buf (generate-new-buffer "*vterm*")))
+      (pop-to-buffer-same-window buf)
+      (with-current-buffer buf
+        (unless (derived-mode-p 'vterm-mode)
+          (vterm-mode)))
+      ))
+  (defun vterm-cua-paste (&optional arg)
+    (interactive "P")
+    (vterm-goto-char (point))
+    (let ((inhibit-read-only t)
+          (buffer-read-only nil))
+      (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
+        (cua-paste arg))))
+  (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-cua-paste)
   )
 
+(use-package eat
+  :commands (eat)
+  :custom
+  (eat-term-name "xterm-256color")
+  (eat-kill-buffer-on-exit t)
+  (eat-enable-shell-prompt-annotation nil)
+  :bind (("<f3>" . eat)
+         ("C-<f3>" . (lambda() (interactive) (eat nil t)))
+         )
+  )
 
 (defun dot-dircolors ()
   (interactive)

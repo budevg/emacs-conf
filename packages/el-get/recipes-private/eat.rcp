@@ -1,0 +1,8 @@
+(:name eat
+       :description "Emulate A Terminal, in a region, in a buffer and in Eshell"
+       :type git
+       :url "https://codeberg.org/akib/emacs-eat.git"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "shell")))
+
+       )
