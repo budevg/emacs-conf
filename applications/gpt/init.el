@@ -18,7 +18,7 @@
   (setq gptel--known-backends nil)
 
   ;; ~/.authinfo
-  ;; machine generativelanguage.googleapis.com login apikey <KEY>
+  ;; machine generativelanguage.googleapis.com login apikey password <KEY>
   (gptel-make-gemini "gemini"
                      :key 'gptel-api-key
                      :stream t
@@ -41,13 +41,17 @@
                                Mistral-large
                                Mistral-small))
 
-  (gptel-make-openai "nebius.ai"
-                     :host "api.studio.nebius.ai"
+  ;; ~/.authinfo
+  ;; machine api.studio.nebius.com login apikey password <KEY>
+  (gptel-make-openai "nebius"
+                     :host "api.studio.nebius.com"
                      :endpoint "/v1/chat/completions"
                      :key 'gptel-api-key
                      :stream t
-                     :models '(deepseek-ai/DeepSeek-R1
-                               deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct))
+                     :models '(deepseek-ai/DeepSeek-V3
+                               Qwen/Qwen3-235B-A22B-Instruct-2507
+                               Qwen/Qwen3-30B-A3B-Instruct-2507
+                               NousResearch/Hermes-4-70B))
 
   (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
         gptel-model 'gemini-2.0-flash
