@@ -9,6 +9,7 @@
   (require 'gptel-curl)
   (require 'gptel-gemini)
   (require 'gptel-openai)
+  (require 'gptel-openai-extras)
   (require 'gptel-transient)
   (require 'gptel-context)
   (require 'gptel-rewrite)
@@ -27,19 +28,16 @@
                                gemini-2.0-flash
                                ))
 
+  ;; ~/.authinfo
+  ;; machine models.github.ai login apikey password <KEY>
   (gptel-make-openai "github"
-                     :host "models.inference.ai.azure.com"
-                     :endpoint "/chat/completions"
+                     :host "models.github.ai"
+                     :endpoint "/inference/chat/completions"
                      :key 'gptel-api-key
                      :stream t
-                     :models '(gpt-4o
-                               gpt-4o-mini
-                               DeepSeek-R1
-                               ai21-jamba-1.5-large
-                               ai21-jamba-1.5-mini
-                               Codestral-2501
-                               Mistral-large
-                               Mistral-small))
+                     :models '(gpt-4.1
+                               gpt-5-mini
+                               grok-3))
 
   ;; ~/.authinfo
   ;; machine api.studio.nebius.com login apikey password <KEY>
@@ -48,10 +46,17 @@
                      :endpoint "/v1/chat/completions"
                      :key 'gptel-api-key
                      :stream t
-                     :models '(deepseek-ai/DeepSeek-V3
-                               Qwen/Qwen3-235B-A22B-Instruct-2507
-                               Qwen/Qwen3-30B-A3B-Instruct-2507
-                               NousResearch/Hermes-4-70B))
+                     :models '(deepseek-ai/DeepSeek-V3-0324
+                               deepseek-ai/DeepSeek-R1-0528
+                               Qwen/Qwen3-Coder-480B-A35B-Instruct))
+
+  ;; ~/.authinfo
+  ;; machine api.perplexity.ai login apikey password <KEY>
+  (gptel-make-perplexity "perplexity"
+                     :host "api.perplexity.ai"
+                     :key 'gptel-api-key
+                     :stream t
+                     )
 
   (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
         gptel-model 'gemini-2.0-flash
