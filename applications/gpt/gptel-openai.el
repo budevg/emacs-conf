@@ -40,6 +40,8 @@
 (defvar gptel-track-media)
 (defvar gptel-use-tools)
 (defvar gptel-tools)
+(defvar gptel--schema)
+(defvar gptel--request-params)
 (declare-function gptel-context--collect-media "gptel-context")
 (declare-function gptel--base64-encode "gptel")
 (declare-function gptel--trim-prefixes "gptel")
@@ -47,6 +49,7 @@
 (declare-function gptel--model-capable-p "gptel")
 (declare-function gptel--model-name "gptel")
 (declare-function gptel--get-api-key "gptel")
+(declare-function gptel--insert-file-string "gptel")
 (declare-function prop-match-value "text-property-search")
 (declare-function text-property-search-backward "text-property-search")
 (declare-function json-read "json")
@@ -57,6 +60,9 @@
 (declare-function gptel-context--wrap "gptel-context")
 (declare-function gptel--inject-prompt "gptel")
 (declare-function gptel--parse-tools "gptel")
+(declare-function gptel--parse-schema "gptel")
+(declare-function gptel--preprocess-schema "gptel")
+(declare-function gptel--dispatch-schema-type "gptel")
 
 ;; JSON conversion semantics used by gptel
 ;; empty object "{}" => empty list '() == nil
@@ -216,7 +222,9 @@ information if the stream contains it."
                   ;; No text content, so look for tool calls
                   (when-let* ((tool-call (map-nested-elt delta '(:tool_calls 0)))
                               (func (plist-get tool-call :function)))
-                    (if (plist-get func :name) ;new tool block begins
+                    (if (and (plist-get func :name)
+                             ;; TEMP: This check is for litellm compatibility, should be removed
+                             (not (equal (plist-get func :name) "null"))) ; new tool block begins
                         (progn
                           (when-let* ((partial (plist-get info :partial_json)))
                             (let* ((prev-tool-call (car (plist-get info :tool-use)))
@@ -231,19 +239,17 @@ information if the stream contains it."
                       ;; old tool block continues, so continue collecting arguments in :partial_json 
                       (push (plist-get func :arguments) (plist-get info :partial_json)))))
                 ;; Check for reasoning blocks, currently only used by Openrouter
-                ;; MAYBE: Should this be moved to a dedicated Openrouter backend?
-                (unless (or (eq (plist-get info :reasoning-block) 'done)
-                            (not (plist-member delta :reasoning)))
-                  (if-let* ((reasoning-chunk (plist-get delta :reasoning)) ;for openrouter
-                            ((not (eq reasoning-chunk :null))))
+                (unless (eq (plist-get info :reasoning-block) 'done)
+                  (if-let* ((reasoning-chunk (or (plist-get delta :reasoning) ;for Openrouter and co
+                                                 (plist-get delta :reasoning_content))) ;for Deepseek, Llama.cpp
+                            ((not (or (eq reasoning-chunk :null) (string-empty-p reasoning-chunk)))))
                       (plist-put info :reasoning
                                  (concat (plist-get info :reasoning) reasoning-chunk))
                     ;; Done with reasoning if we get non-empty content
-                    (if-let* ((c (plist-get delta :content))
-                              ((not (or (eq c :null) (string-empty-p c)))))
-                        (if (plist-member info :reasoning) ;Is this a reasoning model?
-                            (plist-put info :reasoning-block t) ;End of streaming reasoning block
-                          (plist-put info :reasoning-block 'done))))))))) ;Not using a reasoning model
+                    (if-let* (((plist-member info :reasoning)) ;Is this a reasoning model?
+                              (c (plist-get delta :content)) ;Started receiving text content?
+                              ((not (or (eq c :null) (string-blank-p c)))))
+                        (plist-put info :reasoning-block t)))))))) ;Signal end of reasoning block
       (error (goto-char (match-beginning 0))))
     (apply #'concat (nreverse content-strs))))
 
@@ -276,7 +282,8 @@ Mutate state INFO with response metadata."
        collect call-spec into tool-use
        finally (plist-put info :tool-use tool-use)))
     (when (and content (not (or (eq content :null) (string-empty-p content))))
-      (when-let* ((reasoning (plist-get message :reasoning)) ;look for reasoning blocks
+      (when-let* ((reasoning (or (plist-get message :reasoning) ;for Openrouter and co
+                                 (plist-get message :reasoning_content))) ;for Deepseek, Llama.cpp
                   ((and (stringp reasoning) (not (string-empty-p reasoning)))))
         (plist-put info :reasoning reasoning))
       content)))
@@ -292,7 +299,8 @@ Mutate state INFO with response metadata."
            :messages [,@prompts]
            :stream ,(or gptel-stream :json-false)))
         (reasoning-model-p ; TODO: Embed this capability in the model's properties
-         (memq gptel-model '(o1 o1-preview o1-mini o3-mini o3 o4-mini))))
+         (memq gptel-model '(o1 o1-preview o1-mini o3-mini o3 o4-mini
+                                gpt-5 gpt-5-mini gpt-5-nano))))
     (when (and gptel-temperature (not reasoning-model-p))
       (plist-put prompts-plist :temperature gptel-temperature))
     (when gptel-use-tools
@@ -309,11 +317,23 @@ Mutate state INFO with response metadata."
       (plist-put prompts-plist
                  (if reasoning-model-p :max_completion_tokens :max_tokens)
                  gptel-max-tokens))
+    (when gptel--schema
+      (plist-put prompts-plist
+                 :response_format (gptel--parse-schema backend gptel--schema)))
     ;; Merge request params with model and backend params.
     (gptel--merge-plists
      prompts-plist
+     gptel--request-params
      (gptel-backend-request-params gptel-backend)
      (gptel--model-request-params  gptel-model))))
+
+(cl-defmethod gptel--parse-schema ((_backend gptel-openai) schema)
+  (list :type "json_schema"
+        :json_schema
+        (list :name (md5 (format "%s" (random)))
+              :schema (gptel--preprocess-schema
+                       (gptel--dispatch-schema-type schema))
+              :strict t)))
 
 ;; NOTE: No `gptel--parse-tools' method required for gptel-openai, since this is
 ;; handled by its defgeneric implementation
@@ -371,7 +391,9 @@ If the ID has the format used by a different backend, use as-is."
                 (list :type "function"
                       :id (plist-get call :id)
                       :function `( :name ,(plist-get call :name)
-                                   :arguments ,(gptel--json-encode (plist-get call :args))))))
+                                   :arguments ,(decode-coding-string
+                                                (gptel--json-encode (plist-get call :args))
+                                                'utf-8 t)))))
               full-prompt)
              (push (car (gptel--parse-tool-results backend (list (cdr entry)))) full-prompt))))
         (nreverse full-prompt))
@@ -397,7 +419,10 @@ If the ID has the format used by a different backend, use as-is."
                (condition-case nil
                    (let* ((tool-call (read (current-buffer)))
                           (name (plist-get tool-call :name))
-                          (arguments (gptel--json-encode (plist-get tool-call :args))))
+                          (arguments (decode-coding-string
+                                      (gptel--json-encode (plist-get tool-call :args))
+                                      'utf-8 t)))
+                     (setq id (gptel--openai-format-tool-id id))
                      (plist-put tool-call :id id)
                      (plist-put tool-call :result
                                 (string-trim (buffer-substring-no-properties
