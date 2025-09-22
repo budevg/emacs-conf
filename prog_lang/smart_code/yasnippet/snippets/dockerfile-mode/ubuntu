@@ -1,0 +1,22 @@
+# -*- mode: snippet -*-
+# name: ubuntu
+# key: main
+# expand-env: ((yas-indent-line 'fixed))
+# --
+FROM ubuntu:devel
+
+RUN <<EOF
+export DEBIAN_FRONTEND=noninteractive
+
+apt update
+apt -y install --no-install-recommends sudo$0
+
+echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+EOF
+
+USER ubuntu
+
+RUN <<EOF
+echo 'PS1="\[\033[0;31m\]\u@ubuntu:\[\033[0m\]\w$ "' > ~/.bashrc
+touch ~/.sudo_as_admin_successful
+EOF

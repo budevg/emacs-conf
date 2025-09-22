@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: db
+# key: db
+# --
+docker build  -t ${1:name} --progress plain .$0

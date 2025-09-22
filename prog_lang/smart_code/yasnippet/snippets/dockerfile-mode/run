@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: run
+# key: run
+# expand-env: ((yas-indent-line 'fixed))
+# --
+RUN <<EOF
+$0
+EOF
