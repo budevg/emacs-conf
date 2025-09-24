@@ -1,0 +1,7 @@
+(:name yankpad
+       :description "Paste snippets from an org-mode file"
+       :type github
+       :pkgname "Kungsgeten/yankpad"
+       :build `(,(concat "cp -r *.el "
+                         (in-emacs-d "prog_lang/smart_code/yasnippet")))
+       )

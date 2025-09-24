@@ -24,3 +24,12 @@
   )
 
 (run-with-idle-timer 2 nil 'load-yasnippet)
+
+(use-package yankpad
+  :after (yasnippet)
+  :init
+  (setq yankpad-file (in-emacs-d "prog_lang/smart_code/yasnippet/snippets/yankpad.org"))
+  :config
+  (bind-key "M-1" (with-ido-completion yankpad-insert))
+  (bind-key "M-!" (with-ido-completion yankpad-set-category))
+  )
