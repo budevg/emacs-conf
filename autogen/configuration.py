@@ -188,11 +188,15 @@ applications = [Node(path = "applications/init.el",
                      msg = "Different services to run"),
                 Node(path = "applications/kubernetes/init.el",
                      msg = "Init kubernetes"),
-                Node(path = "applications/gpt/init.el",
-                     msg = "Init chat gpt"),
                 Node(path = "applications/media/init.el",
                      msg = "video adn audio media"),
                 ]
+
+ai = [Node(path = "ai/gptel",
+           msg = ""),
+      Node(path = "ai/init.el",
+           msg = "ai"),
+      ]
 
 packages = [Node(path = "packages/el-get",
                  msg = ""),
@@ -211,6 +215,7 @@ PACKAGES = [lisp_lib,
             build_system,
             source_control,
             applications,
+            ai,
             packages,
             ]
 
