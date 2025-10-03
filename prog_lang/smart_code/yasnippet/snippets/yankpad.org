@@ -1,0 +1,11 @@
+* download
+** youtube                                                          :results:
+   #+BEGIN_SRC emacs-lisp
+     (let* ((copied-str (current-kill 0 t))
+            (resolution 720)
+            (youtube-regex "^https://youtube.com/watch\\?")
+            (url (if (string-match-p youtube-regex copied-str)
+                     copied-str
+                   "${1:url}")))
+       (format "yt-dlp -f 'bestvideo[height<=?%d]+bestaudio/best' '%s'" resolution url))
+   #+END_SRC
