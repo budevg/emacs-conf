@@ -36,8 +36,9 @@
          ("C-M-o" . (lambda ()
                       (interactive)
                       (let ((inhibit-message t)
-                            (ff-always-try-to-create nil))
-                        (ff-find-other-file))))
+                            (ff-always-try-to-create nil)
+                            (ff-ignore-include t))
+                        (ff-find-other-file nil t))))
          :map c-mode-map
          ("C-m" . newline-and-indent)
          :map c++-mode-map
