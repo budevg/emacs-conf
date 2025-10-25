@@ -11,7 +11,11 @@
    #+END_SRC
 * docker
 ** build
-   docker build  -t name --progress plain .$0
+   docker build  -t ${1:test} --progress plain .$0
+** run-ui
+   xhost +local: && docker run --rm -it -e DISPLAY=unix$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v \`pwd\`:\`pwd\` -w \`pwd\` ${1:nixos/nix}; xhost -local:$0
+** run
+   docker run --rm -it -v \`pwd\`:\`pwd\` -w \`pwd\` ${1:nixos/nix}$0
 ** ubuntu                                                  :src:indent_fixed:
    #+BEGIN_SRC dockerfile
      FROM ubuntu:devel
