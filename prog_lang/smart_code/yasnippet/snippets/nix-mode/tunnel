@@ -5,7 +5,7 @@
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;
 mkShell {
-  buildInputs = [ ];
+  buildInputs = [ websocat ];
   shellHook = ''
     if ! [ -S agent.sock ] ; then
       pkill ssh-agent
@@ -14,20 +14,31 @@ mkShell {
 
       LABEL=$(tr -dc 'a-z' < /dev/urandom | head -c 6)
 
-      cat << EOF > tunnel.cmd
+      cat << EOF > tunnel.md
+    # remote
     echo "$(cat key.pub)" >> ~/.ssh/authorized_keys
-    # servio
+
+    ## servio
     ssh -R $LABEL:5901:localhost:22 serveo.net
 
     ssh -L 5900:$LABEL:5901 serveo.net
 
     ssh -p 5900 root@localhost
 
-    # pinggy
-    # on remote host run and copy url
-    ssh -p 443 -R0:localhost:22 -o ServerAliveInterval=30 tcp@a.pinggy.io
-    # on local host run tcp://rnlps-74-220-27-36.a.free.pinggy.link:34533
-    ssh -p <url port> <url host>
+    ## pinggy
+    ### on remote host
+    s -qp 443 -R0:localhost:22 -o ServerAliveInterval=30 tcp@a.pinggy.io
+    copy url tcp://HOST:PORT
+    ### on local host
+    s ssh://local@HOST:PORT
+
+    ## cloudflare
+    ### on remote host
+    curl -Lo cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 && chmod +x cloudflared
+    ./cloudflared tunnel --url ssh://localhost:22
+    copy url https://HOST
+    ### on local host
+    s -v -o ProxyCommand="websocat -E --binary - -v ws://%h" -o ServerAliveInterval=10 local@HOST
     EOF
     fi
 
