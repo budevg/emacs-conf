@@ -118,7 +118,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :shell-prompt-regexp "Gemini> "
    :icon-name "gemini.png"
    :welcome-function #'agent-shell-google--gemini-welcome-message
-   :needs-authentication t
+   ;;:needs-authentication t
    :authenticate-request-maker (lambda ()
                                  (cond ((map-elt agent-shell-google-authentication :api-key)
                                         (acp-make-authenticate-request :method-id "gemini-api-key"))

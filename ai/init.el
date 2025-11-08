@@ -160,4 +160,10 @@ combinations."
 
 (use-package agent-shell
   :commands agent-shell
-  )
+  :config
+  (setq shell-maker-prompt-before-killing-buffer nil
+        agent-shell-goose-authentication
+        (agent-shell-make-goose-authentication :none t)
+        )
+  (defun shell-maker-welcome-message (config) "")
+)
