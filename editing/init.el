@@ -60,12 +60,11 @@ Operates on the current paragraph if no region is active."
 
 (defun copy-loc ()
   (interactive)
-  (let* ((f (buffer-file-name))
-         (l (line-number-at-pos))
-         (s (format "%s:%s" f l))
-         )
-    (kill-new s)
-    (message s)))
+  (let ((location (if (eq major-mode 'dired-mode)
+                      (dired-get-filename nil t)
+                    (format "%s:%d" (buffer-file-name) (line-number-at-pos)))))
+    (kill-new location)
+    (message "%s" location)))
 
 (global-set-key (kbd "M-e") 'copy-loc)
 
