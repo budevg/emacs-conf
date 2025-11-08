@@ -157,3 +157,7 @@ combinations."
         '(("everything" . (:command "docker" :args ("run" "--rm" "-i" "mcp/everything")))
           ))
   )
+
+(use-package agent-shell
+  :commands agent-shell
+  )

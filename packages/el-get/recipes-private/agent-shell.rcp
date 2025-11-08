@@ -1,0 +1,7 @@
+(:name agent-shell
+       :description "A native Emacs buffer to interact with LLM agents powered by ACP"
+       :depends (acp shell-maker)
+       :type github
+       :pkgname "xenodium/agent-shell"
+       :build `(,(concat "cp *.el " (in-emacs-d "ai/agent-shell")))
+       )

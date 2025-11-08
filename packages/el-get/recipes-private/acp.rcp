@@ -1,0 +1,6 @@
+(:name acp
+       :description "An ACP (Agent Client Protocol) implementation in Emacs lisp as per https://agentclientprotocol.com"
+       :type github
+       :pkgname "xenodium/acp.el"
+       :build `(,(concat "cp *.el " (in-emacs-d "ai/agent-shell")))
+       )

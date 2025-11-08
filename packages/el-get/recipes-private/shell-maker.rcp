@@ -1,0 +1,6 @@
+(:name shell-maker
+       :description "Create Emacs shells backed by either local or cloud services."
+       :type github
+       :pkgname "xenodium/shell-maker"
+       :build `(,(concat "cp *.el " (in-emacs-d "ai/agent-shell")))
+       )
