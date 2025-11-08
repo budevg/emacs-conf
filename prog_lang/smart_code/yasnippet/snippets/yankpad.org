@@ -21,19 +21,19 @@
      FROM ubuntu:devel
 
      RUN <<EOF
-     export DEBIAN_FRONTEND=noninteractive
+         export DEBIAN_FRONTEND=noninteractive
 
-     apt update
-     apt -y install --no-install-recommends sudo
+         apt update
+         apt -y install --no-install-recommends sudo
 
-     echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+         echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
      EOF
 
      USER ubuntu
 
      RUN <<EOF
-     echo 'PS1="\[\033[0;31m\]\u@ubuntu:\[\033[0m\]\w$ "' > ~/.bashrc
-     touch ~/.sudo_as_admin_successful
+         echo 'PS1="\[\033[0;31m\]\u@ubuntu:\[\033[0m\]\w$ "' > ~/.bashrc
+         touch ~/.sudo_as_admin_successful
      EOF
    #+END_SRC
 ** nix                                                     :src:indent_fixed:
@@ -41,7 +41,7 @@
      FROM nixos/nix
 
      RUN <<EOF
-     echo "extra-experimental-features = nix-command flakes" | tee -a /etc/nix/nix.conf
-     echo 'PS1="\[\033[0;31m\]\u@nix:\[\033[0m\]\w$ "' > ~/.bashrc
+         echo "extra-experimental-features = nix-command flakes" | tee -a /etc/nix/nix.conf
+         echo 'PS1="\[\033[0;31m\]\u@nix:\[\033[0m\]\w$ "' > ~/.bashrc
      EOF
    #+END_SRC

@@ -90,7 +90,7 @@ It is supported from docker 18.09"
   `(,(cons (rx (or line-start "onbuild ")
                (group (or "from" "maintainer" "run" "cmd" "expose" "env" "arg"
                           "add" "copy" "entrypoint" "volume" "user" "workdir" "onbuild"
-                          "label" "stopsignal" "shell" "healthcheck"))
+                          "label" "stopsignal" "shell" "healthcheck" "eof"))
                word-boundary)
            font-lock-keyword-face)
     (,dockerfile--from-regex
