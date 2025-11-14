@@ -89,7 +89,13 @@ If N is negative, search forwards for the -Nth following match."
   (eat-enable-shell-prompt-annotation nil)
   :bind (("<f3>" . eat)
          ("C-<f3>" . (lambda() (interactive) (eat nil t)))
+         :map eat-line-mode-map
+         ("C-c C-l" . (lambda () (interactive) (eat-toggle-cursor)))
          )
+  :config
+  (defun eat-toggle-cursor ()
+    (interactive)
+    (if cursor-type (setq cursor-type nil) (setq cursor-type 'box)))
   )
 
 (defun dot-dircolors ()
