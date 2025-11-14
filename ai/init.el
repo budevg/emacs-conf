@@ -162,8 +162,9 @@ combinations."
   :commands agent-shell
   :config
   (setq shell-maker-prompt-before-killing-buffer nil
-        agent-shell-goose-authentication
-        (agent-shell-make-goose-authentication :none t)
+        agent-shell-goose-authentication (agent-shell-make-goose-authentication :none t)
+        agent-shell-goose-command (cons "goose-acp" (cdr agent-shell-goose-command))
+        agent-shell-google-gemini-command (cons "gemini-acp" (cdr agent-shell-google-gemini-command))
         )
   (defun shell-maker-welcome-message (config) "")
 )
