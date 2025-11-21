@@ -51,6 +51,7 @@
 (require 'text-property-search)
 (require 'cl-generic)
 (require 'map)
+(require 'mailcap)                    ;FIXME Avoid this somehow
 
 (declare-function json-read "json" ())
 (defvar json-object-type)
@@ -346,7 +347,7 @@ behavior of other backends.
 
 This variable controls which parts of the query will be cached,
 and can be the symbols t or nil to cache everything or nothing
-respectively. It can also be a list of symbols:
+respectively.  It can also be a list of symbols:
 
 - message: Cache conversation messages
 - system: Cache the system message
@@ -626,31 +627,17 @@ always handled separately."
 (defcustom gptel-track-media nil
   "Whether supported media in chat buffers should be sent.
 
-When the active `gptel-model' supports it, gptel can send text, images
-or other media from links in chat buffers to the LLM.  To use this, the
-following steps are required.
+When this is non-nil, gptel will send text, images or other media from
+links in chat buffers to the LLM.
 
-1. `gptel-track-media' (this variable) should be non-nil
-
-2. The LLM should provide vision or document support.  (See
-`gptel-make-openai', `gptel-make-anthropic', `gptel-make-ollama' or
-`gptel-make-gemini' for details on how to specify media support for
-models.)
-
-3. Only \"standalone\" links in chat buffers are considered.
-These are links on their own line with no surrounding text.
-Further:
-
-- In Org mode, only files or URLs of the form
-  [[/path/to/media][bracket links]] and <angle/link/path>
-  are sent.
-
-- In Markdown mode, only files or URLS of the form
-  [bracket link](/path/to/media) and <angle/link/path>
-  are sent.
+Sending images or other binary media from links requires the
+active `gptel-model' to support it.  See `gptel-make-openai',
+`gptel-make-anthropic', `gptel-make-ollama' or `gptel-make-gemini' for
+details on how to specify media support for models.
 
 This option has no effect in non-chat buffers.  To include
-media (including images) more generally, use `gptel-add'."
+media (including images) more generally, use `gptel-add' or
+`gptel-add-file'."
   :type 'boolean)
 
 (defcustom gptel-use-context 'system
@@ -699,13 +686,76 @@ reasoning text will be inserted at the end of that buffer."
           (const :tag "Include but ignore" ignore)
           (string :tag "Include in buffer")))
 
-(defvar gptel-context--alist nil
+(define-obsolete-variable-alias 'gptel-context--alist 'gptel-context
+  "0.9.9.3")
+
+(defcustom gptel-context nil
   "List of gptel's context sources.
 
-Each entry is of the form
- (buffer . (overlay1 overlay2 ...))
-or
- (\"path/to/file\").")
+The items in this list (file names or buffers) are included with gptel
+queries as additional context.
+
+Each entry can be a file path (string) or a buffer (object, not buffer
+name):
+
+ \\='(\"~/path/to/file1\"
+   \"./file2\"
+   #<buffer *scratch*>
+   ...)
+
+The above covers the most common cases.  You can also specify context
+sources in a more targeted way, with entries of the form
+
+  (<buffer> . spec)
+  (\"/path/to/file\" . spec)
+
+where spec is a plist declaring specific parts of the buffer/file to
+include instead of the entire text.
+
+For buffers, you can specify regions to include using buffer spans and
+line number ranges as conses, and overlays as a list:
+
+  (<buffer> :bounds ((start1 . end1) (start2 . end2) ...)
+            :lines  ((from1 . to1) (from2 . end2) ...)
+            :overlays (ov1 ov2 ...))
+
+For files, spec can include buffer spans and line number ranges, as well as
+the MIME type of the file:
+
+  (\"/path/to/file\" :bounds ((start1 . end1) (start2 . end2) ...)
+                   :lines  ((from1 . to1) (from2 . end2) ...)
+                   :mime \"image/png\")
+
+gptel tries to guess file MIME types, but is not always successful, so
+it is recommended to provide it with non-text files.
+
+Usage of context commands (such as `gptel-add' and `gptel-add-file')
+will modify this variable.  You can also set this variable
+buffer-locally, or let-bind it around calls to gptel queries, or via
+gptel presets with the :context key."
+  :type '(repeat string))
+
+(defcustom gptel-markdown-validate-link #'always
+  "Validate links to be sent as context with gptel queries.
+
+When `gptel-track-media' is enabled, this option determines if a
+supported link will be followed and its source included with gptel
+queries from Markdown buffers.  Currently only links to files are
+supported (along with web URLs if the model supports them).
+
+It should be a function that accepts a Markdown link and return non-nil
+if the link should be followed.  See `markdown-link-at-pos' for the
+structure of a Markdown link object.
+
+By default, all links are considered valid.
+
+Set this to `gptel--link-standalone-p' to only follow links placed on a
+line by themselves, separated from surrounding text."
+  :type '(choice
+          (const :tag "All links" always)
+          (const :tag "Standalone links" gptel--link-standalone-p)
+          (function :tag "Function"))
+  :group 'gptel)
 
 (defvar gptel--request-alist nil
   "Alist of active gptel requests.
@@ -746,6 +796,23 @@ See `gptel-backend'."
     '("--disable" "--location" "--silent" "--compressed"
       "-XPOST" "-y7200" "-Y1" "-D-"))
   "Arguments always passed to Curl for gptel queries.")
+
+(defvar gptel--link-type-cache nil
+  "Cache of checks for binary files.
+
+Each alist entry maps an absolute file path to a cons cell of the
+form (t . binaryp), where binaryp is non-nil if the file is
+binary-encoded.")
+
+;; The following is derived from:
+;;
+;; (concat "\\(?:" markdown-regex-link-inline "\\|" markdown-regex-angle-uri "\\)")
+;;
+;; Since we want this known at compile time, when markdown-mode is not
+;; guaranteed to be available, we have to hardcode it.
+(defconst gptel-markdown--link-regex
+  "\\(?:\\(?1:!\\)?\\(?2:\\[\\)\\(?3:\\^?\\(?:\\\\\\]\\|[^]]\\)*\\|\\)\\(?4:\\]\\)\\(?5:(\\)\\s-*\\(?6:[^)]*?\\)\\(?:\\s-+\\(?7:\"[^\"]*\"\\)\\)?\\s-*\\(?8:)\\)\\|\\(<\\)\\([a-z][a-z0-9.+-]\\{1,31\\}:[^]	\n<>,;()]+\\)\\(>\\)\\)"
+  "Link regex for `gptel-mode' in Markdown mode.")
 
 
 ;;; Utility functions
@@ -832,6 +899,21 @@ Later plists in the sequence take precedence over earlier ones."
     (goto-char pm))
   (insert "\n```\n"))
 
+(defun gptel--strip-mode-suffix (mode-sym)
+  "Remove the -mode suffix from MODE-SYM.
+
+MODE-SYM is typically a major-mode symbol."
+  (or (alist-get mode-sym gptel--mode-description-alist)
+      (let ((mode-name (thread-last
+                         (symbol-name mode-sym)
+                         (string-remove-suffix "-mode")
+                         (string-remove-suffix "-ts"))))
+        ;; NOTE: The advertised calling convention of provided-mode-derived-p
+        ;; has changed in Emacs 30, this needs to be updated eventually
+        (if (provided-mode-derived-p
+             mode-sym 'prog-mode 'text-mode 'tex-mode)
+            mode-name ""))))
+
 (defvar url-http-end-of-headers)
 (defvar url-http-response-status)
 (cl-defun gptel--url-retrieve (url &key method data headers)
@@ -891,7 +973,7 @@ For BUF, START, END and BODY-THUNK see `gptel--with-buffer-copy'."
       (dolist (sym '( gptel-backend gptel--system-message gptel-model
                       gptel-mode gptel-track-response gptel-track-media
                       gptel-use-tools gptel-tools gptel-use-curl gptel--schema
-                      gptel-use-context gptel--num-messages-to-send
+                      gptel-use-context gptel-context gptel--num-messages-to-send
                       gptel-stream gptel-include-reasoning gptel--request-params
                       gptel-temperature gptel-max-tokens gptel-cache))
         (set (make-local-variable sym) (buffer-local-value sym buf)))
@@ -914,25 +996,26 @@ Return nil if string collapses to empty string."
     (unless (string-empty-p trimmed)
       trimmed)))
 
-(defsubst gptel--link-standalone-p (beg end)
-  "Return non-nil if positions BEG and END are isolated.
+(defun gptel--link-standalone-p (link)
+  "Return non-nil if Markdown LINK is isolated.
 
-This means the extent from BEG to END is the only non-whitespace
-content on this line."
-  (save-excursion
-    (and (= beg (progn (goto-char beg) (beginning-of-line)
-                       (skip-chars-forward "\t ")
-                       (point)))
-         (= end (progn (goto-char end) (end-of-line)
-                       (skip-chars-backward "\t ")
-                       (point))))))
+This means the extent from the link beginning to end is the only
+non-whitespace content on its line."
+  (let ((beg (car link)) (end (cadr link)))
+    (save-excursion
+      (and (= beg (progn (goto-char beg) (beginning-of-line)
+                         (skip-chars-forward "\t ")
+                         (point)))
+           (= end (progn (goto-char end) (end-of-line)
+                         (skip-chars-backward "\t ")
+                         (point)))))))
 
 (defsubst gptel--curl-path ()
   "Curl executable to use."
   (if (stringp gptel-use-curl) gptel-use-curl "curl"))
 
 (defun gptel--transform-add-context (callback fsm)
-  (if (and gptel-use-context gptel-context--alist)
+  (if (and gptel-use-context gptel-context)
       (gptel-context--wrap callback (plist-get (gptel-fsm-info fsm) :data))
     (funcall callback)))
 
@@ -997,10 +1080,9 @@ The result is a string intended for display.  Newlines are
 replaced with REPLACEMENT."
   (cl-typecase directive
     (string
-     (concat
-      (string-replace "\n" (or replacement " ")
-                      (truncate-string-to-width
-                       directive width nil nil t))))
+     (string-replace
+      "\n" (or replacement " ")
+      (substring directive 0 (min width (length directive)))))
     (function
      (concat
       "λ: "
@@ -1194,9 +1276,9 @@ Tools are capabilities provided by you to the LLM as functions an
 LLM can choose to call.  gptel runs the function call on your
 machine.
 
-If set to t, any tools selected in `gptel-tools' will be made
-available to the LLM.  This is the default.  It has no effect if
-no tools are selected.
+If set to t, any tools selected in variable `gptel-tools' will be made
+available to the LLM.  This is the default.  It has no effect if no
+tools are selected.
 
 If set to force, gptel will try to force the LLM to call one or
 more of the provided tools.  Support for this feature depends on
@@ -1307,7 +1389,7 @@ assigned a category when it is created, with a category of
 
 This is a two-level alist mapping categories and tool names to
 the tool itself.  It is used as a global register of available
-tools and in gptel's UI, see `gptel-tools'.
+tools and in gptel's UI, see variable `gptel-tools'.
 
 In this example structure, cat-tool and the rest are cl-structs
 of type `gptel-tool':
@@ -1347,7 +1429,7 @@ returned."
   "Make a gptel tool for LLM use.
 
 The following keyword arguments are available, of which the first
-four are required.
+four SLOTS are required.
 
 NAME: The name of the tool, recommended to be in Javascript style snake_case.
 
@@ -1481,12 +1563,12 @@ implementation, used by OpenAI-compatible APIs and Ollama."
     (ensure-list tools))))
 
 (cl-defgeneric gptel--parse-tool-results (backend results)
-  "Return a BACKEND-appropriate prompt containing tool call RESULTS.
+  "Return a BACKEND appropriate prompt containing tool call RESULTS.
 
 This will be injected into the messages list in the prompt to
 send to the LLM.")
 
-;; FIXME(fsm) unify this with `gptel--wrap-user-prompt', which is a mess
+;; FIXME(fsm) unify this with `gptel--inject-media', which is a mess
 (cl-defgeneric gptel--inject-prompt
     (_backend data new-prompt &optional _position)
   "Append NEW-PROMPT to existing prompts in query DATA.
@@ -1520,10 +1602,10 @@ OpenAI-compatible and Ollama message formats."
 
 Each entry is a list whose car is a request state (any symbol)
 and whose cdr is an alist listing possible next states.  Each key
-is either a predicate function or `t'.  When `gptel--fsm-next' is
+is either a predicate function or t.  When `gptel--fsm-next' is
 called, the predicates are called in the order they appear here
 to find the next state.  Each predicate is called with the state
-machine's INFO, see `gptel-fsm'.  A predicate of `t' is
+machine's INFO, see `gptel-fsm'.  A predicate of t is
 considered a success and acts as a default.")
 
 (defvar gptel-request--handlers
@@ -1608,8 +1690,7 @@ MACHINE is an instance of `gptel-fsm'"
   ;; a second network request: gptel tests for the presence of these flags to
   ;; handle state transitions.  (NOTE: Don't add :token to this.)
   (let ((info (gptel-fsm-info fsm)))
-    (dolist (key '(:tool-success :tool-use :error
-                                 :http-status :reasoning :reasoning-block))
+    (dolist (key '(:tool-success :tool-use :error :http-status :reasoning))
       (when (plist-get info key)
         (plist-put info key nil))))
   (funcall
@@ -1685,6 +1766,7 @@ MACHINE is an instance of `gptel-fsm'"
                      (funcall process-tool-result result)))))))
          tool-use)
         (when pending-calls
+          (plist-put info :tool-pending t)
           (funcall (plist-get info :callback)
                    (cons 'tool-call pending-calls) info))))))
 
@@ -1983,9 +2065,6 @@ Initiate the request when done."
              ;; TODO(tool) Limit tool use to capable models after documenting :capabilities
              ;; (gptel-use-tools (and (gptel--model-capable-p 'tool-use) gptel-use-tools))
              (stream (and (plist-get info :stream) gptel-use-curl gptel-stream
-                          ;; HACK(tool): no stream if Ollama + tools.  Need to find a better way
-                          (not (and (eq (type-of gptel-backend) 'gptel-ollama)
-                                    gptel-tools gptel-use-tools))
                           ;; Check model-specific request-params for streaming preference
                           (let* ((model-params (gptel--model-request-params gptel-model))
                                  (stream-spec (plist-get model-params :stream)))
@@ -2009,11 +2088,11 @@ Initiate the request when done."
         ;; irrespective of the preference in `gptel-use-context'.  This is
         ;; because media cannot be included (in general) with system messages.
         ;; TODO(augment): Find a way to do this in the prompt-buffer?
-        (when (and gptel-context--alist gptel-use-context
-                   gptel-track-media (gptel--model-capable-p 'media))
-          (gptel--wrap-user-prompt gptel-backend full-prompt 'media))
+        (when (and gptel-context gptel-use-context (gptel--model-capable-p 'media))
+          (gptel--inject-media gptel-backend full-prompt))
         (unless stream (cl-remf info :stream))
         (plist-put info :backend gptel-backend)
+        (plist-put info :model gptel-model)
         (when gptel-include-reasoning   ;Required for next-request-only scope
           (plist-put info :include-reasoning gptel-include-reasoning))
         (when (and gptel-use-tools gptel-tools)
@@ -2138,8 +2217,7 @@ lists with explicit roles (prompt/response/tool).  See the documentation of
                   'gptel `(tool . ,(plist-get call :id)))))))))
 
 (cl-defgeneric gptel--parse-list (backend prompt-list)
-  "Parse PROMPT-LIST and return a list of prompts suitable for
-BACKEND.
+  "Parse PROMPT-LIST and return a list of prompts for BACKEND.
 
 PROMPT-LIST is interpreted as a conversation, i.e. an alternating
 series of user prompts and LLM responses.  The returned structure
@@ -2160,10 +2238,41 @@ or
   (list `(:text ,(buffer-substring-no-properties
                   beg end))))
 
-(defvar markdown-regex-link-inline)
-(defvar markdown-regex-angle-uri)
 (declare-function markdown-link-at-pos "markdown-mode")
 (declare-function mailcap-file-name-to-mime-type "mailcap")
+
+(defsubst gptel-markdown--validate-link (link)
+  "Validate a Markdown LINK as sendable under the current gptel settings.
+
+Return a form (validp link-type path . REST), where REST is a list
+explaining why sending the link is not supported by gptel.  Only the
+first nil value in REST is guaranteed to be correct."
+  (let ((mime))
+    (if-let* ((path (nth 3 link))
+              (prefix (or (string-search "://" path) 0))
+              (link-type (if (= prefix 0) "file" (substring path 0 prefix)))
+              (path (if (and (equal link-type "file") (> prefix 0))
+                        (substring path (+ prefix 3)) path))
+              (resource-type
+               (or (and (equal link-type "file") 'file)
+                   (and (gptel--model-capable-p 'url)
+                        (member link-type '("http" "https" "ftp")) 'url)))
+              (user-check (funcall gptel-markdown-validate-link link))
+              (readablep (or (member link-type '("http" "https" "ftp"))
+                             (file-remote-p path)
+                             (file-readable-p path)))
+              (mime-valid
+               (if (or (eq resource-type 'url)
+                       (cdr (with-memoization
+                                (alist-get (expand-file-name path)
+                                           gptel--link-type-cache
+                                           nil nil #'string=)
+                              (cons t (gptel--file-binary-p path)))))
+                   (gptel--model-mime-capable-p
+                    (setq mime (mailcap-file-name-to-mime-type path)))
+                 t)))
+        (list t link-type path resource-type user-check readablep mime-valid mime)
+      (list nil link-type path resource-type user-check readablep mime-valid mime))))
 
 (cl-defmethod gptel--parse-media-links ((_mode (eql 'markdown-mode)) beg end)
   "Parse text and actionable links between BEG and END.
@@ -2173,45 +2282,43 @@ Return a list of the form
   (:media \"/path/to/media.png\" :mime \"image/png\")
   (:text \"More text\"))
 for inclusion into the user prompt for the gptel request."
-  (require 'mailcap)                    ;FIXME Avoid this somehow
-  (let ((parts) (from-pt) (mime))
+  (let ((parts) (from-pt))
     (save-excursion
       (setq from-pt (goto-char beg))
-      (while (re-search-forward
-              (concat "\\(?:" markdown-regex-link-inline "\\|"
-                      markdown-regex-angle-uri "\\)")
-              end t)
-        (setq mime nil)
-        (when-let* ((link-at-pt (markdown-link-at-pos (point)))
-                    ((gptel--link-standalone-p
-                      (car link-at-pt) (cadr link-at-pt)))
-                    (path (nth 3 link-at-pt))
-                    (path (string-remove-prefix "file://" path)))
-          (cond
-           ((seq-some (lambda (p) (string-prefix-p p path))
-                      '("https:" "http:" "ftp:"))
-            ;; Collect text up to this image, and collect this image url
-            (when (gptel--model-capable-p 'url) ; FIXME This is not a good place
-                                        ; to check for url capability!
+      (while (re-search-forward gptel-markdown--link-regex end t)
+        (let* ((link-at-pt (markdown-link-at-pos (point)))
+               (link-status (gptel-markdown--validate-link link-at-pt)))
+          (cl-destructuring-bind
+              (valid type path resource-type user-check readablep mime-valid mime)
+              link-status
+            (cond
+             ((and valid (member type '("http" "https" "ftp")))
+              ;; Collect text up to this image, and collect this image url
               (let ((text (buffer-substring-no-properties from-pt (car link-at-pt))))
                 (unless (string-blank-p text) (push (list :text text) parts))
                 (push (list :url path :mime mime) parts)
-                (setq from-pt (cadr link-at-pt)))))
-           ((file-readable-p path)
-            (if (or (not (gptel--file-binary-p path))
-                    (and (setq mime (mailcap-file-name-to-mime-type path))
-                         (gptel--model-mime-capable-p mime)))
-                ;; Collect text up to this image, and collect this image
-                (let ((text (buffer-substring-no-properties from-pt (car link-at-pt))))
-                  (unless (string-blank-p text) (push (list :text text) parts))
-                  (push (if mime (list :media path :mime mime) (list :textfile path)) parts)
-                  (setq from-pt (cadr link-at-pt)))
+                (setq from-pt (cadr link-at-pt))))
+             (valid   ; Collect text up to this link, and collect this link data
+              (let ((text (buffer-substring-no-properties from-pt (car link-at-pt))))
+                (unless (string-blank-p text) (push (list :text text) parts))
+                (push (if mime (list :media path :mime mime) (list :textfile path)) parts)
+                (setq from-pt (cadr link-at-pt))))
+             ((not resource-type)
+              (message "Link source not followed for unsupported link type \"%s\"." type))
+             ((not user-check)
+              (message
+               (if (eq gptel-markdown-validate-link 'gptel--link-standalone-p)
+                   "Ignoring non-standalone link \"%s\"."
+                 "Link %s failed to validate, see `gptel-markdown-validate-link'.")
+               path))
+             ((not readablep) (message "Ignoring inaccessible file \"%s\"." path))
+             ((and (not mime-valid) (eq resource-type 'file))
               (message "Ignoring unsupported binary file \"%s\"." path)))))))
     (unless (= from-pt end)
       (push (list :text (buffer-substring-no-properties from-pt end)) parts))
     (nreverse parts)))
 
-(cl-defgeneric gptel--wrap-user-prompt (backend _prompts)
+(cl-defgeneric gptel--inject-media (backend _prompts)
   "Wrap the last prompt in PROMPTS with gptel's context.
 
 PROMPTS is a structure as returned by `gptel--parse-buffer'.
@@ -2274,13 +2381,16 @@ the response is inserted into the current buffer after point."
   (let* ((inhibit-message t)
          (message-log-max nil)
          (url-request-method "POST")
+         (info (gptel-fsm-info fsm))
+         ;; We have to let-bind the following two since their dynamic
+         ;; values are used for key lookup and url resolution
+         (gptel-backend (plist-get info :backend))
+         (gptel-model (plist-get info :model))
          (url-request-extra-headers
           (append '(("Content-Type" . "application/json"))
                   (when-let* ((header (gptel-backend-header gptel-backend)))
                     (if (functionp header)
                         (funcall header) header))))
-         (info (gptel-fsm-info fsm))
-         (backend (plist-get info :backend))
          (callback (or (plist-get info :callback) ;if not the first run
                        #'gptel--insert-response)) ;default callback
          ;; NOTE: We don't need the decode-coding-string dance here since we
@@ -2302,14 +2412,13 @@ the response is inserted into the current buffer after point."
     (let ((proc-buf
            (url-retrieve (let ((backend-url (gptel-backend-url gptel-backend)))
                            (if (functionp backend-url)
-                               (with-current-buffer (plist-get info :buffer)
-                                 (funcall backend-url))
-                             backend-url))
+                               (funcall backend-url) backend-url))
                          (lambda (_)
                            (set-buffer-multibyte t)
                            (set-buffer-file-coding-system 'utf-8-unix)
                            (pcase-let ((`(,response ,http-status ,http-msg ,error)
-                                        (gptel--url-parse-response backend info))
+                                        (gptel--url-parse-response
+                                         (plist-get info :backend) info))
                                        (buf (current-buffer)))
                              (plist-put info :http-status http-status)
                              (plist-put info :status http-msg)
@@ -2400,17 +2509,16 @@ See `gptel-curl--get-response' for its contents.")
 (defun gptel-curl--get-args (info token)
   "Produce list of arguments for calling Curl.
 
-REQUEST-DATA is the data to send, TOKEN is a unique identifier."
+INFO contains the request data, TOKEN is a unique identifier."
   (let* ((data (plist-get info :data))
-         ;; We have to let-bind the following two variables since their dynamic
-         ;; values are used for key lookup and url resoloution
+         ;; We have to let-bind the following three since their dynamic
+         ;; values are used for key lookup and url resolution
          (gptel-backend (plist-get info :backend))
+         (gptel-model (plist-get info :model))
          (gptel-stream (plist-get info :stream))
          (url (let ((backend-url (gptel-backend-url gptel-backend)))
                 (if (functionp backend-url)
-                    (with-current-buffer (plist-get info :buffer)
-                      (funcall backend-url))
-                  backend-url)))
+                    (funcall backend-url) backend-url)))
          (data-json (decode-coding-string (gptel--json-encode data) 'utf-8 t))
          (headers
           (append '(("Content-Type" . "application/json"))
@@ -2433,7 +2541,9 @@ REQUEST-DATA is the data to send, TOKEN is a unique identifier."
      (if (length< data-json gptel-curl-file-size-threshold)
          (list (format "-d%s" data-json))
        (letrec
-           ((temp-filename (make-temp-file "gptel-curl-data" nil ".json" data-json))
+           ((write-region-inhibit-fsync t)
+            (file-name-handler-alist nil)
+            (temp-filename (make-temp-file "gptel-curl-data" nil ".json" data-json))
             (cleanup-fn (lambda (&rest _)
                           (when (file-exists-p temp-filename)
                             (delete-file temp-filename)
@@ -2653,7 +2763,8 @@ PROCESS and _STATUS are process parameters."
                   (unless reasoning-block ;Record that we're in a reasoning block (#709)
                     (plist-put proc-info :reasoning-block 'in))
                   (plist-put proc-info :reasoning nil)) ;Reset for next parsing round
-                 ((string-blank-p response)) ;Defer checking if response is blank
+                 ((and (string-blank-p response) ;Defer checking if response is blank
+                       (not reasoning-block))) ;unless we're in a reasoning block already
                  ((and (null reasoning-block) (length> response 0))
                   ;; Obtained from main response stream: reasoning block start
                   (if-let*  ((idx (string-match-p "<think>" response)))
@@ -2772,4 +2883,4 @@ PROC-INFO is a plist with contextual information."
               "Could not parse HTTP response.")))))
 
 (provide 'gptel-request)
-;;; gptel-curl.el ends here
+;;; gptel-request.el ends here

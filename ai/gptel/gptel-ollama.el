@@ -54,9 +54,29 @@ Intended for internal use only.")
         (while (setq content (gptel--json-read))
           (setq pt (point))
           (let ((done (map-elt content :done))
-                (response (map-nested-elt content '(:message :content))))
+                (reasoning (map-nested-elt content '(:message :thinking)))
+                (response (map-nested-elt content '(:message :content)))
+                (tool-calls (map-nested-elt content '(:message :tool_calls))))
             (when (and response (not (eq response :null)))
               (push response content-strs))
+            (when (and tool-calls (not (eq tool-calls :null)))
+              (gptel--inject-prompt
+               (plist-get info :backend) (plist-get info :data)
+               `(:role "assistant" :content :null :tool_calls ,(vconcat tool-calls)))
+              (cl-loop
+               for tool-call across tool-calls  ;replace ":arguments" with ":args"
+               for call-spec = (copy-sequence (plist-get tool-call :function))
+               do (plist-put call-spec :args
+                             (plist-get call-spec :arguments))
+               (plist-put call-spec :arguments nil)
+               collect call-spec into tool-use
+               finally (plist-put info :tool-use tool-use)))
+            (if (and reasoning (not (eq reasoning :null)))
+                (plist-put info :reasoning
+                           (concat (plist-get info :reasoning) reasoning))
+              (if (eq 'in (plist-get info :reasoning-block))
+                  (plist-put info :reasoning-block t)
+                (plist-put info :reasoning-block nil)))
             (unless (eq done :json-false)
               (with-current-buffer (plist-get info :buffer)
                 (cl-incf gptel--ollama-token-count
@@ -73,7 +93,10 @@ Store response metadata in state INFO."
   (plist-put info :stop-reason (plist-get response :done_reason))
   (plist-put info :output-tokens (plist-get response :eval_count))
   (let* ((message (plist-get response :message))
+         (reasoning (plist-get message :thinking))
          (content (plist-get message :content)))
+    (when reasoning
+      (plist-put info :reasoning reasoning))
     (when-let* ((tool-calls (plist-get message :tool_calls)))
       ;; First add the tool call to the prompts list
       (let* ((data (plist-get info :data))
@@ -114,8 +137,7 @@ Store response metadata in state INFO."
     (when (and gptel-use-tools gptel-tools)
       ;; TODO(tool): Find out how to force tool use for Ollama
       (plist-put prompts-plist :tools
-                 (gptel--parse-tools backend gptel-tools))
-      (plist-put prompts-plist :stream :json-false))
+                 (gptel--parse-tools backend gptel-tools)))
     ;; if the temperature and max-tokens aren't set as
     ;; backend/model-specific, use the global settings
     (when (and gptel-temperature (not (plist-get options-plist :temperature)))
@@ -242,22 +264,16 @@ format."
    `(,@(and text-array  (list :content (mapconcat #'identity text-array " ")))
      ,@(and media-array (list :images  (vconcat media-array))))))
 
-(cl-defmethod gptel--wrap-user-prompt ((_backend gptel-ollama) prompts
-                                       &optional inject-media)
-  "Wrap the last user prompt in PROMPTS with the context string.
+(cl-defmethod gptel--inject-media ((_backend gptel-ollama) prompts)
+  "Wrap the first user prompt in PROMPTS with included media files.
 
-If INJECT-MEDIA is non-nil wrap it with base64-encoded media
-files in the context."
-  (if inject-media
-      ;; Wrap the first user prompt with included media files/contexts
-      (when-let* ((media-list (gptel-context--collect-media))
-                  (media-processed (gptel--ollama-parse-multipart media-list)))
-        (cl-callf (lambda (images)
-                    (vconcat (plist-get media-processed :images)
-                             images))
-            (plist-get (car prompts) :images)))
-    ;; Wrap the last user prompt with included text contexts
-    (cl-callf gptel-context--wrap (plist-get (car (last prompts)) :content))))
+Media files, if present, are placed in `gptel-context'."
+  (when-let* ((media-list (gptel-context--collect-media))
+              (media-processed (gptel--ollama-parse-multipart media-list)))
+    (cl-callf (lambda (images)
+                (vconcat (plist-get media-processed :images)
+                         images))
+        (plist-get (car prompts) :images))))
 
 ;;;###autoload
 (cl-defun gptel-make-ollama
