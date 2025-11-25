@@ -15,7 +15,7 @@
        (define-key dired-mode-map [(control n)] 'dired-narrow)
        (define-key dired-mode-map [return] 'dired-single-buffer)
        (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
-       (define-key dired-mode-map "^"
+       (define-key dired-mode-map "-"
          (function
           (lambda nil (interactive) (dired-single-buffer ".."))))
        (define-key dired-mode-map "e"
