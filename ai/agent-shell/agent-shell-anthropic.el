@@ -70,6 +70,24 @@ For api key:
   :type 'alist
   :group 'agent-shell)
 
+(defcustom agent-shell-anthropic-default-model-id
+  nil
+  "Default Anthropic model ID.
+
+Must be one of the model ID's displayed under \"Available models\"
+when starting a new shell."
+  :type '(choice (const nil) string)
+  :group 'agent-shell)
+
+(defcustom agent-shell-anthropic-default-session-mode-id
+  nil
+  "Default Anthropic session mode ID.
+
+Must be one of the mode ID's displayed under \"Available modes\"
+when starting a new shell."
+  :type '(choice (const nil) string)
+  :group 'agent-shell)
+
 (defcustom agent-shell-anthropic-claude-command
   '("claude-code-acp")
   "Command and parameters for the Anthropic Claude client.
@@ -107,6 +125,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :welcome-function #'agent-shell-anthropic--claude-code-welcome-message
    :client-maker (lambda (buffer)
                    (agent-shell-anthropic-make-claude-client :buffer buffer))
+   :default-model-id (lambda () agent-shell-anthropic-default-model-id)
+   :default-session-mode-id (lambda () agent-shell-anthropic-default-session-mode-id)
    :install-instructions "See https://github.com/zed-industries/claude-code-acp for installation."))
 
 (defun agent-shell-anthropic-start-claude-code ()

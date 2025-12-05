@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/acp.el
-;; Version: 0.7.1
+;; Version: 0.8.1
 ;; Package-Requires: ((emacs "28.1"))
 
-(defconst acp-package-version "0.7.1")
+(defconst acp-package-version "0.8.1")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -253,6 +253,11 @@ Note: These are agent process errors.
   "Shutdown ACP CLIENT and release resources."
   (unless client
     (error ":client is required"))
+  (unless (and (or (not (map-elt client :process))
+                   (process-live-p (map-elt client :process)))
+               (buffer-live-p (acp-logs-buffer :client client))
+               (buffer-live-p (acp-traffic-buffer :client client)))
+    (error "Client already shut down"))
   (when (process-live-p (map-elt client :process))
     (delete-process (map-elt client :process)))
   (kill-buffer (acp-logs-buffer :client client))
@@ -431,16 +436,18 @@ and https://agentclientprotocol.com/protocol/schema#initializeresponse."
                                                                     t
                                                                   :false))))))))))
 
-(cl-defun acp-make-authenticate-request (&key method-id)
+(cl-defun acp-make-authenticate-request (&key method-id method)
   "Instantiate an \"authenticate\" request.
 
-METHOD-ID is the authentication method to use.
+METHOD-ID and METHOD (optionally) for authentication method to use.
 
 See https://agentclientprotocol.com/protocol/schema#authenticaterequest."
   (unless method-id
     (error ":method-id is required"))
   `((:method . "authenticate")
-    (:params . ((methodId . ,method-id)))))
+    (:params . ,(append `((methodId . ,method-id))
+                        (when method
+                          `((authMethod . ,method)))))))
 
 (cl-defun acp-make-session-new-request (&key cwd mcp-servers)
   "Instantiate a \"session/new\" request.
@@ -487,6 +494,23 @@ See https://agentclientprotocol.com/protocol/session-modes"
   `((:method . "session/set_mode")
     (:params . ((sessionId . ,session-id)
                 (modeId . ,mode-id)))))
+
+(cl-defun acp-make-session-set-model-request (&key session-id model-id)
+  "Instantiate a \"session/set_model\" request.
+
+SESSION-ID is the ID of the session to change the model for.
+MODEL-ID is the model to set (e.g., \"default\", \"haiku\").
+
+This is a claude-code-acp extension to the ACP protocol.
+
+See https://docs.claude.com/en/api/agent-sdk/typescript"
+  (unless session-id
+    (error ":session-id is required"))
+  (unless model-id
+    (error ":model-id is required"))
+  `((:method . "session/set_model")
+    (:params . ((sessionId . ,session-id)
+                (modelId . ,model-id)))))
 
 (cl-defun acp-make-session-request-permission-response (&key request-id option-id cancelled)
   "Instantiate a \"session/request_permission\" response.
@@ -741,7 +765,7 @@ DIRECTION is either `incoming' or `outgoing', OBJECT is the parsed object."
 
 (defun acp--parse-json (json)
   "Parse JSON using a consistent configuration."
-  (json-parse-string json :object-type 'alist :null-object nil))
+  (json-parse-string json :object-type 'alist :null-object nil :false-object nil))
 
 (defun acp--serialize-json (object)
   "Serialize OBJECT to JSON using a consistent configuration."

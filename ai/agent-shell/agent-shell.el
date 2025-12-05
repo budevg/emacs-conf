@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/agent-shell
-;; Version: 0.17.2
-;; Package-Requires: ((emacs "29.1") (shell-maker "0.84.1") (acp "0.7.1"))
+;; Version: 0.20.2
+;; Package-Requires: ((emacs "29.1") (shell-maker "0.84.1") (acp "0.8.1"))
 
-(defconst agent-shell--version "0.17.2")
+(defconst agent-shell--version "0.20.2")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -107,7 +107,7 @@ Example for devcontainer:
 
 (defcustom agent-shell-section-functions nil
   "Abnormal hook run after overlays are applied (experimental).
-Called in `agent-shell--update-dialog-block' after all overlays
+Called in `agent-shell--update-fragment' after all overlays
 are applied.  Each function is called with a range alist containing:
   :block       - The block range with :start and :end positions
   :body        - The body range (if present)
@@ -209,6 +209,8 @@ Assume screenshot file path will be appended to this list."
                                               client-maker
                                               needs-authentication
                                               authenticate-request-maker
+                                              default-model-id
+                                              default-session-mode-id
                                               icon-name
                                               install-instructions)
   "Create an agent configuration alist.
@@ -222,18 +224,22 @@ Keyword arguments:
 - CLIENT-MAKER: Function to create the client
 - NEEDS-AUTHENTICATION: Non-nil authentication is required
 - AUTHENTICATE-REQUEST-MAKER: Function to create authentication requests
+- DEFAULT-MODEL-ID: Default model ID (function returning value).
+- DEFAULT-SESSION-MODE-ID: Default session mode ID (function returning value).
 - ICON-NAME: Name of the icon to use
 - INSTALL-INSTRUCTIONS: Instructions to show when executable is not found
 
 Returns an alist with all specified values."
   `((:mode-line-name . ,mode-line-name)
-    (:welcome-function . ,welcome-function)
+    (:welcome-function . ,welcome-function)                     ;; function
     (:buffer-name . ,buffer-name)
     (:shell-prompt . ,shell-prompt)
     (:shell-prompt-regexp . ,shell-prompt-regexp)
-    (:client-maker . ,client-maker)
+    (:client-maker . ,client-maker)                             ;; function
     (:needs-authentication . ,needs-authentication)
-    (:authenticate-request-maker . ,authenticate-request-maker)
+    (:authenticate-request-maker . ,authenticate-request-maker) ;; function
+    (:default-model-id . ,default-model-id)                     ;; function
+    (:default-session-mode-id . ,default-session-mode-id)       ;; function
     (:icon-name . ,icon-name)
     (:install-instructions . ,install-instructions)))
 
@@ -258,6 +264,57 @@ See `agent-shell-*-make-*-config' for details."
   :type '(repeat (alist :key-type symbol :value-type sexp))
   :group 'agent-shell)
 
+(defcustom agent-shell-preferred-agent-config nil
+  "Default configuration to use for all new shells.
+
+If this is set, `agent-shell' will unconditionally use this
+config and not prompt you to select one."
+  :type '(alist :key-type symbol :value-type sexp)
+  :group 'agent-shell)
+
+(defcustom agent-shell-mcp-servers nil
+  "List of MCP servers to initialize when creating a new session.
+
+Each element should be an alist representing an MCP server configuration
+following the ACP schema for McpServer as defined at:
+
+https://agentclientprotocol.com/protocol/schema#mcpserver
+
+The schema supports three transport variants:
+
+1. Stdio Transport (universally supported):
+   ((name . \"server-name\")
+    (command . \"/path/to/executable\")
+    (args . (\"arg1\" \"arg2\"))
+    (env . (((name . \"ENV_VAR\") (value . \"value\")))))
+
+2. HTTP Transport (requires mcpCapabilities.http):
+   ((name . \"server-name\")
+    (type . \"http\")
+    (url . \"https://example.com/mcp\")
+    (headers . (((name . \"Authorization\") (value . \"Bearer token\")))))
+
+3. SSE Transport (requires mcpCapabilities.sse):
+   ((name . \"server-name\")
+    (type . \"sse\")
+    (url . \"https://example.com/mcp\")
+    (headers . (((name . \"Authorization\") (value . \"Bearer token\")))))
+
+Example configuration with multiple servers:
+
+  (setq agent-shell-mcp-servers
+        \='(((name . \"notion\")
+           (type . \"http\")
+           (url . \"https://mcp.notion.com/mcp\")
+           (headers . ()))
+          ((name . \"filesystem\")
+           (command . \"npx\")
+           (args . (\"-y\"
+                    \"@modelcontextprotocol/server-filesystem\" \"/tmp\"))
+           (env . ()))))"
+  :type '(repeat (alist :key-type symbol :value-type sexp))
+  :group 'agent-shell)
+
 (cl-defun agent-shell--make-state (&key agent-config buffer client-maker needs-authentication authenticate-request-maker heartbeat)
   "Construct shell agent state with AGENT-CONFIG and BUFFER.
 
@@ -272,6 +329,8 @@ HEARTBEAT, and AUTHENTICATE-REQUEST-MAKER."
         (cons :needs-authentication needs-authentication)
         (cons :authenticate-request-maker authenticate-request-maker)
         (cons :authenticated nil)
+        (cons :set-model nil)
+        (cons :set-session-mode nil)
         (cons :session (list (cons :id nil)
                              (cons :mode-id nil)
                              (cons :modes nil)))
@@ -301,7 +360,8 @@ If already in a shell, invoke `agent-shell-toggle'.
 With prefix argument NEW-SHELL, force start a new shell."
   (interactive "P")
   (if new-shell
-      (agent-shell-start :config (or (agent-shell-select-config
+      (agent-shell-start :config (or agent-shell-preferred-agent-config
+                                     (agent-shell-select-config
                                       :prompt "Start new agent: ")
                                      (error "No agent config found")))
     (if (derived-mode-p 'agent-shell-mode)
@@ -310,11 +370,13 @@ With prefix argument NEW-SHELL, force start a new shell."
           (agent-shell--display-buffer existing-shell)
         (if-let ((other-project-shell (seq-first (agent-shell-buffers))))
             (if (y-or-n-p "No shells in project.  Start a new one? ")
-                (agent-shell-start :config (or (agent-shell-select-config
+                (agent-shell-start :config (or agent-shell-preferred-agent-config
+                                               (agent-shell-select-config
                                                 :prompt "Start new agent: ")
                                                (error "No agent config found")))
               (agent-shell--display-buffer other-project-shell))
-          (agent-shell-start :config (or (agent-shell-select-config
+          (agent-shell-start :config (or agent-shell-preferred-agent-config
+                                         (agent-shell-select-config
                                           :prompt "Start new agent: ")
                                          (error "No agent config found"))))))))
 
@@ -437,8 +499,13 @@ When FORCE is non-nil, skip confirmation prompt."
   "TAB" #'agent-shell-next-item
   "<tab>" #'agent-shell-next-item
   "<backtab>" #'agent-shell-previous-item
+  "n" #'agent-shell-next-item
+  "p" #'agent-shell-previous-item
   "S-TAB" #'agent-shell-previous-item
-  "C-c C-c" #'agent-shell-interrupt)
+  "C-<tab>" #'agent-shell-cycle-session-mode
+  "C-c C-c" #'agent-shell-interrupt
+  "C-c C-m" #'agent-shell-set-session-mode
+  "C-c C-v" #'agent-shell-set-session-model)
 
 (shell-maker-define-major-mode (agent-shell--make-shell-maker-config) agent-shell-mode-map)
 
@@ -492,13 +559,33 @@ Flow:
             :shell shell
             :on-session-init (lambda ()
                                (agent-shell--handle :command command :shell shell))))
+          ((and (map-nested-elt (agent-shell--state) '(:agent-config :default-model-id))
+                (funcall (map-nested-elt (agent-shell--state)
+                                         '(:agent-config :default-model-id)))
+                (not (map-elt (agent-shell--state) :set-model)))
+           (agent-shell--set-default-model
+            :shell shell
+            :model-id (funcall (map-nested-elt (agent-shell--state)
+                                               '(:agent-config :default-model-id)))
+            :on-model-changed (lambda ()
+                                (map-put! (agent-shell--state) :set-model t)
+                                (agent-shell--handle :command command :shell shell))))
+          ((and (map-nested-elt (agent-shell--state) '(:agent-config :default-session-mode-id))
+                (funcall (map-nested-elt (agent-shell--state) '(:agent-config :default-session-mode-id)))
+                (not (map-elt (agent-shell--state) :set-session-mode)))
+           (agent-shell--set-default-session-mode
+            :shell shell
+            :mode-id (funcall (map-nested-elt (agent-shell--state) '(:agent-config :default-session-mode-id)))
+            :on-mode-changed (lambda ()
+                               (map-put! (agent-shell--state) :set-session-mode t)
+                               (agent-shell--handle :command command :shell shell))))
           (t
            (agent-shell--send-command :prompt command :shell shell)))))
 
 (cl-defun agent-shell--on-error (&key state error)
   "Handle ERROR with SHELL an STATE."
   (let-alist error
-    (agent-shell--update-dialog-block
+    (agent-shell--update-fragment
      :state state
      :block-id "Error"
      :body (or .message "Some error ¯\\_ (ツ)_/¯")
@@ -529,14 +616,14 @@ Flow:
                           (list (cons :diff diff)))))
                (let ((tool-call-labels (agent-shell-make-tool-call-label
                                         state (map-elt update 'toolCallId))))
-                 (agent-shell--update-dialog-block
+                 (agent-shell--update-fragment
                   :state state
                   :block-id (map-elt update 'toolCallId)
                   :label-left (map-elt tool-call-labels :status)
                   :label-right (map-elt tool-call-labels :title))
                  ;; Display plan as markdown block if present
                  (when-let ((plan (map-nested-elt update '(rawInput plan))))
-                   (agent-shell--update-dialog-block
+                   (agent-shell--update-fragment
                     :state state
                     :block-id (concat (map-elt update 'toolCallId) "-plan")
                     :label-left (propertize "Proposed plan" 'font-lock-face 'font-lock-doc-markup-face)
@@ -551,7 +638,7 @@ Flow:
                  (unless (equal (map-elt state :last-entry-type)
                                 "agent_thought_chunk")
                    (map-put! state :chunked-group-count (1+ (map-elt state :chunked-group-count))))
-                 (agent-shell--update-dialog-block
+                 (agent-shell--update-fragment
                   :state state
                   :block-id (format "%s-agent_thought_chunk"
                                     (map-elt state :chunked-group-count))
@@ -573,7 +660,7 @@ Flow:
                  (agent-shell--append-transcript
                   :text .content.text
                   :file-path agent-shell--transcript-file)
-                 (agent-shell--update-dialog-block
+                 (agent-shell--update-fragment
                   :state state
                   :block-id (format "%s-agent_message_chunk"
                                     (map-elt state :chunked-group-count))
@@ -585,7 +672,7 @@ Flow:
                (map-put! state :last-entry-type "agent_message_chunk"))
               ((equal (map-elt update 'sessionUpdate) "plan")
                (let-alist update
-                 (agent-shell--update-dialog-block
+                 (agent-shell--update-fragment
                   :state state
                   :block-id "plan"
                   :label-left (propertize "Plan" 'font-lock-face 'font-lock-doc-markup-face)
@@ -640,11 +727,11 @@ Flow:
                    (when (and (map-elt update 'status)
                               (not (equal (map-elt update 'status) "pending")))
                      ;; block-id must be the same as the one used as
-                     ;; agent-shell--update-dialog-block param by "session/request_permission".
-                     (agent-shell--delete-dialog-block :state state :block-id (format "permission-%s" .toolCallId)))
+                     ;; agent-shell--update-fragment param by "session/request_permission".
+                     (agent-shell--delete-fragment :state state :block-id (format "permission-%s" .toolCallId)))
                    (let ((tool-call-labels (agent-shell-make-tool-call-label
                                             state .toolCallId)))
-                     (agent-shell--update-dialog-block
+                     (agent-shell--update-fragment
                       :state state
                       :block-id .toolCallId
                       :label-left (map-elt tool-call-labels :status)
@@ -654,7 +741,7 @@ Flow:
               ((equal (map-elt update 'sessionUpdate) "available_commands_update")
                (let-alist update
                  (map-put! state :available-commands (map-elt update 'availableCommands))
-                 (agent-shell--update-dialog-block
+                 (agent-shell--update-fragment
                   :state state
                   :block-id "available_commands_update"
                   :label-left (propertize "Available commands" 'font-lock-face 'font-lock-doc-markup-face)
@@ -673,7 +760,7 @@ Flow:
                  ;; Note: No need to set :last-entry-type as no text was inserted.
                  (agent-shell--update-header-and-mode-line)))
               (t
-               (agent-shell--update-dialog-block
+               (agent-shell--update-fragment
                 :state state
                 :block-id "Session Update - fallback"
                 :body (format "%s" notification)
@@ -681,7 +768,7 @@ Flow:
                 :navigation 'never)
                (map-put! state :last-entry-type nil)))))
           (t
-           (agent-shell--update-dialog-block
+           (agent-shell--update-fragment
             :state state
             :block-id "Notification - fallback"
             :body (format "Unhandled (please file an issue): %s" notification)
@@ -701,10 +788,10 @@ Flow:
                           (cons :permission-request-id .id))
                     (when-let ((diff (agent-shell--make-diff-info .params.toolCall.content)))
                       (list (cons :diff diff)))))
-           (agent-shell--update-dialog-block
+           (agent-shell--update-fragment
             :state state
             ;; block-id must be the same as the one used
-            ;; in agent-shell--delete-dialog-block param.
+            ;; in agent-shell--delete-fragment param.
             :block-id (format "permission-%s" .params.toolCall.toolCallId)
             :body (with-current-buffer (map-elt state :buffer)
                     (agent-shell--make-tool-call-permission-text
@@ -724,7 +811,7 @@ Flow:
             :state state
             :request request))
           (t
-           (agent-shell--update-dialog-block
+           (agent-shell--update-fragment
             :state state
             :block-id "Unhandled Incoming Request"
             :body (format "⚠ Unhandled incoming request: \"%s\"" .method)
@@ -802,21 +889,19 @@ If the buffer's file has changed, prompt the user to reload it."
         (let* ((path (agent-shell--resolve-path .params.path))
                (content .params.content)
                (dir (file-name-directory path))
-               (buffer (find-buffer-visiting path)))
+               (buffer (or (find-buffer-visiting path)
+                           (find-file-noselect path))))
           (when (and dir (not (file-exists-p dir)))
             (make-directory dir t))
-          (if buffer
-              ;; Buffer is open, write and save.
+          (with-temp-buffer
+            (insert content)
+            (let ((content-buffer (current-buffer))
+                  (inhibit-read-only t))
               (with-current-buffer buffer
                 (save-restriction
                   (widen)
-                  (let ((inhibit-read-only t))
-                    (erase-buffer)
-                    (insert content)
-                    (basic-save-buffer))))
-            ;; No open buffer, write to file directly.
-            (with-temp-file path
-              (insert content)))
+                  (replace-buffer-contents content-buffer)
+                  (basic-save-buffer)))))
           (acp-send-response
            :client (map-elt state :client)
            :response (acp-make-fs-write-text-file-response
@@ -889,22 +974,16 @@ https://agentclientprotocol.com/protocol/schema#param-stop-reason"
 
 (defun agent-shell--format-available-commands (commands)
   "Format COMMANDS for shell rendering."
-  (let ((max-name-length (seq-reduce (lambda (acc cmd)
-                                       (max acc (length (map-elt cmd 'name))))
-                                     commands
-                                     0)))
-    (mapconcat
-     (lambda (cmd)
-       (let ((name (map-elt cmd 'name))
-             (desc (map-elt cmd 'description)))
-         (concat
-          ;; For commands to be executable, they start with /
-          (propertize (format (format "/%%-%ds" max-name-length) name)
-                      'font-lock-face 'font-lock-function-name-face)
-          "  "
-          (propertize desc 'font-lock-face 'font-lock-comment-face))))
-     commands
-     "\n")))
+  (agent-shell--align-alist
+   :data commands
+   :columns (list
+             (lambda (cmd)
+               (propertize (concat "/" (map-elt cmd 'name))
+                           'font-lock-face 'font-lock-function-name-face))
+             (lambda (cmd)
+               (propertize (map-elt cmd 'description)
+                           'font-lock-face 'font-lock-comment-face)))
+   :joiner "\n"))
 
 (defun agent-shell--format-agent-capabilities (capabilities)
   "Format agent CAPABILITIES for shell rendering.
@@ -958,23 +1037,18 @@ Example output:
                                  ;; Top-level boolean capabilities (loadSession)
                                  ((eq value t)
                                   (cons (downcase group-name) nil)))))
-                            capabilities)))
-         (max-name-length (seq-reduce (lambda (acc pair)
-                                        (max acc (length (car pair))))
-                                      categories
-                                      0)))
-    (mapconcat
-     (lambda (pair)
-       (let ((category (car pair))
-             (tags (cdr pair)))
-         (concat
-          (propertize (format (format "%%-%ds" max-name-length) category)
-                      'font-lock-face 'font-lock-function-name-face)
-          (when tags
-            (concat "  "
-                    (propertize tags 'font-lock-face 'font-lock-comment-face))))))
-     categories
-     "\n")))
+                            capabilities))))
+    (agent-shell--align-alist
+     :data categories
+     :columns (list
+               (lambda (pair)
+                 (propertize (car pair)
+                             'font-lock-face 'font-lock-function-name-face))
+               (lambda (pair)
+                 (when (cdr pair)
+                   (propertize (cdr pair)
+                               'font-lock-face 'font-lock-comment-face))))
+     :joiner "\n")))
 
 (defun agent-shell--make-diff-info (acp-content)
   "Make diff information from ACP's tool_call_update's ACP-CONTENT.
@@ -1064,7 +1138,7 @@ DIFF should be in the form returned by `agent-shell--make-diff-info':
   (lambda (error raw-message)
     (let-alist error
       (with-current-buffer (map-elt state :buffer)
-        (agent-shell--update-dialog-block
+        (agent-shell--update-fragment
          :state (agent-shell--state)
          :block-id (format "failed-%s-id:%s-code:%s"
                            (map-elt state :request-count)
@@ -1322,8 +1396,8 @@ Set NO-FOCUS to start in background.
 Set NEW-SESSION to start a separate new session."
   (unless (version<= "0.84.1" shell-maker-version)
     (error "Please update shell-maker to version 0.84.1 or newer"))
-  (unless (version<= "0.6.1" acp-package-version)
-    (error "Please update acp.el to version 0.6.1 or newer"))
+  (unless (version<= "0.8.1" acp-package-version)
+    (error "Please update acp.el to version 0.8.1 or newer"))
   (with-temp-buffer ;; client-maker needs a buffer (use a temp one)
     (unless (and (map-elt config :client-maker)
                  (funcall (map-elt config :client-maker) (current-buffer)))
@@ -1372,17 +1446,17 @@ Set NEW-SESSION to start a separate new session."
       (setq-local agent-shell--transcript-file (agent-shell--init-transcript config)))
     shell-buffer))
 
-(cl-defun agent-shell--delete-dialog-block (&key state block-id)
-  "Delete dialog block with STATE and BLOCK-ID."
+(cl-defun agent-shell--delete-fragment (&key state block-id)
+  "Delete fragment with STATE and BLOCK-ID."
   (with-current-buffer (map-elt state :buffer)
     (unless (and (derived-mode-p 'agent-shell-mode)
                  (equal (current-buffer)
                         (map-elt state :buffer)))
       (error "Editing the wrong buffer: %s" (current-buffer)))
-    (agent-shell-ui-delete-dialog-block :namespace-id (map-elt state :request-count) :block-id block-id)))
+    (agent-shell-ui-delete-fragment :namespace-id (map-elt state :request-count) :block-id block-id)))
 
-(cl-defun agent-shell--update-dialog-block (&key state block-id label-left label-right body append create-new navigation expanded)
-  "Update dialog block in the shell buffer.
+(cl-defun agent-shell--update-fragment (&key state block-id label-left label-right body append create-new navigation expanded)
+  "Update fragment in the shell buffer.
 
 Creates or updates existing dialog using STATE's request count as namespace.
 BLOCK-ID uniquely identifies the block.
@@ -1398,8 +1472,8 @@ by default."
                         (map-elt state :buffer)))
       (error "Editing the wrong buffer: %s" (current-buffer)))
     (shell-maker-with-auto-scroll-edit
-     (when-let* ((range (agent-shell-ui-update-dialog-block
-                         (agent-shell-ui-make-dialog-block-model
+     (when-let* ((range (agent-shell-ui-update-fragment
+                         (agent-shell-ui-make-fragment-model
                           :namespace-id (map-elt state :request-count)
                           :block-id block-id
                           :label-left label-left
@@ -1458,57 +1532,83 @@ by default."
 (defun agent-shell-next-item ()
   "Go to next item.
 
-Could be a prompt or an expandable item."
+Could be a prompt or an expandable item.
+If point is at the input prompt and a character key was pressed,
+insert the character instead."
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
-  (let* ((prompt-pos (save-mark-and-excursion
-                       (when (comint-next-prompt 1)
-                         (point))))
-         (block-pos (save-mark-and-excursion
-                      (agent-shell-ui-forward-block)))
-         (button-pos (save-mark-and-excursion
-                       (agent-shell-next-permission-button)))
-         (next-pos (apply #'min (delq nil (list prompt-pos
-                                                block-pos
-                                                button-pos)))))
-    (when next-pos
-      (deactivate-mark)
-      (goto-char next-pos)
-      (when (eq next-pos prompt-pos)
-        (comint-skip-prompt)))))
+  ;; Check if at prompt and inserting a character
+  ;; (Ignore special keys like TAB/Shift-TAB).
+  (if (and (not (shell-maker-busy))
+           (shell-maker-point-at-last-prompt-p)
+           (integerp last-command-event)
+           (> (length (this-command-keys-vector)) 0)
+           ;; Ensure invoked using a key binding.
+           (eq (key-binding (this-command-keys-vector)) this-command))
+      ;; At prompt, insert character.
+      (self-insert-command 1)
+    ;; Otherwise navigate.
+    (let* ((prompt-pos (save-mark-and-excursion
+                         (when (comint-next-prompt 1)
+                           (point))))
+           (block-pos (save-mark-and-excursion
+                        (agent-shell-ui-forward-block)))
+           (button-pos (save-mark-and-excursion
+                         (agent-shell-next-permission-button)))
+           (next-pos (apply #'min (delq nil (list prompt-pos
+                                                  block-pos
+                                                  button-pos)))))
+      (when next-pos
+        (deactivate-mark)
+        (goto-char next-pos)
+        (when (eq next-pos prompt-pos)
+          (comint-skip-prompt))))))
 
 (defun agent-shell-previous-item ()
   "Go to previous item.
 
-Could be a prompt or an expandable item."
+Could be a prompt or an expandable item.
+If point is at the input prompt and a character key was pressed,
+insert the character instead."
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
-  (let* ((current-pos (point))
-         (prompt-pos (save-mark-and-excursion
-                       (when (comint-next-prompt (- 1))
-                         (let ((pos (point)))
-                           (when (< pos current-pos)
-                             pos)))))
-         (block-pos (save-mark-and-excursion
-                      (let ((pos (agent-shell-ui-backward-block)))
-                        (when (and pos (< pos current-pos))
-                          pos))))
-         (button-pos (save-mark-and-excursion
-                       (let ((pos (agent-shell-previous-permission-button)))
-                         (when (and pos (< pos current-pos))
-                           pos))))
-         (positions (delq nil (list prompt-pos
-                                    block-pos
-                                    button-pos)))
-         (next-pos (when positions
-                     (apply #'max positions))))
-    (when next-pos
-      (deactivate-mark)
-      (goto-char next-pos)
-      (when (eq next-pos prompt-pos)
-        (comint-skip-prompt)))))
+  ;; Check if at prompt and inserting a character
+  ;; (Ignore special keys like TAB/Shift-TAB).
+  (if (and (not (shell-maker-busy))
+           (shell-maker-point-at-last-prompt-p)
+           (integerp last-command-event)
+           (> (length (this-command-keys-vector)) 0)
+           ;; Ensure invoked using a key binding.
+           (eq (key-binding (this-command-keys-vector)) this-command))
+      ;; At prompt, insert character.
+      (self-insert-command 1)
+    ;; Otherwise navigate.
+    (let* ((current-pos (point))
+           (prompt-pos (save-mark-and-excursion
+                         (when (comint-next-prompt (- 1))
+                           (let ((pos (point)))
+                             (when (< pos current-pos)
+                               pos)))))
+           (block-pos (save-mark-and-excursion
+                        (let ((pos (agent-shell-ui-backward-block)))
+                          (when (and pos (< pos current-pos))
+                            pos))))
+           (button-pos (save-mark-and-excursion
+                         (let ((pos (agent-shell-previous-permission-button)))
+                           (when (and pos (< pos current-pos))
+                             pos))))
+           (positions (delq nil (list prompt-pos
+                                      block-pos
+                                      button-pos)))
+           (next-pos (when positions
+                       (apply #'max positions))))
+      (when next-pos
+        (deactivate-mark)
+        (goto-char next-pos)
+        (when (eq next-pos prompt-pos)
+          (comint-skip-prompt))))))
 
 (cl-defun agent-shell-make-environment-variables (&rest vars &key inherit-env load-env &allow-other-keys)
   "Return VARS in the form expected by `process-environment'.
@@ -1559,9 +1659,26 @@ STATE should contain :agent-config with :icon-name, :buffer-name, and
 :session with :mode-id and :modes for displaying the current session mode."
   (unless state
     (error "STATE is required"))
-  (let* ((text-header (format " %s @ %s"
+  (let* ((model-name (or (map-elt (seq-find (lambda (model)
+                                              (string= (map-elt model :model-id)
+                                                       (map-nested-elt state '(:session :model-id))))
+                                            (map-nested-elt state '(:session :models)))
+                                  :name)
+                         (map-nested-elt state '(:session :model-id))))
+         (mode-name (when-let ((mode-id (map-nested-elt state '(:session :mode-id))))
+                      (or (agent-shell--resolve-session-mode-name
+                           mode-id
+                           (map-nested-elt state '(:session :modes)))
+                          (map-nested-elt state '(:session :mode-id)))))
+         (text-header (format " %s%s%s @ %s"
                               (propertize (concat (map-nested-elt state '(:agent-config :buffer-name)) " Agent")
                                           'font-lock-face 'font-lock-variable-name-face)
+                              (if model-name
+                                  (concat " ➤ " (propertize model-name 'font-lock-face 'font-lock-negation-char-face))
+                                "")
+                              (if mode-name
+                                  (concat " ➤ " (propertize mode-name 'font-lock-face 'font-lock-type-face))
+                                "")
                               (propertize (string-remove-suffix "/" (abbreviate-file-name default-directory))
                                           'font-lock-face 'font-lock-string-face))))
     (pcase agent-shell-header-style
@@ -1602,6 +1719,20 @@ STATE should contain :agent-config with :icon-name, :buffer-name, and
                                                   (dom-node 'tspan
                                                             `((fill . ,(face-attribute 'font-lock-variable-name-face :foreground)))
                                                             (concat (map-nested-elt state '(:agent-config :buffer-name)) " Agent")))
+                                ;; Model name (optional)
+                                (when model-name
+                                  ;; Add separator arrow
+                                  (dom-append-child text-node
+                                                    (dom-node 'tspan
+                                                              `((fill . ,(face-attribute 'default :foreground))
+                                                                (dx . "8"))
+                                                              "➤"))
+                                  ;; Add model name
+                                  (dom-append-child text-node
+                                                    (dom-node 'tspan
+                                                              `((fill . ,(face-attribute 'font-lock-negation-char-face :foreground))
+                                                                (dx . "8"))
+                                                              model-name)))
                                 ;; Session mode (optional)
                                 (when-let ((mode-id (map-nested-elt state '(:session :mode-id))))
                                   ;; Add separator arrow
@@ -1616,9 +1747,7 @@ STATE should contain :agent-config with :icon-name, :buffer-name, and
                                                               `((fill . ,(or (face-attribute 'font-lock-type-face :foreground nil t)
                                                                              "#6699cc"))
                                                                 (dx . "8"))
-                                                              (agent-shell--resolve-session-mode-name
-                                                               mode-id
-                                                               (map-nested-elt state '(:session :modes))))))
+                                                              mode-name)))
                                 (when-let ((status-frame (agent-shell--status-frame)))
                                   (dom-append-child text-node
                                                     (dom-node 'tspan
@@ -1799,7 +1928,7 @@ FORMAT-ARGS are passed to `format' with ERROR-FORMAT."
 
 (cl-defun agent-shell--initialize-client (&key shell)
   "Initialize ACP client with SHELL."
-  (agent-shell--update-dialog-block
+  (agent-shell--update-fragment
    :state (agent-shell--state)
    :block-id "starting"
    :label-left (format "%s %s"
@@ -1819,7 +1948,7 @@ FORMAT-ARGS are passed to `format' with ERROR-FORMAT."
 
 (cl-defun agent-shell--initialize-subscriptions (&key shell)
   "Initialize ACP client subscriptions with SHELL.."
-  (agent-shell--update-dialog-block
+  (agent-shell--update-fragment
    :state agent-shell--state
    :block-id "starting"
    :label-left (format "%s %s"
@@ -1842,7 +1971,7 @@ Must provide ON-INITIATED (lambda ())."
   (unless on-initiated
     (error "Missing required argument: :on-initiated"))
   (with-current-buffer (map-elt agent-shell--state :buffer)
-    (agent-shell--update-dialog-block
+    (agent-shell--update-fragment
      :state agent-shell--state
      :block-id "starting"
      :body "\n\nInitializing..."
@@ -1862,7 +1991,7 @@ Must provide ON-INITIATED (lambda ())."
                                (list (cons :image (map-elt prompt-capabilities 'image))
                                      (cons :embedded-context (map-elt prompt-capabilities 'embeddedContext)))))
                    (when-let ((agent-capabilities (map-elt response 'agentCapabilities)))
-                     (agent-shell--update-dialog-block
+                     (agent-shell--update-fragment
                       :state agent-shell--state
                       :block-id "agent_capabilities"
                       :label-left (propertize "Agent capabilities" 'font-lock-face 'font-lock-doc-markup-face)
@@ -1876,7 +2005,7 @@ Must provide ON-INITIATED (lambda ())."
 
 Must provide ON-AUTHENTICATED (lambda ())."
   (with-current-buffer (map-elt agent-shell--state :buffer)
-    (agent-shell--update-dialog-block
+    (agent-shell--update-fragment
      :state (agent-shell--state)
      :block-id "starting"
      :body "\n\nAuthenticating..."
@@ -1893,6 +2022,66 @@ Must provide ON-AUTHENTICATED (lambda ())."
     (funcall (map-elt shell :write-output) "No :authenticate-request-maker")
     (funcall (map-elt shell :finish-output) nil)))
 
+(cl-defun agent-shell--set-default-model (&key shell model-id on-model-changed)
+  "Initiate ACP authentication with SHELL MODEL-ID and ON-MODEL-CHANGED."
+  (when-let ((session-id (map-nested-elt (agent-shell--state) '(:session :id))))
+    (with-current-buffer (map-elt agent-shell--state :buffer)
+      (agent-shell--update-fragment
+       :state (agent-shell--state)
+       :block-id "set-model"
+       :label-left (propertize "Setting model" 'font-lock-face 'font-lock-doc-markup-face)
+       :body (format "Requesting %s..." model-id)
+       :append t))
+    (acp-send-request
+     :client (map-elt (agent-shell--state) :client)
+     :request (acp-make-session-set-model-request
+               :session-id session-id
+               :model-id model-id)
+     :on-success (lambda (_response)
+                   (agent-shell--update-fragment
+                    :state (agent-shell--state)
+                    :block-id "set-model"
+                    :body "\n\nDone"
+                    :append t)
+                   (let ((updated-session (map-elt (agent-shell--state) :session)))
+                     (map-put! updated-session :model-id model-id)
+                     (map-put! (agent-shell--state) :session updated-session))
+                   (agent-shell--update-header-and-mode-line)
+                   (when on-model-changed
+                     (funcall on-model-changed)))
+     :on-failure (agent-shell--make-error-handler
+                  :state (agent-shell--state) :shell shell))))
+
+(cl-defun agent-shell--set-default-session-mode (&key shell mode-id on-mode-changed)
+  "Set default session mode with SHELL MODE-ID and ON-MODE-CHANGED."
+  (when-let ((session-id (map-nested-elt (agent-shell--state) '(:session :id))))
+    (with-current-buffer (map-elt agent-shell--state :buffer)
+      (agent-shell--update-fragment
+       :state (agent-shell--state)
+       :block-id "set-session-mode"
+       :label-left (propertize "Setting session mode" 'font-lock-face 'font-lock-doc-markup-face)
+       :body (format "Requesting %s..." mode-id)
+       :append t))
+    (acp-send-request
+     :client (map-elt (agent-shell--state) :client)
+     :request (acp-make-session-set-mode-request
+               :session-id session-id
+               :mode-id mode-id)
+     :on-success (lambda (_response)
+                   (agent-shell--update-fragment
+                    :state (agent-shell--state)
+                    :block-id "set-session-mode"
+                    :body "\n\nDone"
+                    :append t)
+                   (let ((updated-session (map-elt (agent-shell--state) :session)))
+                     (map-put! updated-session :mode-id mode-id)
+                     (map-put! (agent-shell--state) :session updated-session))
+                   (agent-shell--update-header-and-mode-line)
+                   (when on-mode-changed
+                     (funcall on-mode-changed)))
+     :on-failure (agent-shell--make-error-handler
+                  :state (agent-shell--state) :shell shell))))
+
 (cl-defun agent-shell--initiate-session (&key shell on-session-init)
   "Initiate ACP session creation with SHELL.
 
@@ -1900,21 +2089,33 @@ Must provide ON-SESSION-INIT (lambda ())."
   (unless on-session-init
     (error "Missing required argument: :on-session-init"))
   (with-current-buffer (map-elt (agent-shell--state) :buffer)
-    (agent-shell--update-dialog-block
+    (agent-shell--update-fragment
      :state (agent-shell--state)
      :block-id "starting"
      :body "\n\nCreating session..."
      :append t))
   (acp-send-request
    :client (map-elt (agent-shell--state) :client)
-   :request (acp-make-session-new-request :cwd (agent-shell--resolve-path (agent-shell-cwd)))
+   :request (acp-make-session-new-request
+             :cwd (agent-shell--resolve-path (agent-shell-cwd))
+             :mcp-servers (agent-shell--mcp-servers))
    :buffer (current-buffer)
    :on-success (lambda (response)
                  (map-put! agent-shell--state
                            :session (list (cons :id (map-elt response 'sessionId))
                                           (cons :mode-id (map-nested-elt response '(modes currentModeId)))
-                                          (cons :modes (map-nested-elt response '(modes availableModes)))))
-                 (agent-shell--update-dialog-block
+                                          (cons :modes (mapcar (lambda (mode)
+                                                                 `((:id . ,(map-elt mode 'id))
+                                                                   (:name . ,(map-elt mode 'name))
+                                                                   (:description . ,(map-elt mode 'description))))
+                                                               (map-nested-elt response '(modes availableModes))))
+                                          (cons :model-id (map-nested-elt response '(models currentModelId)))
+                                          (cons :models (mapcar (lambda (model)
+                                                                  `((:model-id . ,(map-elt model 'modelId))
+                                                                    (:name . ,(map-elt model 'name))
+                                                                    (:description . ,(map-elt model 'description))))
+                                                                (map-nested-elt response '(models availableModels))))))
+                 (agent-shell--update-fragment
                   :state agent-shell--state
                   :block-id "starting"
                   :label-left (format "%s %s"
@@ -1922,18 +2123,47 @@ Must provide ON-SESSION-INIT (lambda ())."
                                       (propertize "Starting agent" 'font-lock-face 'font-lock-doc-markup-face))
                   :body "\n\nReady"
                   :append t)
-                 (when (map-nested-elt response '(modes availableModes))
-                   (agent-shell--update-dialog-block
+                 (agent-shell--update-header-and-mode-line)
+                 (when (map-nested-elt agent-shell--state '(:session :models))
+                   (agent-shell--update-fragment
+                    :state agent-shell--state
+                    :block-id "available_models"
+                    :label-left (propertize "Available models" 'font-lock-face 'font-lock-doc-markup-face)
+                    :body (agent-shell--format-available-models
+                           (map-nested-elt agent-shell--state '(:session :models)))))
+                 (when (map-nested-elt agent-shell--state '(:session :modes))
+                   (agent-shell--update-fragment
                     :state agent-shell--state
                     :block-id "available_modes"
                     :label-left (propertize "Available modes" 'font-lock-face 'font-lock-doc-markup-face)
                     :body (agent-shell--format-available-modes
-                           (map-nested-elt response '(modes availableModes))
-                           (map-nested-elt response '(modes currentModeId)))))
+                           (map-nested-elt agent-shell--state '(:session :modes)))))
                  (agent-shell--update-header-and-mode-line)
                  (funcall on-session-init))
    :on-failure (agent-shell--make-error-handler
                 :state agent-shell--state :shell shell)))
+
+(defun agent-shell--mcp-servers ()
+  "Return normalized MCP servers configuration for JSON serialization.
+
+Converts list-valued `args', `env', and `headers' fields to vectors
+so they serialize properly to JSON arrays.  Returns a vector of
+normalized server configs."
+  (when agent-shell-mcp-servers
+    (apply #'vector
+           (mapcar (lambda (server)
+                     (let ((normalized (copy-alist server)))
+                       (when-let ((args (map-elt normalized 'args))
+                                  (_ (listp args)))
+                         (map-put! normalized 'args (apply #'vector args)))
+                       (when-let ((env (map-elt normalized 'env))
+                                  (_ (listp env)))
+                         (map-put! normalized 'env (apply #'vector env)))
+                       (when-let ((headers (map-elt normalized 'headers))
+                                  (_ (listp headers)))
+                         (map-put! normalized 'headers (apply #'vector headers)))
+                       normalized))
+                   agent-shell-mcp-servers))))
 
 (cl-defun agent-shell--subscribe-to-client-events (&key state)
   "Subscribe SHELL and STATE to ACP events."
@@ -2098,7 +2328,7 @@ If FILE-PATH is not an image, returns nil."
 
 (cl-defun agent-shell--display-attached-files (uris)
   "Display the attached URIS in the buffer."
-  (agent-shell--update-dialog-block
+  (agent-shell--update-fragment
    :state agent-shell--state
    :block-id "attached-files"
    :label-left (format "%d file%s attached"
@@ -2534,8 +2764,8 @@ MESSAGE-TEXT: Optional message to display after sending the response."
               :option-id option-id))
   ;; Hide permission after sending response.
   ;; block-id must be the same as the one used as
-  ;; agent-shell--update-dialog-block param by "session/request_permission".
-  (agent-shell--delete-dialog-block :state state :block-id (format "permission-%s" tool-call-id))
+  ;; agent-shell--update-fragment param by "session/request_permission".
+  (agent-shell--delete-fragment :state state :block-id (format "permission-%s" tool-call-id))
   (let ((updated-tool-calls (map-copy (map-elt state :tool-calls))))
     (map-delete updated-tool-calls tool-call-id)
     (map-put! state :tool-calls updated-tool-calls))
@@ -2878,6 +3108,41 @@ Available values:
         (:line-end . ,(save-excursion (goto-char end) (line-number-at-pos)))
         (:content . ,content)))))
 
+(cl-defun agent-shell--align-alist (&key data columns (separator "  ") joiner)
+  "Align COLUMNS from DATA.
+
+DATA is a list of alists.  COLUMNS is a list of extractor functions,
+where each extractor takes one alist and returns a string for that
+column.  SEPARATOR is the string used to join columns (defaults to
+two spaces).  JOINER, when provided, wraps the result with
+string-join using JOINER as the separator.
+
+Returns a list of strings with spaced-aligned columns, or a single
+joined string if JOINER is provided."
+  (let* ((rows (mapcar
+                (lambda (item)
+                  (mapcar (lambda (extractor) (funcall extractor item))
+                          columns))
+                data))
+         (widths (seq-reduce
+                  (lambda (acc row)
+                    (seq-mapn #'max
+                              acc
+                              (mapcar (lambda (cell) (length (or cell ""))) row)))
+                  rows
+                  (make-list (length columns) 0)))
+         (result (mapcar (lambda (row)
+                           (string-join
+                            (seq-mapn (lambda (cell width)
+                                        (format (format "%%-%ds" width) (or cell "")))
+                                      row
+                                      widths)
+                            separator))
+                         rows)))
+    (if joiner
+        (string-join result joiner)
+      result)))
+
 (cl-defun agent-shell--get-decorated-region (&key deactivate)
   "Get the active region decorated with file path and Markdown code block.
 
@@ -2904,14 +3169,14 @@ When DEACTIVATE is non-nil, deactivate region/selection."
   "Get the name of the session mode with MODE-ID from AVAILABLE-SESSION-MODES.
 
 AVAILABLE-SESSION-MODES is the list of mode objects from the ACP
-session/new response.  Each mode has an `id' and `name' field.
+session/new response.  Each mode has an `:id' and `:name' field.
 We look up the mode by ID to get its display name.
 
 See https://agentclientprotocol.com/protocol/session-modes for details."
   (when-let ((mode (seq-find (lambda (m)
-                               (string= mode-id (map-elt m 'id)))
+                               (string= mode-id (map-elt m :id)))
                              available-session-modes)))
-    (map-elt mode 'name)))
+    (map-elt mode :name)))
 
 (defun agent-shell--status-frame ()
   "Return busy frame string or nil if not busy."
@@ -2923,12 +3188,21 @@ See https://agentclientprotocol.com/protocol/session-modes for details."
 (defun agent-shell--mode-line-format ()
   "Return `agent-shell''s mode-line format.
 
-Typically includes the session mode and activity or nil if unavailable.
+Typically includes the model, session mode and activity or nil if unavailable.
 
-For example: \" [Accept Edits] ░░░ \"."
+For example: \" [Sonnet] [Accept Edits] ░░░ \"."
   (when-let* (((derived-mode-p 'agent-shell-mode))
               ((memq agent-shell-header-style '(text none nil))))
-    (concat (when-let ((mode-name (agent-shell--resolve-session-mode-name
+    (concat (when-let ((model-name (or (map-elt (seq-find (lambda (model)
+                                                            (string= (map-elt model :model-id)
+                                                                     (map-nested-elt (agent-shell--state) '(:session :model-id))))
+                                                          (map-nested-elt (agent-shell--state) '(:session :models)))
+                                                :name)
+                                       (map-nested-elt (agent-shell--state) '(:session :model-id)))))
+              (propertize (format " [%s]" model-name)
+                          'face 'font-lock-variable-name-face
+                          'help-echo (format "Model: %s" model-name)))
+            (when-let ((mode-name (agent-shell--resolve-session-mode-name
                                    (map-nested-elt (agent-shell--state) '(:session :mode-id))
                                    (map-nested-elt (agent-shell--state) '(:session :modes)))))
               (propertize (format " [%s]" mode-name)
@@ -2953,7 +3227,7 @@ Uses :eval so the mode updates automatically when state changes."
   (unless (map-nested-elt (agent-shell--state) '(:session :modes))
     (user-error "No session modes available"))
   (let* ((mode-ids (mapcar (lambda (mode)
-                             (map-elt mode 'id))
+                             (map-elt mode :id))
                            (map-nested-elt (agent-shell--state) '(:session :modes))))
          (mode-idx (or (seq-position mode-ids
                                      (map-nested-elt (agent-shell--state) '(:session :mode-id))
@@ -2994,8 +3268,8 @@ Uses :eval so the mode updates automatically when state changes."
                                   current-mode-id
                                   (map-nested-elt (agent-shell--state) '(:session :modes)))))
          (mode-choices (mapcar (lambda (mode)
-                                 (cons (map-elt mode 'name)
-                                       (map-elt mode 'id)))
+                                 (cons (map-elt mode :name)
+                                       (map-elt mode :id)))
                                (map-nested-elt (agent-shell--state) '(:session :modes))))
          (selection (completing-read "Set session mode: "
                                      (mapcar #'car mode-choices)
@@ -3025,31 +3299,102 @@ Uses :eval so the mode updates automatically when state changes."
      :on-failure (lambda (error _raw-message)
                    (message "Failed to change session mode: %s" error)))))
 
-(defun agent-shell--format-available-modes (modes &optional current-mode-id)
+(defun agent-shell-set-session-model ()
+  "Set session model."
+  (interactive)
+  (unless (derived-mode-p 'agent-shell-mode)
+    (user-error "Not in an agent-shell buffer"))
+  (unless (map-nested-elt (agent-shell--state) '(:session :id))
+    (user-error "No active session"))
+  (unless (map-nested-elt (agent-shell--state) '(:session :models))
+    (user-error "No session models available"))
+  (let* ((current-model-id (map-nested-elt (agent-shell--state) '(:session :model-id)))
+         (available-models (map-nested-elt (agent-shell--state) '(:session :models)))
+         (default-model-name (and current-model-id
+                                  (map-elt (seq-find (lambda (model)
+                                                       (string= (map-elt model :model-id) current-model-id))
+                                                     available-models)
+                                           :name)))
+         (model-choices (seq-mapn (lambda (title model)
+                                    (cons title (map-elt model :model-id)))
+                                  (agent-shell--align-alist
+                                   :data available-models
+                                   :columns (list
+                                             (lambda (model)
+                                               (map-elt model :name))
+                                             (lambda (model)
+                                               (format "(%s)" (map-elt model :model-id)))))
+                                  available-models))
+         (selection (completing-read "Set model: "
+                                     (mapcar #'car model-choices)
+                                     nil t nil nil
+                                     (and default-model-name
+                                          (car (seq-find (lambda (choice)
+                                                           (string-prefix-p default-model-name (car choice)))
+                                                         model-choices)))))
+         (selected-model-id (cdr (seq-find (lambda (choice)
+                                             (string= selection (car choice)))
+                                           model-choices))))
+    (unless selected-model-id
+      (user-error "Unknown model: %s" selection))
+    (when (and current-model-id (string= selected-model-id current-model-id))
+      (error "Session model already %s" (map-elt (seq-find (lambda (model)
+                                                             (string= (map-elt model :model-id) selected-model-id))
+                                                           available-models)
+                                                 :name)))
+    (acp-send-request
+     :client (map-elt (agent-shell--state) :client)
+     :request (acp-make-session-set-model-request
+               :session-id (map-nested-elt (agent-shell--state) '(:session :id))
+               :model-id selected-model-id)
+     :on-success (lambda (_response)
+                   (let ((updated-session (map-elt (agent-shell--state) :session)))
+                     (map-put! updated-session :model-id selected-model-id)
+                     (map-put! (agent-shell--state) :session updated-session)
+                     (message "Model: %s"
+                              (map-elt (seq-find (lambda (model)
+                                                   (string= (map-elt model :model-id) selected-model-id))
+                                                 (map-nested-elt (agent-shell--state) '(:session :models)))
+                                       :name)))
+                   (agent-shell--update-header-and-mode-line))
+     :on-failure (lambda (error _raw-message)
+                   (message "Failed to change model: %s" error)))))
+
+(defun agent-shell--format-available-modes (modes)
   "Format MODES for shell rendering.
 If CURRENT-MODE-ID is provided, append \"(current)\" to the matching mode name."
-  (let ((max-name-length (seq-reduce (lambda (acc mode)
-                                       (let ((name (map-elt mode 'name))
-                                             (is-current (and current-mode-id
-                                                              (string= (map-elt mode 'id) current-mode-id))))
-                                         (max acc (length (if is-current
-                                                              (concat name " (current)")
-                                                            name)))))
-                                     modes
-                                     0)))
-    (mapconcat
-     (lambda (mode)
-       (when (map-elt mode 'name)
-         (concat
-          (propertize (format (format "%%-%ds" max-name-length)
-                              (map-elt mode 'name))
-                      'font-lock-face 'font-lock-function-name-face)
-          (when (map-elt mode 'description)
-            (concat "  "
-                    (propertize (map-elt mode 'description)
-                                'font-lock-face 'font-lock-comment-face))))))
-     modes
-     "\n")))
+  (agent-shell--align-alist
+   :data modes
+   :columns (list
+             (lambda (mode)
+               (when (map-elt mode :name)
+                 (propertize (format "%s (%s)"
+                                     (map-elt mode :name)
+                                     (map-elt mode :id))
+                             'font-lock-face 'font-lock-function-name-face)))
+             (lambda (mode)
+               (when (map-elt mode :description)
+                 (propertize (map-elt mode :description)
+                             'font-lock-face 'font-lock-comment-face))))
+   :joiner "\n"))
+
+(defun agent-shell--format-available-models (models)
+  "Format MODELS for shell rendering.
+
+Mark model using CURRENT-MODEL-ID."
+  (agent-shell--align-alist
+   :data models
+   :columns (list
+             (lambda (model)
+               (map-elt model :name)
+               (when (map-elt model :name)
+                 (propertize (map-elt model :name)
+                             'font-lock-face 'font-lock-function-name-face)))
+             (lambda (model)
+               (when (map-elt model :description)
+                 (propertize (map-elt model :description)
+                             'font-lock-face 'font-lock-comment-face))))
+   :joiner "\n"))
 
 ;;; Transient
 
@@ -3065,6 +3410,7 @@ If CURRENT-MODE-ID is provided, append \"(current)\" to the matching mode name."
   [["Session"
     ("m" "Cycle modes" agent-shell-cycle-session-mode :transient t)
     ("M" "Set mode" agent-shell-set-session-mode :transient t)
+    ("v" "Set model" agent-shell-set-session-model :transient t)
     ("C" "Interrupt" agent-shell-interrupt :transient t)]
    ["Shell"
     ("b" "Toggle" agent-shell-toggle :transient t)

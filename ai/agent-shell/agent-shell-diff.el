@@ -143,8 +143,8 @@ Arguments:
                 (dolist (binding bindings)
                   (define-key map (kbd (map-elt binding :key)) (map-elt binding :command)))
                 (use-local-map map)))))
-      (pop-to-buffer diff-buffer '(display-buffer-use-some-window
-                                   display-buffer-same-window)))))
+      (pop-to-buffer diff-buffer '((display-buffer-use-some-window
+                                    display-buffer-same-window))))))
 
 (defun agent-shell-diff--make-diff (old new)
   "Create a unified diff between OLD and NEW strings.

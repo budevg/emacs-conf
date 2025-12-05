@@ -389,11 +389,14 @@ Use START END TITLE-START TITLE-END URL-START URL-END."
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward
-              (rx (or (group "**" (group (one-or-more (not (any "\n*")))) "**")
-                      (group "__" (group (one-or-more (not (any "\n_")))) "__")))
+              (rx (or line-start (syntax whitespace))
+                  (group
+                   (or (seq "**" (group (one-or-more (not (any "\n*")))) "**")
+                       (seq "__" (group (one-or-more (not (any "\n_")))) "__")))
+                  (or (syntax punctuation) (syntax whitespace) line-end))
               nil t)
-        (when-let ((begin (match-beginning 0))
-                   (end (match-end 0)))
+        (when-let ((begin (match-beginning 1))
+                   (end (match-end 1)))
           (unless (seq-find (lambda (avoided)
                               (and (>= begin (car avoided))
                                    (<= end (cdr avoided))))

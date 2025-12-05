@@ -118,14 +118,35 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :shell-prompt-regexp "Gemini> "
    :icon-name "gemini.png"
    :welcome-function #'agent-shell-google--gemini-welcome-message
-   ;;:needs-authentication t
+   :needs-authentication nil
    :authenticate-request-maker (lambda ()
                                  (cond ((map-elt agent-shell-google-authentication :api-key)
-                                        (acp-make-authenticate-request :method-id "gemini-api-key"))
+                                        ;; TODO: Save authentication methods from
+                                        ;; initialization and resolve :method-id
+                                        ;; to :method which came from the agent.
+                                        (acp-make-authenticate-request
+                                         :method-id "gemini-api-key"
+                                         :method '((id . "gemini-api-key")
+                                                   (name . "Use Gemini API key")
+                                                   (description . "Requires setting the `GEMINI_API_KEY` environment variable"))))
                                        ((map-elt agent-shell-google-authentication :vertex-ai)
-                                        (acp-make-authenticate-request :method-id "vertex-ai"))
+                                        ;; TODO: Save authentication methods from
+                                        ;; initialization and resolve :method-id
+                                        ;; to :method which came from the agent.
+                                        (acp-make-authenticate-request
+                                         :method-id "vertex-ai"
+                                         :method '((id . "vertex-ai")
+                                                   (name . "Vertex AI")
+                                                   (description . ""))))
                                        (t
-                                        (acp-make-authenticate-request :method-id "oauth-personal"))))
+                                        ;; TODO: Save authentication methods from
+                                        ;; initialization and resolve :method-id
+                                        ;; to :method which came from the agent.
+                                        (acp-make-authenticate-request
+                                         :method-id "oauth-personal"
+                                         :method '((id . "oauth-personal")
+                                                   (name . "Log in with Google")
+                                                   (description . ""))))))
    :client-maker (lambda (buffer)
                    (agent-shell-google-make-gemini-client :buffer buffer))
    :install-instructions "See https://github.com/google-gemini/gemini-cli for installation."))
