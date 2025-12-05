@@ -85,7 +85,8 @@ combinations."
             (when gptel-mode
               (force-mode-line-update)))))))
 
-  (setq gptel--known-backends nil)
+  (setq gptel--known-backends nil
+        gptel-expert-commands t)
 
   ;; ~/.authinfo
   ;; machine generativelanguage.googleapis.com login apikey password <KEY>
