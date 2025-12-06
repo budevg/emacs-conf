@@ -90,12 +90,25 @@ If N is negative, search forwards for the -Nth following match."
   :bind (("<f3>" . eat)
          ("C-<f3>" . (lambda() (interactive) (eat nil t)))
          :map eat-line-mode-map
-         ("C-c C-l" . (lambda () (interactive) (eat-toggle-cursor)))
+         ("C-c C-l" . eat-cycle-modes)
+         :map eat-mode-map
+         ("C-c C-l" . eat-cycle-modes)
          )
   :config
-  (defun eat-toggle-cursor ()
+  (defun eat-cycle-modes ()
     (interactive)
-    (if cursor-type (setq cursor-type nil) (setq cursor-type 'box)))
+    (cond
+     (eat--line-mode
+      (eat-semi-char-mode)
+      (when (and (boundp 'cursor-type-modified) cursor-type-modified)
+        (setq cursor-type nil)
+        (kill-local-variable 'cursor-type-modified)))
+     (t
+      (eat-line-mode)
+      (when (not cursor-type)
+        (make-local-variable 'cursor-type-modified)
+        (setq cursor-type-modified t
+              cursor-type 'box)))))
   )
 
 (defun dot-dircolors ()
