@@ -1,0 +1,7 @@
+(:name denote
+       :description "Simple notes for Emacs with an efficient file-naming scheme"
+       :type github
+       :pkgname "protesilaos/denote"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "doc_lang")))
+       )
