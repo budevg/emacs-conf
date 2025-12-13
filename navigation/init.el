@@ -184,6 +184,7 @@ Fall back to `completing-read' otherwise."
            ag-arg-extra '("--line-number" "--column")
            ag-arguments '("--smart-case")
            ag-arg-filesearch "--color never --smart-case --files -g"
+           next-error-verbose nil
            )
      (define-key ag-mode-map (kbd "q")
                  (lambda () (interactive)
