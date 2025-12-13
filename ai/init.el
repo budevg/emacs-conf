@@ -93,16 +93,10 @@ combinations."
   (gptel-make-gemini "gemini"
     :key 'gptel-api-key
     :stream t
-    :models '(gemini-2.5-flash
-              gemini-2.5-pro
-              gemini-2.0-flash
-              ))
-
-  (gptel-make-gemini "gemini-web"
-    :key 'gptel-api-key
-    :stream t
     :request-params '(:tools [(:google_search ()) (:url_context ())])
-    :models '(gemini-2.5-flash
+    :models '(gemini-2.5-flash-lite
+              gemini-2.5-flash
+              gemma-3-4b
               ))
 
   ;; ~/.authinfo
@@ -117,15 +111,16 @@ combinations."
               grok-3))
 
   ;; ~/.authinfo
-  ;; machine api.studio.nebius.com login apikey password <KEY>
+  ;; machine api.tokenfactory.nebius.com login apikey password <KEY>
   (gptel-make-openai "nebius"
-    :host "api.studio.nebius.com"
+    :host "api.tokenfactory.nebius.com"
     :endpoint "/v1/chat/completions"
     :key 'gptel-api-key
     :stream t
     :models '(deepseek-ai/DeepSeek-V3-0324
               deepseek-ai/DeepSeek-R1-0528
-              Qwen/Qwen3-Coder-480B-A35B-Instruct))
+              Qwen/Qwen3-Coder-480B-A35B-Instruct
+              Qwen/Qwen3-Coder-30B-A3B-Instruct))
 
   ;; ~/.authinfo
   ;; machine api.perplexity.ai login apikey password <KEY>
@@ -137,7 +132,7 @@ combinations."
 
   (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
         gptel-include-reasoning nil
-        gptel-model 'gemini-2.0-flash
+        gptel-model 'gemini-2.5-flash-lite
         gptel-directives
         (let* ((suffix " Also, use only plain text. Do not use Markdown, bullet points, numbering, bold, italics, or any other formatting. Output should be simple unformatted text only. Use only code blocks when necessary")
                (directives
