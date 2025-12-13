@@ -30,6 +30,7 @@
       ido-handle-duplicate-virtual-buffers 2
       ;;ido-max-prospects 10
       use-short-answers t
+      completing-read-function 'ido-occasional-completing-read
       )
 (icomplete-mode t)
 
