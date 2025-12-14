@@ -156,12 +156,17 @@ combinations."
 
 (use-package agent-shell
   :commands agent-shell
+  :bind (:map agent-shell-mode-map
+         ("C-<tab>" . nil)
+         ("C-f G" . agent-shell-help-menu)
+         )
   :config
   (setq shell-maker-prompt-before-killing-buffer nil
         agent-shell-show-config-icons nil
         agent-shell-goose-authentication (agent-shell-make-goose-authentication :none t)
         agent-shell-goose-command (cons "goose-acp" (cdr agent-shell-goose-command))
         agent-shell-google-gemini-command (cons "gemini-acp" (cdr agent-shell-google-gemini-command))
+        agent-shell-opencode-command (cons "opencode-acp" (cdr agent-shell-opencode-command))
         )
   (defun shell-maker-welcome-message (config) "")
 )
