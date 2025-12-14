@@ -1,5 +1,7 @@
 
-(autoload 'iman "iman" "iman autoload" t)
-(global-set-key [f1] (with-ido-completion man))
-(global-set-key [(control f1)] (with-ido-completion iman))
-(global-set-key [(shift f1)] 'info)
+(use-package man
+  :bind (("<f1>" . man/with-ido)
+         ("S-<f1>" . info))
+  :config
+  (with-ido-completion man)
+  )

@@ -1,36 +1,51 @@
-(eval-after-load "ido"
-  '(progn
-     (defun ido-occasional-completing-read
-         (prompt collection
-                 &optional predicate require-match initial-input
-                 hist def inherit-input-method)
-       "Use `ido-completing-read' if the collection isn't too large.
+(use-package ido
+  :demand t
+  :bind (("C-q" . execute-extended-command/with-ido))
+  :config
+  (setq ido-enable-prefix nil
+      ido-enable-flex-matching t
+      ido-auto-merge-work-directories-length nil
+      ido-create-new-buffer 'always
+      ;;ido-use-filename-at-point 'guess
+      ido-use-virtual-buffers t
+      ido-handle-duplicate-virtual-buffers 2
+      ;;ido-max-prospects 10
+      use-short-answers t
+      )
+
+  (defun ido-occasional-completing-read
+      (prompt collection
+              &optional predicate require-match initial-input
+              hist def inherit-input-method)
+    "Use `ido-completing-read' if the collection isn't too large.
 Fall back to `completing-read' otherwise."
-       (let ((filtered-collection
-              (all-completions "" collection predicate)))
-         (if (<= (length filtered-collection) 30000)
-             (ido-completing-read
-              prompt filtered-collection nil
-              require-match initial-input hist
-              def nil)
-           (completing-read
-            prompt collection predicate
-            require-match initial-input hist
-            def inherit-input-method))))
+    (let ((filtered-collection
+           (all-completions "" collection predicate)))
+      (if (<= (length filtered-collection) 30000)
+          (ido-completing-read
+           prompt filtered-collection nil
+           require-match initial-input hist
+           def nil)
+        (completing-read
+         prompt collection predicate
+         require-match initial-input hist
+         def inherit-input-method))))
 
-     (defmacro with-ido-completion (fun)
-       "Wrap FUN in another interactive function with ido completion."
-       `(defun ,(intern (concat (symbol-name fun) "/with-ido")) ()
-          ,(format "Forward to `%S' with ido completion." fun)
-          (interactive)
-          (let ((completing-read-function
-                 'ido-occasional-completing-read))
-            (call-interactively #',fun))))
+  (with-ido-completion execute-extended-command)
 
-     (global-set-key
-      "\C-q"
-      (with-ido-completion execute-extended-command))
-     ))
+  (ido-mode t)
+
+  (defun fido-completion-styles-advice (&rest _args)
+    "Override completion styles after fido setup."
+    (when (and fido-mode (icomplete-simple-completing-p))
+      (setq-local completion-styles
+                  '(substring basic partial-completion))))
+
+  (advice-add 'icomplete--fido-mode-setup
+              :after #'fido-completion-styles-advice)
+
+  (fido-mode 1)
+  )
 
 (defun rename-frame ()
   (interactive)

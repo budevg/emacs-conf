@@ -29,7 +29,9 @@
   :after (yasnippet)
   :init
   (setq yankpad-file (in-emacs-d "prog_lang/smart_code/yasnippet/snippets/yankpad.org"))
+  :bind (("M-1" . yankpad-insert/with-ido)
+         ("M-!" . yankpad-set-category/with-ido))
   :config
-  (bind-key "M-1" (with-ido-completion yankpad-insert))
-  (bind-key "M-!" (with-ido-completion yankpad-set-category))
+  (with-ido-completion yankpad-insert)
+  (with-ido-completion yankpad-set-category)
   )
