@@ -1,0 +1,8 @@
+(:name marginalia
+       :description "Marginalia in the minibuffer"
+       :type github
+       :pkgname "minad/marginalia"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+
+       )

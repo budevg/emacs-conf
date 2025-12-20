@@ -83,6 +83,8 @@
    '(ansi-color-blue ((t :foreground "CadetBlue3" :background "CadetBlue3")))
    '(ansi-color-bright-blue ((t :foreground "CadetBlue2" :background "CadetBlue2")))
    '(ansi-color-bright-black ((t :foreground "gray90" :background "gray90")))
+   ;; vertico
+   '(vertico-current ((t (:background "gray20"))))
    ))
 
 ;;;###autoload

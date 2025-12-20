@@ -31,26 +31,49 @@ Fall back to `completing-read' otherwise."
          require-match initial-input hist
          def inherit-input-method))))
 
+  (defmacro with-ido-completion (fun)
+    "Wrap FUN in another interactive function with ido completion."
+    `(defun ,(intern (concat (symbol-name fun) "/with-ido")) ()
+       ,(format "Forward to `%S' with ido completion." fun)
+       (interactive)
+       (let ((completing-read-function
+              'ido-occasional-completing-read))
+         (call-interactively #',fun))))
+
   (with-ido-completion execute-extended-command)
 
   (ido-mode t)
-
-  (defun fido-completion-styles-advice (&rest _args)
-    "Override completion styles after fido setup."
-    (when (and fido-mode (icomplete-simple-completing-p))
-      (setq-local completion-styles
-                  '(substring basic partial-completion))))
-
-  (advice-add 'icomplete--fido-mode-setup
-              :after #'fido-completion-styles-advice)
-
-  (fido-mode 1)
   )
 
-(defun rename-frame ()
-  (interactive)
-  (let ((new-name (read-from-minibuffer "Rename frame (to new name): ")))
-    (setq frame-title-format new-name)))
+(use-package vertico
+  :demand t
+  :bind (:map vertico-map
+         ("C-<up>" . previous-history-element)
+         ("C-<down>" . next-history-element)
+         )
+
+  ;;:custom
+  ;;(completion-styles '(orderless basic))
+  :config
+  (vertico-mode)
+  )
+
+(use-package orderless
+  :after vertico
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles partial-completion))))
+  (completion-pcm-leading-wildcard t)
+  )
+
+(use-package marginalia
+  :after vertico
+  :bind (:map minibuffer-local-map
+         ("M-a" . marginalia-cycle))
+
+  :config
+  (marginalia-mode)
+  )
 
 (use-package perspective
   :custom

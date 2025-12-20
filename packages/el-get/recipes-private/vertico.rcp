@@ -1,0 +1,8 @@
+(:name vertico
+       :description "VERTical Interactive COmpletion"
+       :type github
+       :pkgname "minad/vertico"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+
+       )

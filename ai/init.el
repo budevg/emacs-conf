@@ -60,7 +60,7 @@ combinations."
                     (nreverse other-models-alist)))
 
       (let* ((selected-combo
-              (ido-completing-read
+              (completing-read
                (format "Switch backend and model (current: %s): "
                        (or current-selection "None Active"))
                reordered-model-names ; Use the reordered list

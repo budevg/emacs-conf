@@ -52,12 +52,3 @@
    name
    (shell-command-to-string
     (format "bash -c '. ~/.bashrc; echo -n $%s'" name))))
-
-(defmacro with-ido-completion (fun)
-  "Wrap FUN in another interactive function with ido completion."
-  `(defun ,(intern (concat (symbol-name fun) "/with-ido")) ()
-     ,(format "Forward to `%S' with ido completion." fun)
-     (interactive)
-     (let ((completing-read-function
-            'ido-occasional-completing-read))
-       (call-interactively #',fun))))

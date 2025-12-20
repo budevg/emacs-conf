@@ -1,0 +1,7 @@
+(:name orderless
+       :description "Emacs completion style that matches multiple regexps in any order"
+       :type github
+       :pkgname "oantolin/orderless"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "navigation")))
+       )

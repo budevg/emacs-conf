@@ -1,7 +1,6 @@
 
 (use-package man
-  :bind (("<f1>" . man/with-ido)
+  :bind (("<f1>" . man)
          ("S-<f1>" . info))
   :config
-  (with-ido-completion man)
   )
