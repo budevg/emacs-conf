@@ -162,9 +162,12 @@ combinations."
          )
   :config
   (setq shell-maker-prompt-before-killing-buffer nil
+        agent-shell-transcript-file-path-function nil
         agent-shell-show-config-icons nil
+        agent-shell-header-style 'text
         agent-shell-goose-authentication (agent-shell-make-goose-authentication :none t)
         agent-shell-goose-command (cons "goose-acp" (cdr agent-shell-goose-command))
+        agent-shell-google-authentication (agent-shell-google-make-authentication :none t)
         agent-shell-google-gemini-command (cons "gemini-acp" (cdr agent-shell-google-gemini-command))
         agent-shell-opencode-command (cons "opencode-acp" (cdr agent-shell-opencode-command))
         )

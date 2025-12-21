@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/acp.el
-;; Version: 0.8.1
+;; Version: 0.8.2
 ;; Package-Requires: ((emacs "28.1"))
 
-(defconst acp-package-version "0.8.1")
+(defconst acp-package-version "0.8.2")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -117,10 +117,16 @@ functions for advanced customization or testing."
                        :buffer stderr-buffer
                        :filter (lambda (_process raw-output)
                                  (acp--log client "STDERR" "%s" (string-trim raw-output))
-                                 (when-let ((api-error (acp--parse-stderr-api-error raw-output)))
+                                 (when-let ((std-error (cond
+                                                        ((acp--parse-stderr-api-error raw-output)
+                                                         (acp--parse-stderr-api-error raw-output))
+                                                        ((not (string-empty-p (string-trim raw-output)))
+                                                         ;; Fallback: create a generic error response
+                                                         `((code . -32603)
+                                                           (message . ,raw-output))))))
                                    (acp--log client "API-ERROR" "%s" (string-trim raw-output))
                                    (dolist (handler (map-elt client :error-handlers))
-                                     (funcall handler api-error)))))))
+                                     (funcall handler std-error)))))))
     (let ((process (make-process
                     :name (format "acp-client(%s)-%s"
                                   (map-elt client :command)
@@ -253,15 +259,16 @@ Note: These are agent process errors.
   "Shutdown ACP CLIENT and release resources."
   (unless client
     (error ":client is required"))
-  (unless (and (or (not (map-elt client :process))
-                   (process-live-p (map-elt client :process)))
-               (buffer-live-p (acp-logs-buffer :client client))
-               (buffer-live-p (acp-traffic-buffer :client client)))
-    (error "Client already shut down"))
-  (when (process-live-p (map-elt client :process))
-    (delete-process (map-elt client :process)))
-  (kill-buffer (acp-logs-buffer :client client))
-  (kill-buffer (acp-traffic-buffer :client client)))
+  (if (and (or (not (map-elt client :process))
+               (process-live-p (map-elt client :process)))
+           (buffer-live-p (acp-logs-buffer :client client))
+           (buffer-live-p (acp-traffic-buffer :client client)))
+      (progn
+        (when (process-live-p (map-elt client :process))
+          (delete-process (map-elt client :process)))
+        (kill-buffer (acp-logs-buffer :client client))
+        (kill-buffer (acp-traffic-buffer :client client)))
+    (message "Client already shut down")))
 
 (cl-defun acp-send-request (&key client request buffer on-success on-failure sync)
   "Send REQUEST from CLIENT.

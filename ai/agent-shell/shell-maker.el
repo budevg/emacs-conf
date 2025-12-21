@@ -4,7 +4,7 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/shell-maker
-;; Version: 0.84.1
+;; Version: 0.84.4
 ;; Package-Requires: ((emacs "27.1"))
 
 ;; This package is free software; you can redistribute it and/or modify
@@ -32,7 +32,7 @@
 
 ;;; Code:
 
-(defconst shell-maker-version "0.84.1")
+(defconst shell-maker-version "0.84.4")
 
 (require 'comint)
 (require 'goto-addr)
@@ -153,7 +153,7 @@ For example:
   :parent comint-mode-map
   :doc "Base keymap for `shell-maker' based modes."
   "S-<return>" #'newline
-  "C-x C-s" #'shell-maker-save-session-transcript
+  "<remap> <save-buffer>" #'shell-maker-save-session-transcript
   "C-M-h" #'shell-maker-mark-output)
 
 (defun shell-maker-start (config &optional no-focus welcome-function new-session buffer-name mode-line-name)
@@ -1530,7 +1530,6 @@ If BACKWARDS is non-nil, move backwards."
   "Extract all commands and respective output in TEXT with PROMPT-REGEXP.
 
 Returns a list of (command . output) cons."
-  (setq text (substring-no-properties text))
   (let ((result))
     (mapc (lambda (item)
             (let* ((values (split-string item "<shell-maker-end-of-prompt>"))

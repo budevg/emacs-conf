@@ -33,7 +33,7 @@
 (declare-function agent-shell--indent-string "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
-(declare-function agent-shell-start "agent-shell")
+(declare-function agent-shell--dwim "agent-shell")
 
 (defcustom agent-shell-cursor-command
   '("cursor-agent-acp")
@@ -70,8 +70,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 (defun agent-shell-cursor-start-agent ()
   "Start an interactive Cursor agent shell."
   (interactive)
-  (agent-shell-start
-   :config (agent-shell-cursor-make-agent-config)))
+  (agent-shell--dwim :config (agent-shell-cursor-make-agent-config)
+                     :new-shell t))
 
 (cl-defun agent-shell-cursor-make-client (&key buffer)
   "Create a Cursor agent ACP client with BUFFER as context."
@@ -103,8 +103,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
   ╚═════╝  ╚═════╝  ╚═╝  ╚═╝ ╚══════╝  ╚═════╝  ╚═╝  ╚═╝
 " "\n")))
     (propertize text 'font-lock-face (if is-dark
-                                         '(:foreground "#00d4ff")
-                                       '(:foreground "#0066cc")))))
+                                         '(:foreground "#00d4ff" :inherit fixed-pitch)
+                                       '(:foreground "#0066cc" :inherit fixed-pitch)))))
 
 (provide 'agent-shell-cursor)
 

@@ -34,7 +34,7 @@
 (declare-function agent-shell--interpolate-gradient "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
-(declare-function agent-shell-start "agent-shell")
+(declare-function agent-shell--dwim "agent-shell")
 
 (cl-defun agent-shell-qwen-make-authentication (&key login none)
   "Create Qwen Code authentication configuration.
@@ -118,8 +118,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 (defun agent-shell-qwen-start ()
   "Start an interactive Qwen Code CLI agent shell."
   (interactive)
-  (agent-shell-start
-   :config (agent-shell-qwen-make-agent-config)))
+  (agent-shell--dwim :config (agent-shell-qwen-make-agent-config)
+                     :new-shell t))
 
 (cl-defun agent-shell-qwen-make-client (&key buffer)
   "Create a Qwen Code client with BUFFER as context."
@@ -167,7 +167,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
                  (color (agent-shell--interpolate-gradient gradient-colors progress)))
             (setq propertized-line
                   (concat propertized-line
-                          (propertize char 'font-lock-face `(:foreground ,color))))))
+                          (propertize char 'font-lock-face `(:foreground ,color :inherit fixed-pitch))))))
         (setq result (concat result propertized-line "\n"))))
     (string-trim-right result)))
 

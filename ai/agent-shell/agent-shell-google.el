@@ -34,9 +34,9 @@
 (declare-function agent-shell--interpolate-gradient "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
-(declare-function agent-shell-start "agent-shell")
+(declare-function agent-shell--dwim "agent-shell")
 
-(cl-defun agent-shell-google-make-authentication (&key api-key login vertex-ai)
+(cl-defun agent-shell-google-make-authentication (&key api-key login vertex-ai none)
   "Create Google authentication configuration.
 
 API-KEY is the Google API key string or function that returns it.
@@ -46,12 +46,13 @@ VERTEX-AI when non-nil indicates to use Vertex AI authentication.
 Only one of API-KEY, LOGIN, or VERTEX-AI should be provided."
   (when (> (seq-count #'identity (list api-key login vertex-ai)) 1)
     (error "Cannot specify multiple authentication methods - choose one"))
-  (unless (> (seq-count #'identity (list api-key login vertex-ai)) 0)
+  (unless (> (seq-count #'identity (list api-key login vertex-ai none)) 0)
     (error "Must specify one of :api-key, :login, or :vertex-ai"))
   (cond
    (api-key `((:api-key . ,api-key)))
    (login `((:login . t)))
-   (vertex-ai `((:vertex-ai . t)))))
+   (vertex-ai `((:vertex-ai . t)))
+   (none `((:none . t)))))
 
 (defcustom agent-shell-google-authentication
   (agent-shell-google-make-authentication :login t)
@@ -75,7 +76,12 @@ For API key (function):
 For Vertex AI authentication:
 
   (setq agent-shell-google-authentication
-        (agent-shell-google-make-authentication :vertex-ai t))"
+        (agent-shell-google-make-authentication :vertex-ai t))
+
+For no authentication (when using alternative authentication methods):
+
+  (setq agent-shell-google-authentication
+        (agent-shell-google-make-authentication :none t))"
   :type 'alist
   :group 'agent-shell)
 
@@ -118,7 +124,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :shell-prompt-regexp "Gemini> "
    :icon-name "gemini.png"
    :welcome-function #'agent-shell-google--gemini-welcome-message
-   :needs-authentication nil
+   :needs-authentication (not (map-elt agent-shell-google-authentication :none))
    :authenticate-request-maker (lambda ()
                                  (cond ((map-elt agent-shell-google-authentication :api-key)
                                         ;; TODO: Save authentication methods from
@@ -138,6 +144,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
                                          :method '((id . "vertex-ai")
                                                    (name . "Vertex AI")
                                                    (description . ""))))
+                                       ((map-elt agent-shell-google-authentication :none)
+                                        nil)
                                        (t
                                         ;; TODO: Save authentication methods from
                                         ;; initialization and resolve :method-id
@@ -154,8 +162,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 (defun agent-shell-google-start-gemini ()
   "Start an interactive Gemini CLI agent shell."
   (interactive)
-  (agent-shell-start
-   :config (agent-shell-google-make-gemini-config)))
+  (agent-shell--dwim :config (agent-shell-google-make-gemini-config)
+                     :new-shell t))
 
 (cl-defun agent-shell-google-make-gemini-client (&key buffer)
   "Create a Gemini client using configured authentication with BUFFER as context.
@@ -179,6 +187,11 @@ Uses `agent-shell-google-authentication' for authentication configuration."
                                   :environment-variables agent-shell-google-gemini-environment
                                   :context-buffer buffer))
    ((map-elt agent-shell-google-authentication :vertex-ai)
+    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-command)
+                                  :command-params (cdr agent-shell-google-gemini-command)
+                                  :environment-variables agent-shell-google-gemini-environment
+                                  :context-buffer buffer))
+   ((map-elt agent-shell-google-authentication :none)
     (agent-shell--make-acp-client :command (car agent-shell-google-gemini-command)
                                   :command-params (cdr agent-shell-google-gemini-command)
                                   :environment-variables agent-shell-google-gemini-environment
@@ -225,7 +238,7 @@ Uses `agent-shell-google-authentication' for authentication configuration."
                  (color (agent-shell--interpolate-gradient gradient-colors progress)))
             (setq propertized-line
                   (concat propertized-line
-                          (propertize char 'font-lock-face `(:foreground ,color))))))
+                          (propertize char 'font-lock-face `(:foreground ,color :inherit fixed-pitch))))))
         (setq result (concat result propertized-line "\n"))))
     (string-trim-right result)))
 
@@ -240,7 +253,7 @@ Uses `agent-shell-google-authentication' for authentication configuration."
     (dotimes (i (length text))
       (setq result (concat result
                            (propertize (substring text i (1+ i))
-                                       'font-lock-face `(:foreground ,(nth (mod i (length colors)) colors))))))
+                                       'font-lock-face `(:foreground ,(nth (mod i (length colors)) colors) :inherit fixed-pitch)))))
     result))
 
 (defun agent-shell-google-key ()

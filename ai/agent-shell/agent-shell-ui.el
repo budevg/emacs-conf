@@ -50,7 +50,7 @@ NAMESPACE-ID, BLOCK-ID, LABEL-LEFT, LABEL-RIGHT, and BODY are the keys."
         (cons :label-right (agent-shell-ui--string-or-nil label-right))
         (cons :body (agent-shell-ui--string-or-nil body))))
 
-(cl-defun agent-shell-ui-update-fragment (model &key append create-new on-post-process navigation expanded)
+(cl-defun agent-shell-ui-update-fragment (model &key append create-new on-post-process navigation expanded no-undo)
   "Update or add a fragment using MODEL.
 
 When APPEND is non-nil, append to body instead of replacing.
@@ -60,10 +60,12 @@ When NAVIGATION is `never', block won't be TAB navigatable.
 When NAVIGATION is `auto', block is navigatable if non-empty body.
 When NAVIGATION is `always', block is always TAB navigatable.
 When EXPANDED is non-nil, body will be expanded by default.
+When NO-UNDO is non-nil, disable undo recording for this operation.
 
 For existing blocks, the current expansion state is preserved unless overridden."
   (save-mark-and-excursion
     (let* ((inhibit-read-only t)
+           (buffer-undo-list (if no-undo t buffer-undo-list))
            (namespace-id (map-elt model :namespace-id))
            (qualified-id (format "%s-%s" namespace-id (map-elt model :block-id)))
            (new-label-left (map-elt model :label-left))
@@ -174,10 +176,13 @@ For existing blocks, the current expansion state is preserved unless overridden.
             (setf (map-elt fragment :body) body)))))
     fragment))
 
-(cl-defun agent-shell-ui-delete-fragment (&key namespace-id block-id)
-  "Delete fragment with NAMESPACE-ID and BLOCK-ID."
+(cl-defun agent-shell-ui-delete-fragment (&key namespace-id block-id no-undo)
+  "Delete fragment with NAMESPACE-ID and BLOCK-ID.
+
+When NO-UNDO is non-nil, disable undo recording for this operation."
   (save-mark-and-excursion
     (let* ((inhibit-read-only t)
+           (buffer-undo-list (if no-undo t buffer-undo-list))
            (qualified-id (format "%s-%s" namespace-id block-id))
            (match (save-mark-and-excursion
                     (goto-char (point-max))
@@ -349,23 +354,20 @@ NAVIGATION controls navigability:
                                                     help-echo ,qualified-id
                                                     read-only t
                                                     front-sticky (read-only))))
-    (when-let ((is-collapsable collapsable)
-               (body-overlay (make-overlay (or label-right-end
-                                               label-left-end) body-end)))
-      (overlay-put body-overlay 'evaporate t)
-      (overlay-put body-overlay 'agent-shell-ui-section 'body)
-      (overlay-put body-overlay 'invisible (not expanded)))
-    ;; Hide trailing whitespace (don't delete) in body.
+    ;; Include the newlines before the body in the invisible region
+    (when collapsable
+      (add-text-properties (or label-right-end label-left-end)
+                           body-end
+                           `(invisible ,(if expanded nil t))))
+    ;; Hide trailing whitespace (don't delete) in body using text properties.
     (when body
       (save-mark-and-excursion
         (goto-char body-end)
         (when (re-search-backward "[^ \t\n]" body-start t)
           (forward-char 1)
           (when (< (point) body-end)
-            (let ((ws-overlay (make-overlay (point) body-end)))
-              (overlay-put ws-overlay 'invisible t)
-              (overlay-put ws-overlay 'evaporate t)
-              (overlay-put ws-overlay 'agent-shell-ui-section 'trailing-whitespace))))))
+            (add-text-properties (point) body-end
+                                 '(invisible t))))))
     (when body
       (unless agent-shell-ui--content-store
         (setq agent-shell-ui--content-store (make-hash-table :test 'equal)))
@@ -432,22 +434,33 @@ NAVIGATION controls navigability:
                             :property 'agent-shell-ui-section :value 'indicator
                             :from (map-elt block :start)
                             :to (map-elt block :end)))
-                (body-overlay (seq-first (overlays-in (map-elt body :start)
-                                                      (map-elt body :end))))
-                (overlay-found (equal (overlay-get body-overlay 'agent-shell-ui-section) 'body)))
-      (when (equal (overlay-get body-overlay 'agent-shell-ui-section) 'body)
-        (let ((indicator-properties (text-properties-at (map-elt indicator :start))))
-          (overlay-put body-overlay 'invisible (not (map-elt state :collapsed)))
-          (delete-region (map-elt indicator :start)
-                         (map-elt indicator :end))
-          (goto-char (map-elt indicator :start))
-          (insert (if (map-elt state :collapsed)
-                      "▼ "
-                    "▶ "))
-          (add-text-properties (map-elt indicator :start)
-                               (map-elt indicator :end)
-                               indicator-properties)
-          (map-put! state :collapsed (not (map-elt state :collapsed))))
+                ;; Find where labels end (either label-right or label-left)
+                (invisible-start (or (map-elt (agent-shell-ui--nearest-range-matching-property
+                                               :property 'agent-shell-ui-section :value 'label-right
+                                               :from (map-elt block :start)
+                                               :to (map-elt block :end))
+                                              :end)
+                                     (map-elt (agent-shell-ui--nearest-range-matching-property
+                                               :property 'agent-shell-ui-section :value 'label-left
+                                               :from (map-elt block :start)
+                                               :to (map-elt block :end))
+                                              :end)))
+                ;; Must be saved before deleting region.
+                (indicator-properties (text-properties-at (map-elt indicator :start))))
+      (let ((new-collapsed-state (not (map-elt state :collapsed))))
+        ;; Toggle invisible text property including newlines before body
+        (put-text-property invisible-start
+                           (map-elt body :end)
+                           'invisible new-collapsed-state)
+        ;; Update indicator
+        (delete-region (map-elt indicator :start)
+                       (map-elt indicator :end))
+        (goto-char (map-elt indicator :start))
+        (insert (if new-collapsed-state "▶ " "▼ "))
+        ;; Update state
+        (add-text-properties (map-elt indicator :start)
+                             (point) indicator-properties)
+        (map-put! state :collapsed new-collapsed-state)
         (put-text-property (map-elt block :start)
                            (map-elt block :end) 'agent-shell-ui-state state)))))
 
@@ -552,6 +565,40 @@ FACE when non-nil applies the specified face to the text."
                          text))
   text)
 
+(defvar-local agent-shell-ui--isearch-opened-fragments nil
+  "List of fragment qualified-ids that were opened during isearch.")
+
+(defun agent-shell-ui--isearch-filter-predicate (beg end)
+  "Custom isearch filter that expands collapsed fragments when matches are found.
+BEG and END define the match region."
+  ;; Check if the match contains invisible text
+  (let ((pos beg)
+        (found-invisible nil))
+    (while (and (< pos end) (not found-invisible))
+      (when (get-text-property pos 'invisible)
+        (setq found-invisible t))
+      (setq pos (1+ pos)))
+
+    ;; If we found invisible text, expand the fragment
+    (when found-invisible
+      (save-excursion
+        (goto-char beg)
+        (when-let* ((state (get-text-property (point) 'agent-shell-ui-state))
+                    (qualified-id (map-elt state :qualified-id))
+                    ((map-elt state :collapsed)))
+          ;; Track which fragments we've opened
+          (unless (member qualified-id agent-shell-ui--isearch-opened-fragments)
+            (push qualified-id agent-shell-ui--isearch-opened-fragments))
+          ;; Expand the fragment
+          (agent-shell-ui-toggle-fragment-at-point))))
+
+    ;; Always return t to include the match
+    t))
+
+(defun agent-shell-ui--isearch-cleanup ()
+  "Clean up isearch state when search ends."
+  (setq agent-shell-ui--isearch-opened-fragments nil))
+
 (defvar agent-shell-ui-mode-map
   (let ((map (make-sparse-keymap)))
     map)
@@ -563,8 +610,18 @@ FACE when non-nil applies the specified face to the text."
   :lighter " SUI"
   :keymap agent-shell-ui-mode-map
   (if agent-shell-ui-mode
-      (cursor-sensor-mode 1)
-    (cursor-sensor-mode -1)))
+      (progn
+        (cursor-sensor-mode 1)
+        ;; Enable searching in invisible text and auto-expansion
+        (setq-local search-invisible 'open-all)
+        ;; Use custom filter predicate to expand fragments during search
+        (setq-local isearch-filter-predicate #'agent-shell-ui--isearch-filter-predicate)
+        ;; Clean up when search ends
+        (add-hook 'isearch-mode-end-hook #'agent-shell-ui--isearch-cleanup nil 'local))
+    (cursor-sensor-mode -1)
+    (kill-local-variable 'search-invisible)
+    (kill-local-variable 'isearch-filter-predicate)
+    (remove-hook 'isearch-mode-end-hook #'agent-shell-ui--isearch-cleanup 'local)))
 
 (provide 'agent-shell-ui)
 
