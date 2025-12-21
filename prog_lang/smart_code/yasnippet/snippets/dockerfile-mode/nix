@@ -1,0 +1,14 @@
+# -*- mode: snippet -*-
+# name: nix
+# key: main
+# expand-env: ((yas-indent-line 'fixed))
+# --
+FROM nixos/nix
+
+RUN <<EOF
+mkdir -p ~/.config/nix/
+echo 'experimental-features = nix-command flakes' > ~/.config/nix/nix.conf
+echo 'PS1="\[\033[0;31m\]\u@nix:\[\033[0m\]\w$ "' > ~/.bashrc
+echo 'export PAGER=cat' >> ~/.bashrc
+EOF
+$0
