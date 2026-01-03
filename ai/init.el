@@ -1,6 +1,7 @@
 (use-package gptel
   :commands (gptel gptel-send gptel-menu)
-  :bind (("C-f g" . gptel-send)
+  :bind (("<f1>" . gptel)
+         ("C-f g" . gptel-send)
          ("C-f G" . gptel-menu)
          :map gptel-mode-map
          ("C-c C-c" . gptel-send)
@@ -156,9 +157,11 @@ combinations."
 
 (use-package agent-shell
   :commands agent-shell
-  :bind (:map agent-shell-mode-map
+  :bind (("S-<f1>" . (lambda () (interactive) (agent-shell t)))
+         :map agent-shell-mode-map
          ("C-<tab>" . nil)
          ("C-f G" . agent-shell-help-menu)
+         ("C-c C-l" . agent-shell-clear-buffer)
          )
   :config
   (setq shell-maker-prompt-before-killing-buffer nil

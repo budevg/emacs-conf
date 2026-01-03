@@ -60,8 +60,6 @@ shell = [Node(path = "shell/shell-buffer.el",
               msg = "basic commands on shell buffer"),
          Node(path = "shell/eshell-conf.el",
               msg = "eshell configurations"),
-         Node(path = "shell/man-pages.el",
-              msg = "man and info pages"),
          Node(path = "shell/ssh-utils.el",
               msg = "ssh utils"),
          ]
