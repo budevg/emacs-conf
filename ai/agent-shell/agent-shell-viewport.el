@@ -39,17 +39,25 @@
 (eval-when-compile
   (require 'cl-lib))
 
+(declare-function agent-shell--current-shell "agent-shell")
+(declare-function agent-shell--display-buffer "agent-shell")
+(declare-function agent-shell--get-region "agent-shell")
 (declare-function agent-shell--insert-to-shell-buffer "agent-shell")
 (declare-function agent-shell--make-header "agent-shell")
-(declare-function agent-shell--relevant-text "agent-shell")
+(declare-function agent-shell--context "agent-shell")
 (declare-function agent-shell--shell-buffer "agent-shell")
 (declare-function agent-shell--start "agent-shell")
 (declare-function agent-shell--state "agent-shell")
+(declare-function agent-shell-buffers "agent-shell")
+(declare-function agent-shell-cycle-session-mode "agent-shell")
 (declare-function agent-shell-interrupt "agent-shell")
 (declare-function agent-shell-next-permission-button "agent-shell")
+(declare-function agent-shell-other-buffer "agent-shell")
 (declare-function agent-shell-previous-permission-button "agent-shell")
 (declare-function agent-shell-project-buffers "agent-shell")
 (declare-function agent-shell-select-config "agent-shell")
+(declare-function agent-shell-set-session-mode "agent-shell")
+(declare-function agent-shell-set-session-model "agent-shell")
 (declare-function agent-shell-ui-backward-block "agent-shell")
 (declare-function agent-shell-ui-forward-block "agent-shell")
 (declare-function agent-shell-ui-mode "agent-shell")
@@ -83,7 +91,7 @@ Returns an alist with insertion details or nil otherwise:
       (pop-to-buffer-same-window current)))
   (when-let ((shell-buffer (or shell-buffer (agent-shell--shell-buffer)))
              (viewport-buffer (agent-shell-viewport--buffer :shell-buffer shell-buffer))
-             (text (or text (agent-shell--relevant-text) "")))
+             (text (or text (agent-shell--context) "")))
     (let ((insert-start nil)
           (insert-end nil))
       ;; Is there text to be inserted? Reject while busy.
@@ -121,6 +129,8 @@ Returns an alist with insertion details or nil otherwise:
 (defun agent-shell-viewport-compose-send ()
   "Send the viewport composed prompt to the agent shell."
   (interactive)
+  (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
+    (user-error "Not in a shell viewport buffer"))
   (if agent-shell-prefer-viewport-interaction
       (agent-shell-viewport-compose-send-and-wait-for-response)
     (agent-shell-viewport-compose-send-and-kill)))
@@ -128,6 +138,8 @@ Returns an alist with insertion details or nil otherwise:
 (defun agent-shell-viewport-compose-send-and-kill ()
   "Send the viewport composed prompt to the agent shell and kill compose buffer."
   (interactive)
+  (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
+    (user-error "Not in a shell viewport buffer"))
   (let ((shell-buffer (agent-shell--shell-buffer))
         (viewport-buffer (current-buffer))
         (prompt (buffer-string)))
@@ -183,6 +195,7 @@ Returns an alist with insertion details or nil otherwise:
 (defun agent-shell-viewport-interrupt ()
   "Interrupt active agent shell request."
   (interactive)
+  (agent-shell-viewport--ensure-buffer)
   (catch 'exit
     (let ((shell-buffer (agent-shell--shell-buffer)))
       (unless (agent-shell-viewport--busy-p)
@@ -197,9 +210,8 @@ Returns an alist with insertion details or nil otherwise:
   "Initialize viewport compose buffer.
 
 Optionally set its PROMPT and RESPONSE."
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
+
   ;; Recalculate and cache position
   (agent-shell-viewport--position :force-refresh t)
   (let ((inhibit-read-only t)
@@ -229,6 +241,11 @@ Optionally set its PROMPT and RESPONSE."
       (insert response))
     (let ((inhibit-read-only t))
       (markdown-overlays-put))))
+
+(defun agent-shell-viewport--ensure-buffer ()
+  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
+              (derived-mode-p 'agent-shell-viewport-edit-mode))
+    (user-error "Not in a shell viewport buffer")))
 
 (defun agent-shell-viewport--prompt ()
   "Return the buffer prompt."
@@ -281,9 +298,7 @@ Optionally set its PROMPT and RESPONSE."
 (defun agent-shell-viewport-compose-cancel ()
   "Cancel prompt composition."
   (interactive)
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
   (if (or (derived-mode-p 'agent-shell-viewport-view-mode)
           (with-current-buffer (agent-shell--shell-buffer)
             (not (shell-maker-history))))
@@ -296,9 +311,7 @@ Optionally set its PROMPT and RESPONSE."
 (defun agent-shell-viewport-view-last ()
   "Display the last request/response interaction."
   (interactive)
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
   (when-let ((shell-buffer (agent-shell--shell-buffer)))
     (with-current-buffer shell-buffer
       (goto-char comint-last-input-start)))
@@ -308,9 +321,7 @@ Optionally set its PROMPT and RESPONSE."
 (defun agent-shell-viewport-refresh ()
   "Refresh viewport buffer content with current item from shell."
   (interactive)
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
   (when-let ((shell-buffer (agent-shell--shell-buffer))
              (viewport-buffer (agent-shell-viewport--buffer))
              (current (with-current-buffer shell-buffer
@@ -422,6 +433,8 @@ With EXISTING-ONLY, only return existing buffers without creating."
 (defun agent-shell-viewport-reply ()
   "Reply as a follow-up and compose another prompt/query."
   (interactive)
+  (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
+    (user-error "Not in a shell viewport buffer"))
   (when (agent-shell-viewport--busy-p)
     (user-error "Busy, please wait"))
   (let* ((region (map-elt (agent-shell--get-region :deactivate t) :content))
@@ -485,6 +498,7 @@ If START-AT-TOP is non-nil, position at point-min regardless of direction."
 (defun agent-shell-viewport-set-session-model ()
   "Set session model."
   (interactive)
+  (agent-shell-viewport--ensure-buffer)
   (let* ((shell-buffer (or (agent-shell--current-shell)
                            (user-error "Not in an agent-shell buffer")))
          (viewport-buffer (agent-shell-viewport--buffer
@@ -499,6 +513,7 @@ If START-AT-TOP is non-nil, position at point-min regardless of direction."
 (defun agent-shell-viewport-set-session-mode ()
   "Set session mode."
   (interactive)
+  (agent-shell-viewport--ensure-buffer)
   (let* ((shell-buffer (or (agent-shell--current-shell)
                            (user-error "Not in an agent-shell buffer")))
          (viewport-buffer (agent-shell-viewport--buffer
@@ -514,6 +529,7 @@ If START-AT-TOP is non-nil, position at point-min regardless of direction."
 (defun agent-shell-viewport-cycle-session-mode ()
   "Cycle through available session modes."
   (interactive)
+  (agent-shell-viewport--ensure-buffer)
   (let* ((shell-buffer (or (agent-shell--current-shell)
                            (user-error "Not in an agent-shell buffer")))
          (viewport-buffer (agent-shell-viewport--buffer
@@ -530,9 +546,7 @@ If START-AT-TOP is non-nil, position at point-min regardless of direction."
   "Return the position in history of the shell buffer.
 
 When FORCE-REFRESH is non-nil, recalculate and update cache."
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
   (if (and (not force-refresh) agent-shell-viewport--position-cache)
       agent-shell-viewport--position-cache
     (let* ((shell-buffer (agent-shell--shell-buffer))
@@ -550,7 +564,9 @@ When FORCE-REFRESH is non-nil, recalculate and update cache."
       position)))
 
 (cl-defun agent-shell-viewport--busy-p (&key viewport-buffer)
-  "Return non-nil if the associated shell buffer is busy."
+  "Return non-nil if the associated shell buffer is busy.
+
+VIEWPORT-BUFFER is the viewport buffer to check."
   (when-let ((shell-buffer (agent-shell--shell-buffer
                             :viewport-buffer viewport-buffer
                             :no-error t)))
@@ -561,9 +577,7 @@ When FORCE-REFRESH is non-nil, recalculate and update cache."
   "Update header and mode line based on `agent-shell-header-style'.
 
 Automatically determines qualifier and bindings based on current major mode."
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
   (let* ((pos (or (agent-shell-viewport--position)
                   (cons 1 1)))
          (pos-label (format "%d/%d" (car pos) (cdr pos)))
@@ -631,9 +645,7 @@ Automatically determines qualifier and bindings based on current major mode."
   "Clean up resources.
 
 For example, offer to kill associated shell session."
-  (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
-              (derived-mode-p 'agent-shell-viewport-edit-mode))
-    (user-error "Not in a shell viewport buffer"))
+  (agent-shell-viewport--ensure-buffer)
   (if (and agent-shell-viewport--clean-up
            ;; Only offer to kill shell buffers when viewport buffer
            ;; is explicitly being killed from a viewport buffer.
@@ -648,7 +660,7 @@ For example, offer to kill associated shell session."
                                                         :existing-only t)
                                                        (current-buffer)))
                                               (agent-shell-buffers)))
-                   (_ (y-or-n-p "Kill shell session too?")))
+                   ((y-or-n-p "Kill shell session too?")))
           (mapc (lambda (shell-buffer)
                   (kill-buffer shell-buffer))
                 shell-buffers)))))
@@ -680,7 +692,7 @@ For example, offer to kill associated shell session."
     (define-key map (kbd "C-c C-c") #'agent-shell-viewport-interrupt)
     (define-key map (kbd "n") #'agent-shell-viewport-next-item)
     (define-key map (kbd "p") #'agent-shell-viewport-previous-item)
-    (define-key map (kbd "<tab>") #'agent-shell-viewport-next-item)
+    (define-key map (kbd "TAB") #'agent-shell-viewport-next-item)
     (define-key map (kbd "<backtab>") #'agent-shell-viewport-previous-item)
     (define-key map (kbd "f") #'agent-shell-viewport-next-page)
     (define-key map (kbd "b") #'agent-shell-viewport-previous-page)

@@ -42,8 +42,9 @@
 API-KEY is the Google API key string or function that returns it.
 LOGIN when non-nil indicates to use login-based authentication.
 VERTEX-AI when non-nil indicates to use Vertex AI authentication.
+NONE when non-nil indicates no authentication method is used.
 
-Only one of API-KEY, LOGIN, or VERTEX-AI should be provided."
+Only one of API-KEY, LOGIN, VERTEX-AI, or NONE should be provided."
   (when (> (seq-count #'identity (list api-key login vertex-ai)) 1)
     (error "Cannot specify multiple authentication methods - choose one"))
   (unless (> (seq-count #'identity (list api-key login vertex-ai none)) 0)

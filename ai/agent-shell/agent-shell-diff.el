@@ -127,14 +127,14 @@ Arguments:
                                 (funcall on-exit))))
                           (with-current-buffer calling-buffer
                             ;; Make sure give focus back to calling buffer on exit.
-                            (if (and (window-live-p calling-window)
-                                     (eq (window-buffer calling-window) calling-buffer))
-                                ;; Calling buffer still on calling window, just select it.
-                                (select-window calling-window)
-                              ;; Calling buffer not on calling window, restore it.
-                              (progn
-                                (set-window-buffer calling-window calling-buffer)
-                                (select-window calling-window)))))
+                            (if (window-live-p calling-window)
+                                (if (eq (window-buffer calling-window) calling-buffer)
+                                    ;; Calling buffer still on calling window, just select it.
+                                    (select-window calling-window)
+                                  ;; Calling buffer not on calling window, restore it.
+                                  (progn
+                                    (set-window-buffer calling-window calling-buffer)
+                                    (select-window calling-window))))))
                         nil t))
             (setq buffer-read-only t)
             (when bindings
