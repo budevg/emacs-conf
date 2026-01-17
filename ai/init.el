@@ -183,6 +183,8 @@ combinations."
 
 (use-package pi-coding-agent
   :commands pi-coding-agent
+  :custom
+  (pi-coding-agent-conf-dir (format "%s/.pi" (file-name-directory (executable-find "pi"))))
   :bind (:map pi-coding-agent-chat-mode-map
          ("g" . (lambda () (interactive) (delete-other-windows) (pi-coding-agent)))
          )

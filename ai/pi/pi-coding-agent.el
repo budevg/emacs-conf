@@ -117,6 +117,11 @@ Prevents huge single-line outputs from blowing up the chat buffer."
   :type 'natnum
   :group 'pi-coding-agent)
 
+(defcustom pi-coding-agent-conf-dir "~/.pi"
+  "Directory where pi stores configs and sessions."
+  :type 'string
+  :group 'pi-coding-agent)
+
 ;;;; Faces
 
 (defface pi-coding-agent-separator
@@ -2028,7 +2033,7 @@ optional command files that may not exist or may have permission issues."
   "Discover file-based slash commands for session in DIR.
 Searches ~/.pi/agent/commands/ and DIR/.pi/commands/.
 Returns list of command plists."
-  (let ((user-dir (expand-file-name "~/.pi/agent/commands/"))
+  (let ((user-dir (expand-file-name "agent/commands/" pi-coding-agent-conf-dir))
         (project-dir (expand-file-name ".pi/commands/" dir)))
     (append (pi-coding-agent--load-commands-from-dir user-dir "user")
             (pi-coding-agent--load-commands-from-dir project-dir "project"))))
@@ -2179,7 +2184,7 @@ Shows HH:MM if today, otherwise YYYY-MM-DD HH:MM."
   "List available session files for project DIR.
 Returns list of absolute paths to .jsonl files, sorted by modification
 time with most recently used first."
-  (let* ((sessions-base (expand-file-name "~/.pi/agent/sessions/"))
+  (let* ((sessions-base (expand-file-name "agent/sessions/" pi-coding-agent-conf-dir))
          (session-dir (expand-file-name (pi-coding-agent--session-dir-name dir) sessions-base)))
     (when (file-directory-p session-dir)
       ;; Sort by modification time descending (most recently used first)
