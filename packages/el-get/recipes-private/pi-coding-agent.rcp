@@ -1,0 +1,7 @@
+(:name agent-shell
+       :description "Emacs frontend for the pi coding agent"
+       :depends (acp shell-maker)
+       :type github
+       :pkgname "dnouri/pi-coding-agent"
+       :build `(,(concat "cp *.el " (in-emacs-d "ai/pi")))
+       )

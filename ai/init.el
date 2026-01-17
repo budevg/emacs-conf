@@ -180,3 +180,24 @@ combinations."
         )
   (defun shell-maker-welcome-message (config) "")
 )
+
+(use-package pi-coding-agent
+  :commands pi-coding-agent
+  :bind (:map pi-coding-agent-chat-mode-map
+         ("g" . (lambda () (interactive) (delete-other-windows) (pi-coding-agent)))
+         )
+  )
+
+(defun ai-dispatch ()
+  (interactive)
+  (let ((choice (completing-read
+                 "AI: "
+                 '("gptel" "shell-agent" "pi")
+                 nil
+                 t)))
+    (pcase choice
+      ("gptel" (call-interactively #'gptel))
+      ("shell-agent" (agent-shell t))
+      ("pi" (call-interactively #'pi-coding-agent)))))
+
+(global-set-key (kbd "C-f i") #'ai-dispatch)
