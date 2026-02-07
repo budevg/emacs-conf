@@ -193,49 +193,6 @@ filter LLM response text, either use `gptel-request' with a
 custom callback, or use `gptel-post-response-functions'."
  "0.9.7")
 
-(defcustom gptel-pre-response-hook nil
-  "Hook run before inserting the LLM response into the current buffer.
-
-This hook is called in the buffer where the LLM response will be
-inserted.
-
-Note: this hook only runs if the request succeeds."
-  :type 'hook)
-
-(define-obsolete-variable-alias
-  'gptel-post-response-hook 'gptel-post-response-functions
-  "0.6.0"
-  "Post-response functions are now called with two arguments: the
-start and end buffer positions of the response.")
-
-(defcustom gptel-post-response-functions nil
-  "Abnormal hook run after inserting the LLM response into the current buffer.
-
-This hook is called in the buffer to which the LLM response is
-sent, and after the full response has been inserted.  Each
-function is called with two arguments: the response beginning and
-end positions.
-
-Note: this hook runs even if the request fails.  In this case the
-response beginning and end positions are both the cursor position
-at the time of the request."
-  :type 'hook)
-
-;; (defcustom gptel-pre-stream-insert-hook nil
-;;   "Hook run before each insertion of the LLM's streaming response.
-
-;; This hook is called in the buffer from which the prompt was sent
-;; to the LLM, immediately before text insertion."
-;;   :group 'gptel
-;;   :type 'hook)
-
-(defcustom gptel-post-stream-hook nil
-  "Hook run after each insertion of the LLM's streaming response.
-
-This hook is called in the buffer from which the prompt was sent
-to the LLM, and after a text insertion."
-  :type 'hook)
-
 ;; TODO: Handle `prog-mode' using the `comment-start' variable
 (defcustom gptel-prompt-prefix-alist
   '((markdown-mode . "### ")
@@ -456,6 +413,22 @@ the same as t."
      :input-cost 0.05
      :output-cost 0.40
      :cutoff-date "2024-09")
+    (gpt-5.1
+     :description "The best model for coding and agentic tasks"
+     :capabilities (media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 400
+     :input-cost 1.25
+     :output-cost 10
+     :cutoff-date "2024-09")
+    (gpt-5.2
+     :description "The best model for coding and agentic tasks"
+     :capabilities (media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 400
+     :input-cost 1.75
+     :output-cost 14
+     :cutoff-date "2025-08")
     (o1
      :description "Reasoning model designed to solve hard problems across domains"
      :capabilities (media reasoning)
@@ -881,13 +854,17 @@ Later plists in the sequence take precedence over earlier ones."
 
 (defun gptel--file-binary-p (path)
   "Check if file at PATH is readable and binary."
-  (condition-case nil
-      (with-temp-buffer
-        (insert-file-contents path nil 1 512 'replace)
-        (memq buffer-file-coding-system
-              '(no-conversion no-conversion-multibyte)))
-    (file-missing (message "File \"%s\" is not readable." path)
-                  nil)))
+  ;; HACK Image files with ICC color profiles are characterized as ASCII
+  ;; (#1223), so until we find a better solution we just match these files by
+  ;; extension.
+  (or (string-match-p "\\.\\(jpe?g\\|png\\|gif\\|webp\\)\\'" path)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents path nil 1 512 'replace)
+            (memq buffer-file-coding-system
+                  '(no-conversion no-conversion-multibyte)))
+        (file-missing (message "File \"%s\" is not readable." path)
+                      nil))))
 
 (defun gptel--insert-file-string (path)
   "Insert at point the contents of the file at PATH as context."
@@ -919,8 +896,8 @@ MODE-SYM is typically a major-mode symbol."
 (cl-defun gptel--url-retrieve (url &key method data headers)
   "Retrieve URL synchronously with METHOD, DATA and HEADERS."
   (declare (indent 1))
-  (let ((url-request-method (if (eq method'post) "POST" "GET"))
-        (url-request-data (encode-coding-string (gptel--json-encode data) 'utf-8))
+  (let ((url-request-method (if (eq method 'post) "POST" "GET"))
+        (url-request-data (when (eq method 'post) (encode-coding-string (gptel--json-encode data) 'utf-8)))
         (url-mime-accept-string "application/json")
         (url-request-extra-headers
          `(("content-type" . "application/json")
@@ -1610,7 +1587,10 @@ considered a success and acts as a default.")
 
 (defvar gptel-request--handlers
   `((WAIT ,#'gptel--handle-wait)
-    (TOOL ,#'gptel--handle-tool-use))
+    (TOOL ,#'gptel--handle-tool-use)
+    (DONE ,#'gptel--handle-post)
+    (ERRS ,#'gptel--handle-post)
+    (ABRT ,#'gptel--handle-post))
   "Alist specifying handlers for gptel's default state transitions.
 
 Each entry is a list whose car is a request state (a symbol) and
@@ -1769,6 +1749,12 @@ MACHINE is an instance of `gptel-fsm'"
           (plist-put info :tool-pending t)
           (funcall (plist-get info :callback)
                    (cons 'tool-call pending-calls) info))))))
+
+(defun gptel--handle-post (fsm)
+  "Run cleanup for `gptel-request' with FSM."
+  (when-let* ((info (gptel-fsm-info fsm))
+              (post (plist-get info :post)))
+    (mapc (lambda (f) (funcall f info)) post)))
 
 ;;;; State machine predicates
 ;; Predicates used to find the next state to transition to, see
@@ -1980,7 +1966,7 @@ be used to rerun or continue the request at a later time."
          (prompt-buffer
           (cond                       ;prompt from buffer or explicitly supplied
            ((null prompt)
-            (gptel--create-prompt-buffer (point)))
+            (gptel--create-prompt-buffer start-marker))
            ((stringp prompt)
             (gptel--with-buffer-copy buffer nil nil
               (insert prompt)
@@ -1991,11 +1977,16 @@ be used to rerun or continue the request at a later time."
               ;; TEMP Decide on the annoated prompt-list format
               (gptel--parse-list-and-insert prompt)
               (current-buffer)))))
+         (system-list (gptel--parse-directive system 'raw)) ;eval function-valued system prompts
          (info (list :data prompt-buffer
                      :buffer buffer
                      :position start-marker)))
     (when transforms (plist-put info :transforms transforms))
-    (with-current-buffer prompt-buffer (setq gptel--system-message system))
+    (with-current-buffer prompt-buffer
+      (setq gptel--system-message       ;guaranteed to be buffer-local
+            ;; Retain single-part system messages as strings to avoid surprises
+            ;; when applying presets
+            (if (cdr system-list) system-list (car system-list))))
     (when stream (plist-put info :stream stream))
     ;; This context should not be confused with the context aggregation context!
     (when callback (plist-put info :callback callback))
@@ -2538,19 +2529,16 @@ INFO contains the request data, TOKEN is a unique identifier."
      (and-let* ((curl-args (gptel-backend-curl-args gptel-backend)))
        (if (functionp curl-args) (funcall curl-args) curl-args))
      (list (format "-w(%s . %%{size_header})" token))
-     (if (length< data-json gptel-curl-file-size-threshold)
+     (if (< (string-bytes data-json) gptel-curl-file-size-threshold)
          (list (format "-d%s" data-json))
-       (letrec
-           ((write-region-inhibit-fsync t)
-            (file-name-handler-alist nil)
-            (temp-filename (make-temp-file "gptel-curl-data" nil ".json" data-json))
-            (cleanup-fn (lambda (&rest _)
-                          (when (file-exists-p temp-filename)
-                            (delete-file temp-filename)
-                            (remove-hook 'gptel-post-response-functions cleanup-fn)))))
-         (add-hook 'gptel-post-response-functions cleanup-fn)
-         (list "--data-binary"
-               (format "@%s" temp-filename))))
+       (let* ((write-region-inhibit-fsync t)
+              (file-name-handler-alist nil)
+              (inhibit-message t)
+              (temp-filename (make-temp-file "gptel-curl-data" nil ".json" data-json))
+              (cleanup-fn (lambda (&rest _) (when (file-exists-p temp-filename)
+                                         (delete-file temp-filename)))))
+         (plist-put info :post (cons cleanup-fn (plist-get info :post)))
+         (list "--data-binary" (format "@%s" temp-filename))))
      (when (not (string-empty-p gptel-proxy))
        (list "--proxy" gptel-proxy
              "--proxy-negotiate"
@@ -2820,18 +2808,19 @@ PROCESS and _STATUS are process parameters."
         (plist-put proc-info :status http-msg)
         (gptel--fsm-transition fsm)     ;WAIT -> TYPE
         (when error (plist-put proc-info :error error))
-        (when response                  ;Look for a reasoning block
-          (if (string-match-p "^\\s-*<think>" response)
-              (when-let* ((idx (string-search "</think>" response)))
-                (with-demoted-errors "gptel callback error: %S"
-                  (funcall proc-callback
-                           (cons 'reasoning (substring response nil (+ idx 8)))
-                           proc-info))
-                (setq response
-                      (string-trim-left (substring response (+ idx 8)))))
-            (when-let* ((reasoning (plist-get proc-info :reasoning))
-                        ((stringp reasoning)))
-              (funcall proc-callback (cons 'reasoning reasoning) proc-info))))
+        ;; Look for a reasoning block
+        (if (and (stringp response) (string-match-p "^\\s-*<think>" response))
+            (when-let* ((idx (string-search "</think>" response)))
+              (with-demoted-errors "gptel callback error: %S"
+                (funcall proc-callback
+                         (cons 'reasoning (substring response nil (+ idx 8)))
+                         proc-info))
+              (setq response
+                    (string-trim-left (substring response (+ idx 8)))))
+          (when-let* ((reasoning (plist-get proc-info :reasoning))
+                      ((stringp reasoning)))
+            (funcall proc-callback (cons 'reasoning reasoning) proc-info)))
+        ;; Call callback with response text
         (when (or response (not (member http-status '("200" "100"))))
           (with-demoted-errors "gptel callback error: %S"
             (funcall proc-callback response proc-info))))

@@ -31,6 +31,7 @@
 
 (declare-function ediff-regions-internal "ediff")
 (declare-function ediff-make-cloned-buffer "ediff-utils")
+(declare-function org-escape-code-in-string "org-src")
 
 
 ;; * Helper functions and vars
@@ -305,6 +306,11 @@ documention.  Return nil if user does not provide a number, for default."
 
 Handle formatting for system messages when the active
 `gptel-model' does not support system messages."
+  ;; Transient >= 0.12 may call description functions with the suffix/group
+  ;; object as an argument. Treat that as "no explicit message supplied".
+  (when (and (fboundp 'eieio-object-p)
+             (eieio-object-p message))
+    (setq message nil))
   (setq message (or message gptel--system-message))
   (if (gptel--model-capable-p 'nosystem)
       (concat (propertize "[No system message support for model "
@@ -1365,6 +1371,7 @@ supports.  See `gptel-track-media' for more information."
   :description
   "Yank to context"
   (interactive "P")
+  (require 'gptel-context)
   (gptel-context-add-current-kill arg)
   (transient-setup))
 
@@ -1687,10 +1694,13 @@ This sets the variable `gptel-include-tool-results', which see."
                      (if (consp reduced-prompt);either (region . prompt) or prompt
                          (concat (and (car reduced-prompt)
                                       (concat "#+begin_src " (gptel--strip-mode-suffix major-mode)
-                                              "\n" (car reduced-prompt) "\n#+end_src\n\n"))
+                                              "\n" (org-escape-code-in-string (car reduced-prompt))
+                                              "\n#+end_src\n\n"))
                                  (cdr reduced-prompt))
                        (concat "#+begin_src " (gptel--strip-mode-suffix major-mode)
-                               "\n" (or (cdr-safe reduced-prompt) reduced-prompt) "\n#+end_src"))))
+                               "\n" (org-escape-code-in-string
+                                     (or (cdr-safe reduced-prompt) reduced-prompt))
+                               "\n#+end_src"))))
               (t (setq reduced-prompt
                        (if (consp reduced-prompt);either (region . prompt) or prompt
                            (concat (and (car reduced-prompt)
@@ -1863,7 +1873,7 @@ This uses the prompts in the variable
           (gptel--set-with-scope
            'gptel--system-message prompt gptel--set-buffer-locally)
           (gptel--edit-directive 'gptel--system-message
-            :callback (lambda () (call-interactively #'gptel-menu)))))
+            :callback (lambda (_) (call-interactively #'gptel-menu)))))
     (message "No prompts available.")))
 
 (transient-define-suffix gptel--suffix-system-message (&optional cancel)
