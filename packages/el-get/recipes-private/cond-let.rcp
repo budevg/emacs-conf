@@ -1,0 +1,7 @@
+(:name cond-let
+       :description "Binding conditionals "
+       :type github
+       :pkgname "tarsius/cond-let"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib")))
+       )

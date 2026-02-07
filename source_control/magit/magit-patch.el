@@ -1,6 +1,6 @@
 ;;; magit-patch.el --- Creating and applying patches  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -28,6 +28,8 @@
 
 (require 'magit)
 
+(declare-function message-goto-body "message" (&optional interactive))
+
 ;;; Options
 
 (defcustom magit-patch-save-arguments '(exclude "--stat")
@@ -50,7 +52,7 @@ the prefix argument."
 
 ;;; Commands
 
-;;;###autoload (autoload 'magit-patch "magit-patch" nil t)
+;;;###autoload(autoload 'magit-patch "magit-patch" nil t)
 (transient-define-prefix magit-patch ()
   "Create or apply patches."
   ["Actions"
@@ -60,7 +62,7 @@ the prefix argument."
     ("s"  "Save diff as patch" magit-patch-save)]
    [("r"  "Request pull"       magit-request-pull)]])
 
-;;;###autoload (autoload 'magit-patch-create "magit-patch" nil t)
+;;;###autoload(autoload 'magit-patch-create "magit-patch" nil t)
 (transient-define-prefix magit-patch-create (range args files)
   "Create patches for the commits in RANGE.
 When a single commit is given for RANGE, create a patch for the
@@ -97,18 +99,18 @@ which creates patches for all commits that are reachable from
   ["Actions"
    ("c" "Create patches" magit-patch-create)]
   (interactive
-   (if (not (eq transient-current-command 'magit-patch-create))
-       (list nil nil nil)
-     (cons (if-let ((revs (magit-region-values 'commit t)))
-               (concat (car (last revs)) "^.." (car revs))
-             (let ((range (magit-read-range-or-commit
-                           "Create patches for range or commit")))
-               (if (string-search ".." range)
-                   range
-                 (format "%s~..%s" range range))))
-           (let ((args (transient-args 'magit-patch-create)))
-             (list (seq-filter #'stringp args)
-                   (cdr (assoc "--" args)))))))
+    (if (not (eq transient-current-command 'magit-patch-create))
+        (list nil nil nil)
+      (cons (if-let ((revs (magit-region-values 'commit t)))
+                (concat (car (last revs)) "^.." (car revs))
+              (let ((range (magit-read-range-or-commit
+                            "Create patches for range or commit")))
+                (if (string-search ".." range)
+                    range
+                  (format "%s~..%s" range range))))
+            (let ((args (transient-args 'magit-patch-create)))
+              (list (seq-filter #'stringp args)
+                    (cdr (assoc "--" args)))))))
   (if (not range)
       (transient-setup 'magit-patch-create)
     (magit-run-git "format-patch" range args "--" files)
@@ -116,8 +118,8 @@ which creates patches for all commits that are reachable from
       (save-match-data
         (find-file
          (expand-file-name
-          (concat (and-let* ((v (transient-arg-value "--reroll-count=" args)))
-                    (format "v%s-" v))
+          (concat (and$ (transient-arg-value "--reroll-count=" args)
+                        (format "v%s-" $))
                   "0000-cover-letter.patch")
           (let ((topdir (magit-toplevel)))
             (if-let ((dir (transient-arg-value "--output-directory=" args)))
@@ -150,9 +152,8 @@ which creates patches for all commits that are reachable from
   :reader #'magit-format-patch-select-base)
 
 (defun magit-format-patch-select-base (prompt initial-input history)
-  (or (magit-completing-read prompt (cons "auto" (magit-list-refnames))
-                             nil nil initial-input history "auto")
-      (user-error "Nothing selected")))
+  (magit-completing-read prompt (cons "auto" (magit-list-refnames))
+                         nil 'any initial-input history "auto"))
 
 (transient-define-argument magit-format-patch:--reroll-count ()
   :description "Reroll count"
@@ -235,7 +236,7 @@ which creates patches for all commits that are reachable from
   :argument "--output-directory="
   :reader #'transient-read-existing-directory)
 
-;;;###autoload (autoload 'magit-patch-apply "magit-patch" nil t)
+;;;###autoload(autoload 'magit-patch-apply "magit-patch" nil t)
 (transient-define-prefix magit-patch-apply (file &rest args)
   "Apply the patch file FILE."
   :man-page "git-apply"
@@ -246,14 +247,14 @@ which creates patches for all commits that are reachable from
   ["Actions"
    ("a"  "Apply patch" magit-patch-apply)]
   (interactive
-   (if (not (eq transient-current-command 'magit-patch-apply))
-       (list nil)
-     (list (expand-file-name
-            (read-file-name "Apply patch: "
-                            default-directory nil nil
-                            (and-let* ((file (magit-file-at-point)))
-                              (file-relative-name file))))
-           (transient-args 'magit-patch-apply))))
+    (if (not (eq transient-current-command 'magit-patch-apply))
+        (list nil)
+      (list (expand-file-name
+             (read-file-name "Apply patch: "
+                             default-directory nil nil
+                             (and$ (magit-file-at-point)
+                                   (file-relative-name $))))
+            (transient-args 'magit-patch-apply))))
   (if (not file)
       (transient-setup 'magit-patch-apply)
     (magit-run-git "apply" args "--" (magit-convert-filename-for-git file))))
@@ -312,9 +313,10 @@ START is a commit that already is in the upstream repository.
 END is the last commit, usually a branch name, which upstream
 is asked to pull.  START has to be reachable from that commit."
   (interactive
-   (list (magit-get "remote" (magit-read-remote "Remote") "url")
-         (magit-read-branch-or-commit "Start" (magit-get-upstream-branch))
-         (magit-read-branch-or-commit "End")))
+    (list (magit-get "remote" (magit-read-remote "Remote") "url")
+          (magit-read-branch-or-commit "Start" (magit-get-upstream-branch))
+          (magit-read-branch-or-commit "End")))
+  (require 'message)
   (let ((dir default-directory))
     ;; mu4e changes default-directory
     (compose-mail)
@@ -325,4 +327,15 @@ is asked to pull.  START has to be reachable from that commit."
 
 ;;; _
 (provide 'magit-patch)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-patch.el ends here

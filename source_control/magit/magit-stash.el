@@ -1,6 +1,6 @@
 ;;; magit-stash.el --- Stash support for Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -87,7 +87,7 @@ AUTHOR-WIDTH has to be an integer.  When the name of the author
 
 ;;; Commands
 
-;;;###autoload (autoload 'magit-stash "magit-stash" nil t)
+;;;###autoload(autoload 'magit-stash "magit-stash" nil t)
 (transient-define-prefix magit-stash ()
   "Stash uncommitted changes."
   :man-page "git-stash"
@@ -127,13 +127,13 @@ Untracked files are included according to infix arguments.
 One prefix argument is equivalent to `--include-untracked'
 while two prefix arguments are equivalent to `--all'."
   (interactive
-   (progn (when (and (magit-merge-in-progress-p)
-                     (not (magit-y-or-n-p "\
+    (progn (when (and (magit-merge-in-progress-p)
+                      (not (magit-y-or-n-p "\
 Stashing and resetting during a merge conflict.  \
 Applying the resulting stash won't restore the merge state.  \
 Proceed anyway? ")))
-            (user-error "Abort"))
-          (magit-stash-read-args)))
+             (user-error "Abort"))
+           (magit-stash-read-args)))
   (magit-stash-save message t t include-untracked t))
 
 ;;;###autoload
@@ -173,14 +173,15 @@ while two prefix arguments are equivalent to `--all'."
 
 The message that Git would have picked, is available as the
 default (used when the user enters the empty string) and as
-the next history element (which can be accessed with \
-\\<minibuffer-local-map>\\[next-history-element])."
-  (read-string (format "Stash message (default: On%s:%s): "
-                       (magit--ellipsis) (magit--ellipsis))
-               nil nil
-               (format "On %s: %s"
-                       (or (magit-get-current-branch) "(no branch)")
-                       (magit-rev-format "%h %s"))))
+the first future history element.  The second future history
+element is just \"On BRANCH: \".  Future history elements can
+be accessed using \\<minibuffer-local-map>\\[next-history-element])."
+  (let ((branch (or (magit-get-current-branch) "(no branch)"))
+        (ellipsis (magit--ellipsis)))
+    (read-string (format "Stash message (default: On%s:%s): " ellipsis ellipsis)
+                 nil nil
+                 (list (format "On %s: %s" branch (magit-rev-format "%h %s"))
+                       (format "On %s: " branch)))))
 
 (defun magit-stash-read-message-traditional ()
   "Read a message from the minibuffer, to be used for a stash.
@@ -233,7 +234,7 @@ while two prefix arguments are equivalent to `--all'."
   (magit-stash-save (concat "WIP on " (magit-stash-summary))
                     index worktree untracked refresh t))
 
-;;;###autoload (autoload 'magit-stash-push "magit-stash" nil t)
+;;;###autoload(autoload 'magit-stash-push "magit-stash" nil t)
 (transient-define-prefix magit-stash-push (&optional transient args)
   "Create stash using \"git stash push\".
 
@@ -369,9 +370,9 @@ want to fall back to using \"--3way\", without being prompted."
   "Remove a stash from the stash list.
 When the region is active offer to drop all contained stashes."
   (interactive
-   (list (if-let ((values (magit-region-values 'stash)))
-             (magit-confirm 'drop-stashes nil "Drop %d stashes" nil values)
-           (magit-read-stash "Drop stash"))))
+    (list (if-let ((values (magit-region-values 'stash)))
+              (magit-confirm 'drop-stashes nil "Drop %d stashes" nil values)
+            (magit-read-stash "Drop stash"))))
   (dolist (stash (if (listp stash)
                      (nreverse (prog1 stash (setq stash (car stash))))
                    (list stash)))
@@ -447,10 +448,10 @@ Then apply STASH, dropping it if it applies cleanly."
     (unless noerror
       (user-error "No %s changes to save" (cond ((not index)  "unstaged")
                                                 ((not worktree) "staged")
-                                                (t "local"))))))
+                                                ("local"))))))
 
-(defun magit-stash-store (message ref commit)
-  (magit-update-ref ref message commit))
+(defun magit-stash-store (message ref rev)
+  (magit-update-ref ref message rev))
 
 (defun magit-stash-create (message index worktree untracked)
   (unless (magit-rev-parse "--verify" "HEAD")
@@ -527,16 +528,12 @@ instead of \"Stashes:\"."
             (magit-insert-section (stash autostash)
               (insert (propertize "AUTOSTASH" 'font-lock-face 'magit-hash))
               (insert " " msg "\n")
-              (save-excursion
-                (backward-char)
-                (magit-log-format-margin autostash author date)))))
+              (magit-log-format-margin autostash author date))))
         (if verified
             (magit-git-wash (apply-partially #'magit-log-wash-log 'stash)
               "reflog" "--format=%gd%x00%aN%x00%at%x00%gs" ref)
           (insert ?\n)
-          (save-excursion
-            (backward-char)
-            (magit-make-margin-overlay)))))))
+          (magit-make-margin-overlay))))))
 
 ;;; List Stashes
 
@@ -572,7 +569,8 @@ instead of \"Stashes:\"."
 
 (defun magit-stashes-maybe-update-stash-buffer (&optional _)
   "When moving in the stashes buffer, update the stash buffer.
-If there is no stash buffer in the same frame, then do nothing."
+If there is no stash buffer in the same frame, then do nothing.
+See also info node `(magit)Section Movement'."
   (when (derived-mode-p 'magit-stashes-mode)
     (magit--maybe-update-stash-buffer)))
 
@@ -639,8 +637,8 @@ If there is no stash buffer in the same frame, then do nothing."
 (cl-defmethod magit-buffer-value (&context (major-mode magit-stash-mode))
   magit-buffer-revision)
 
-(defun magit-stash-insert-section (commit range message &optional files)
-  (magit-insert-section (commit commit)
+(defun magit-stash-insert-section (rev range message &optional files)
+  (magit-insert-section (commit rev)
     (magit-insert-heading message)
     (magit--insert-diff nil
       "diff" range "-p" "--no-prefix" magit-buffer-diff-args
@@ -683,4 +681,15 @@ that make up the stash."
 
 ;;; _
 (provide 'magit-stash)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-stash.el ends here

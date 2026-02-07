@@ -1,6 +1,6 @@
 ;;; magit-gitignore.el --- Intentionally untracked files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -30,7 +30,7 @@
 
 ;;; Transient
 
-;;;###autoload (autoload 'magit-gitignore "magit-gitignore" nil t)
+;;;###autoload(autoload 'magit-gitignore "magit-gitignore" nil t)
 (transient-define-prefix magit-gitignore ()
   "Instruct Git to ignore a file or pattern."
   :man-page "gitignore"
@@ -118,9 +118,9 @@ Rules that are defined in that file affect all local repositories."
            (mapcan
             (lambda (file)
               (cons (concat "/" file)
-                    (and-let* ((ext (file-name-extension file)))
-                      (list (concat "/" (file-name-directory file) "*." ext)
-                            (concat "*." ext)))))
+                    (and$ (file-name-extension file)
+                          (list (concat "/" (file-name-directory file) "*." $)
+                                (concat "*." $)))))
             (sort (nconc
                    (magit-untracked-files nil base)
                    ;; The untracked section of the status buffer lists
@@ -138,7 +138,7 @@ Rules that are defined in that file affect all local repositories."
         (unless (member default choices)
           (setq default nil))))
     (magit-completing-read "File or pattern to ignore"
-                           choices nil nil nil nil default)))
+                           choices nil 'any nil nil default)))
 
 ;;; Skip Worktree Commands
 
@@ -146,12 +146,12 @@ Rules that are defined in that file affect all local repositories."
 (defun magit-skip-worktree (file)
   "Call \"git update-index --skip-worktree -- FILE\"."
   (interactive
-   (list (magit-read-file-choice "Skip worktree for"
-                                 (magit-with-toplevel
-                                   (cl-set-difference
-                                    (magit-list-files)
-                                    (magit-skip-worktree-files)
-                                    :test #'equal)))))
+    (list (magit-read-file-choice "Skip worktree for"
+                                  (magit-with-toplevel
+                                    (cl-set-difference
+                                     (magit-list-files)
+                                     (magit-skip-worktree-files)
+                                     :test #'equal)))))
   (magit-with-toplevel
     (magit-run-git "update-index" "--skip-worktree" "--" file)))
 
@@ -159,9 +159,9 @@ Rules that are defined in that file affect all local repositories."
 (defun magit-no-skip-worktree (file)
   "Call \"git update-index --no-skip-worktree -- FILE\"."
   (interactive
-   (list (magit-read-file-choice "Do not skip worktree for"
-                                 (magit-with-toplevel
-                                   (magit-skip-worktree-files)))))
+    (list (magit-read-file-choice "Do not skip worktree for"
+                                  (magit-with-toplevel
+                                    (magit-skip-worktree-files)))))
   (magit-with-toplevel
     (magit-run-git "update-index" "--no-skip-worktree" "--" file)))
 
@@ -171,12 +171,12 @@ Rules that are defined in that file affect all local repositories."
 (defun magit-assume-unchanged (file)
   "Call \"git update-index --assume-unchanged -- FILE\"."
   (interactive
-   (list (magit-read-file-choice "Assume file to be unchanged"
-                                 (magit-with-toplevel
-                                   (cl-set-difference
-                                    (magit-list-files)
-                                    (magit-assume-unchanged-files)
-                                    :test #'equal)))))
+    (list (magit-read-file-choice "Assume file to be unchanged"
+                                  (magit-with-toplevel
+                                    (cl-set-difference
+                                     (magit-list-files)
+                                     (magit-assume-unchanged-files)
+                                     :test #'equal)))))
   (magit-with-toplevel
     (magit-run-git "update-index" "--assume-unchanged" "--" file)))
 
@@ -184,12 +184,23 @@ Rules that are defined in that file affect all local repositories."
 (defun magit-no-assume-unchanged (file)
   "Call \"git update-index --no-assume-unchanged -- FILE\"."
   (interactive
-   (list (magit-read-file-choice "Do not assume file to be unchanged"
-                                 (magit-with-toplevel
-                                   (magit-assume-unchanged-files)))))
+    (list (magit-read-file-choice "Do not assume file to be unchanged"
+                                  (magit-with-toplevel
+                                    (magit-assume-unchanged-files)))))
   (magit-with-toplevel
     (magit-run-git "update-index" "--no-assume-unchanged" "--" file)))
 
 ;;; _
 (provide 'magit-gitignore)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-gitignore.el ends here

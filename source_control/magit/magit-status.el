@@ -1,6 +1,6 @@
 ;;; magit-status.el --- The grand overview  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -27,6 +27,8 @@
 ;;; Code:
 
 (require 'magit)
+
+(declare-function magit-dired-jump "magit-dired" (&optional other-window))
 
 ;;; Options
 
@@ -147,7 +149,7 @@ The functions which respect this option are
 
 - If nil, do not list any untracked files.
 - If t, list untracked files, but if a directory does not contain any
-  untracked files, then only list that directory, not the contained
+  tracked files, then only list that directory, not the contained
   untracked files.
 - If all, then list each individual untracked files.  This is can be
   very slow and is discouraged.
@@ -257,18 +259,18 @@ has to confirm that it should be reinitialized.
 
 Non-interactively DIRECTORY is (re-)initialized unconditionally."
   (interactive
-   (let ((directory (file-name-as-directory
-                     (expand-file-name
-                      (read-directory-name "Create repository in: ")))))
-     (when-let ((toplevel (magit-toplevel directory)))
-       (setq toplevel (expand-file-name toplevel))
-       (unless (y-or-n-p (if (file-equal-p toplevel directory)
-                             (format "Reinitialize existing repository %s? "
-                                     directory)
-                           (format "%s is a repository.  Create another in %s? "
-                                   toplevel directory)))
-         (user-error "Abort")))
-     (list directory)))
+    (let ((directory (file-name-as-directory
+                      (expand-file-name
+                       (read-directory-name "Create repository in: ")))))
+      (when-let ((toplevel (magit-toplevel directory)))
+        (setq toplevel (expand-file-name toplevel))
+        (unless (y-or-n-p (if (file-equal-p toplevel directory)
+                              (format "Reinitialize existing repository %s? "
+                                      directory)
+                            (format "%s is a repository.  Create another in %s? "
+                                    toplevel directory)))
+          (user-error "Abort")))
+      (list directory)))
   ;; `git init' does not understand the meaning of "~"!
   (magit-call-git "init" (magit-convert-filename-for-git
                           (expand-file-name directory)))
@@ -308,12 +310,12 @@ prefix arguments:
   then fall back to the same behavior as with two prefix
   arguments."
   (interactive
-   (let ((magit--refresh-cache (list (cons 0 0))))
-     (list (and (or current-prefix-arg (not (magit-toplevel)))
-                (progn (magit--assert-usable-git)
-                       (magit-read-repository
-                        (>= (prefix-numeric-value current-prefix-arg) 16))))
-           magit--refresh-cache)))
+    (let ((magit--refresh-cache (list (cons 0 0))))
+      (list (and (or current-prefix-arg (not (magit-toplevel)))
+                 (progn (magit--assert-usable-git)
+                        (magit-read-repository
+                         (>= (prefix-numeric-value current-prefix-arg) 16))))
+            magit--refresh-cache)))
   (let ((magit--refresh-cache (or cache (list (cons 0 0)))))
     (if directory
         (let ((toplevel (magit-toplevel directory)))
@@ -346,8 +348,12 @@ also contains other useful hints.")
 
 ;;;###autoload
 (defun magit-status-here ()
-  "Like `magit-status' but with non-nil `magit-status-goto-file-position'."
+  "Like `magit-status' but with non-nil `magit-status-goto-file-position'.
+Before doing so, save all file-visiting buffers belonging to the current
+repository without prompting."
   (interactive)
+  (let ((magit-inhibit-refresh t))
+    (magit-save-repository-buffers t))
   (let ((magit-status-goto-file-position t))
     (call-interactively #'magit-status)))
 
@@ -433,9 +439,6 @@ Type \\[magit-commit] to create a commit.
   :interactive nil
   :group 'magit-status
   (magit-hack-dir-local-variables)
-  (when magit-status-initial-section
-    (add-hook 'magit-post-create-buffer-hook
-              #'magit-status-goto-initial-section nil t))
   (setq magit--imenu-group-types '(not branch commit)))
 
 (put 'magit-status-mode 'magit-diff-default-arguments
@@ -445,41 +448,46 @@ Type \\[magit-commit] to create a commit.
 
 ;;;###autoload
 (defun magit-status-setup-buffer (&optional directory)
-  (unless directory
-    (setq directory default-directory))
-  (when (file-remote-p directory)
-    (magit-git-version-assert))
-  (let* ((default-directory directory)
-         (d (magit-diff--get-value 'magit-status-mode
-                                   magit-status-use-buffer-arguments))
-         (l (magit-log--get-value 'magit-status-mode
-                                  magit-status-use-buffer-arguments))
-         (file (and magit-status-goto-file-position
-                    (magit-file-relative-name)))
-         (line (and file (save-restriction (widen) (line-number-at-pos))))
-         (col  (and file (save-restriction (widen) (current-column))))
-         (buf  (magit-setup-buffer #'magit-status-mode nil
-                 (magit-buffer-diff-args  (nth 0 d))
-                 (magit-buffer-diff-files (nth 1 d))
-                 (magit-buffer-log-args   (nth 0 l))
-                 (magit-buffer-log-files  (nth 1 l)))))
-    (when file
-      (with-current-buffer buf
-        (let ((staged (magit-get-section '((staged) (status)))))
-          (if (and staged
-                   (cadr (magit-diff--locate-hunk file line staged)))
-              (magit-diff--goto-position file line col staged)
-            (let ((unstaged (magit-get-section '((unstaged) (status)))))
-              (unless (and unstaged
-                           (magit-diff--goto-position file line col unstaged))
-                (when staged
-                  (magit-diff--goto-position file line col staged))))))))
-    buf))
+  (let ((default-directory (or directory default-directory)))
+    (when (file-remote-p default-directory)
+      (magit-git-version-assert))
+    (pcase-let
+        ((`(,dargs ,dfiles) (magit-diff--get-value 'magit-status-mode 'status))
+         (`(,largs ,lfiles) (magit-log--get-value  'magit-status-mode 'status)))
+      (magit-setup-buffer #'magit-status-mode nil
+        :initial-section #'magit-status-goto-initial-section
+        :select-section (and$ (magit-status--get-file-position)
+                              (lambda () (apply #'magit-status--goto-file-position $)))
+        (magit-buffer-diff-args  dargs)
+        (magit-buffer-diff-files dfiles)
+        (magit-buffer-log-args   largs)
+        (magit-buffer-log-files  lfiles)))))
 
 (defun magit-status-refresh-buffer ()
   (magit-git-exit-code "update-index" "--refresh")
   (magit-insert-section (status)
     (magit-run-section-hook 'magit-status-sections-hook)))
+
+(defun magit-status--get-file-position ()
+  (and-let* ((_ magit-status-goto-file-position)
+             (file (magit-file-relative-name)))
+    (save-excursion
+      (widen)
+      (list file (line-number-at-pos) (current-column)))))
+
+(defun magit-status--goto-file-position (file line column)
+  (pcase-let ((`(,upos ,uloc)
+               (magit-diff--locate-file-position file line column 'unstaged))
+              (`(,spos ,sloc)
+               (magit-diff--locate-file-position file line column 'staged)))
+    (cond ((eq uloc 'line) (goto-char upos))
+          ((eq sloc 'line) (goto-char spos))
+          ((eq uloc 'hunk) (goto-char upos))
+          ((eq sloc 'hunk) (goto-char spos))
+          (upos            (goto-char upos))
+          (spos            (goto-char spos)))
+    (when (or upos spos)
+      (magit-section-reveal (magit-current-section)))))
 
 (defun magit-status-goto-initial-section ()
   "Jump to the section specified by `magit-status-initial-section'."
@@ -500,19 +508,22 @@ Type \\[magit-commit] to create a commit.
 
 (defun magit-status-maybe-update-revision-buffer (&optional _)
   "When moving in the status buffer, update the revision buffer.
-If there is no revision buffer in the same frame, then do nothing."
+If there is no revision buffer in the same frame, then do nothing.
+See also info node `(magit)Section Movement'."
   (when (derived-mode-p 'magit-status-mode)
     (magit--maybe-update-revision-buffer)))
 
 (defun magit-status-maybe-update-stash-buffer (&optional _)
   "When moving in the status buffer, update the stash buffer.
-If there is no stash buffer in the same frame, then do nothing."
+If there is no stash buffer in the same frame, then do nothing.
+See also info node `(magit)Section Movement'."
   (when (derived-mode-p 'magit-status-mode)
     (magit--maybe-update-stash-buffer)))
 
 (defun magit-status-maybe-update-blob-buffer (&optional _)
   "When moving in the status buffer, update the blob buffer.
-If there is no blob buffer in the same frame, then do nothing."
+If there is no blob buffer in the same frame, then do nothing.
+See also info node `(magit)Section Movement'."
   (when (derived-mode-p 'magit-status-mode)
     (magit--maybe-update-blob-buffer)))
 
@@ -544,7 +555,8 @@ the status buffer causes this section to disappear again."
       (insert (propertize (format "%-10s" "GitError! ")
                           'font-lock-face 'magit-section-heading))
       (insert (propertize magit-this-error 'font-lock-face 'error))
-      (when-let ((key (car (where-is-internal 'magit-process-buffer))))
+      (when-let ((_ magit-show-process-buffer-hint)
+                 (key (car (where-is-internal 'magit-process-buffer))))
         (insert (format "  [Type `%s' for details]" (key-description key))))
       (insert ?\n))
     (setq magit-this-error nil)))
@@ -609,35 +621,34 @@ arguments are for internal use only."
             (_       (setq rebase (magit-get-boolean "pull.rebase"))))
           (insert (format "%-10s" (or keyword (if rebase "Rebase: " "Merge: "))))
           (insert
-           (if upstream
-               (concat (and magit-status-show-hashes-in-headers
-                            (concat (propertize (magit-rev-format "%h" upstream)
-                                                'font-lock-face 'magit-hash)
-                                    " "))
-                       upstream " "
-                       (magit-log--wash-summary
-                        (or (magit-rev-format "%s" upstream)
-                            "(no commit message)")))
-             (cond
-              ((magit--unnamed-upstream-p remote merge)
-               (concat (propertize merge  'font-lock-face 'magit-branch-remote)
-                       " from "
-                       (propertize remote 'font-lock-face 'bold)))
-              ((magit--valid-upstream-p remote merge)
-               (if (equal remote ".")
-                   (concat
-                    (propertize merge 'font-lock-face 'magit-branch-local) " "
-                    (propertize "does not exist"
-                                'font-lock-face 'magit-branch-warning))
-                 (format
-                  "%s %s %s"
-                  (propertize merge 'font-lock-face 'magit-branch-remote)
-                  (propertize "does not exist on"
-                              'font-lock-face 'magit-branch-warning)
-                  (propertize remote 'font-lock-face 'magit-branch-remote))))
-              (t
-               (propertize "invalid upstream configuration"
-                           'font-lock-face 'magit-branch-warning)))))
+           (cond
+             (upstream
+              (concat (and magit-status-show-hashes-in-headers
+                           (concat (propertize (magit-rev-format "%h" upstream)
+                                               'font-lock-face 'magit-hash)
+                                   " "))
+                      upstream " "
+                      (magit-log--wash-summary
+                       (or (magit-rev-format "%s" upstream)
+                           "(no commit message)"))))
+             ((magit--unnamed-upstream-p remote merge)
+              (concat (propertize merge  'font-lock-face 'magit-branch-remote)
+                      " from "
+                      (propertize remote 'font-lock-face 'bold)))
+             ((magit--valid-upstream-p remote merge)
+              (if (equal remote ".")
+                  (concat
+                   (propertize merge 'font-lock-face 'magit-branch-local) " "
+                   (propertize "does not exist"
+                               'font-lock-face 'magit-branch-warning))
+                (format
+                 "%s %s %s"
+                 (propertize merge 'font-lock-face 'magit-branch-remote)
+                 (propertize "does not exist on"
+                             'font-lock-face 'magit-branch-warning)
+                 (propertize remote 'font-lock-face 'magit-branch-remote))))
+             ((propertize "invalid upstream configuration"
+                          'font-lock-face 'magit-branch-warning))))
           (insert ?\n))))))
 
 (defun magit-insert-push-branch-header ()
@@ -647,22 +658,24 @@ arguments are for internal use only."
     (magit-insert-section (branch target)
       (insert (format "%-10s" "Push: "))
       (insert
-       (if (magit-rev-verify target)
-           (concat (and magit-status-show-hashes-in-headers
-                        (concat (propertize (magit-rev-format "%h" target)
-                                            'font-lock-face 'magit-hash)
-                                " "))
-                   target " "
-                   (magit-log--wash-summary (or (magit-rev-format "%s" target)
-                                                "(no commit message)")))
-         (let ((remote (magit-get-push-remote branch)))
-           (if (magit-remote-p remote)
-               (concat target " "
-                       (propertize "does not exist"
-                                   'font-lock-face 'magit-branch-warning))
-             (concat remote " "
-                     (propertize "remote does not exist"
-                                 'font-lock-face 'magit-branch-warning))))))
+       (cond-let
+         ((magit-rev-verify target)
+          (concat (and magit-status-show-hashes-in-headers
+                       (concat (propertize (magit-rev-format "%h" target)
+                                           'font-lock-face 'magit-hash)
+                               " "))
+                  target " "
+                  (magit-log--wash-summary
+                   (or (magit-rev-format "%s" target)
+                       "(no commit message)"))))
+         [[remote (magit-get-push-remote branch)]]
+         ((magit-remote-p remote)
+          (concat target " "
+                  (propertize "does not exist"
+                              'font-lock-face 'magit-branch-warning)))
+         ((concat remote " "
+                  (propertize "remote does not exist"
+                              'font-lock-face 'magit-branch-warning)))))
       (insert ?\n))))
 
 (defun magit-insert-tags-header ()
@@ -748,31 +761,14 @@ remote in alphabetic order."
   magit-insert-assume-unchanged-files)
 
 (defun magit-insert-untracked-files ()
-  "Maybe insert list of untracked files.
+  "Maybe insert a list of untracked files.
 
 List files if `magit-status-show-untracked-files' is non-nil, but also
 take the local value of Git variable `status.showUntrackedFiles' into
 account.  The local value of the Lisp variable takes precedence over the
 local value of the Git variable.  The global value of the Git variable
 is always ignored."
-  (when-let*
-      ((value (or (and (local-variable-p 'magit-status-show-untracked-files)
-                       magit-status-show-untracked-files)
-                  (pcase (magit-get "--local" "status.showUntrackedFiles")
-                    ((or "no" "off" "false" "0") 'no)
-                    ((or "yes" "on" "true" "1") t)
-                    ("all" 'all))
-                  magit-status-show-untracked-files))
-       ((not (eq value 'no))))
-    (magit-insert-files
-     'untracked
-     (lambda (files)
-       (mapcan (##and (eq (aref % 0) ??)
-                      (list (substring % 3)))
-               (apply #'magit-git-items "status" "-z" "--porcelain"
-                      (format "--untracked-files=%s"
-                              (if (eq value 'all) "all" "normal"))
-                      "--" files))))))
+  (magit-insert-files 'untracked #'magit-list-untracked-files))
 
 (defun magit-insert-tracked-files ()
   "Insert a list of tracked files.
@@ -824,4 +820,15 @@ Honor the buffer's file filter, which can be set using \"D - -\"."
 
 ;;; _
 (provide 'magit-status)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-status.el ends here

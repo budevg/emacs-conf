@@ -1,6 +1,6 @@
 ;;; magit-bookmark.el --- Bookmarks for Magit buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Inspired by an earlier implementation by Yuri Khan.
 
@@ -36,6 +36,11 @@
 
 (cl-defmethod magit-bookmark-get-filename (&context (major-mode magit-mode))
   (magit-toplevel))
+
+(cl-defmethod magit-bookmark-get-value
+  (bookmark &context (major-mode magit-mode))
+  (dolist (var (get major-mode 'magit-bookmark-variables))
+    (bookmark-prop-set bookmark var (symbol-value var))))
 
 (cl-defmethod magit-bookmark-get-buffer-create
   (bookmark (mode (derived-mode magit-mode)))
@@ -151,4 +156,15 @@
 
 ;;; _
 (provide 'magit-bookmark)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-bookmark.el ends here

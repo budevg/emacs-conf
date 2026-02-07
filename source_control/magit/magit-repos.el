@@ -1,6 +1,6 @@
 ;;; magit-repos.el --- Listing repositories  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -31,6 +31,7 @@
 (require 'magit-core)
 
 (declare-function magit-status-setup-buffer "magit-status" (&optional directory))
+(declare-function magit-dired-jump "magit-dired" (&optional other-window))
 
 (defvar x-stretch-cursor)
 
@@ -262,7 +263,8 @@ If it contains \"%s\" then the directory is substituted for that."
   "m"   #'magit-repolist-mark
   "u"   #'magit-repolist-unmark
   "f"   #'magit-repolist-fetch
-  "5"   #'magit-repolist-find-file-other-frame)
+  "5"   #'magit-repolist-find-file-other-frame
+  "<remap> <dired-jump>" #'magit-dired-jump)
 
 (define-derived-mode magit-repolist-mode tabulated-list-mode "Repos"
   "Major mode for browsing a list of Git repositories."
@@ -308,7 +310,7 @@ If it contains \"%s\" then the directory is substituted for that."
                                            sort-fn #'identity idx))
                                          (sort-fn sort-fn)
                                          (sort-set nil)
-                                         (t t)))
+                                         (t)))
                              (flatten-tree props))))
                   magit-repolist-columns))))
 
@@ -372,10 +374,10 @@ Usually this is just its basename."
 
 (defun magit-repolist-column-version (_)
   "Insert a description of the repository's `HEAD' revision."
-  (and-let* ((v (or (magit-git-string "describe" "--tags" "--dirty")
-                    ;; If there are no tags, use the date in MELPA format.
-                    (magit-rev-format "%cd-g%h" nil
-                                      "--date=format:%Y%m%d.%H%M"))))
+  (and-let ((v (or (magit-git-string "describe" "--tags" "--dirty")
+                   ;; If there are no tags, use the date in MELPA format.
+                   (magit-rev-format "%cd-g%h" nil
+                                     "--date=format:%Y%m%d.%H%M"))))
     (save-match-data
       (when (string-match magit-repolist-column-version-regexp v)
         (magit--put-face (match-beginning 0) (match-end 0) 'shadow v)
@@ -384,24 +386,25 @@ Usually this is just its basename."
         (when (match-end 4)
           (magit--put-face (or (match-beginning 3) (match-beginning 4))
                            (match-end 4) 'error v))
-        (when (and (equal (match-string 2 v) "1")
+        (when (and (equal (match-str 2 v) "1")
                    (string-match-p magit-repolist-column-version-resume-regexp
                                    (magit-rev-format "%s")))
           (setq v (replace-match (propertize "+" 'face 'shadow) t t v 1))))
-      (if (and v (string-match "\\`[0-9]" v))
-          (concat " " v)
-        (when (and v (string-match "\\`[^0-9]+" v))
-          (magit--put-face 0 (match-end 0) 'shadow v))
-        v))))
+      (cond ((not v) nil)
+            ((string-match "\\`[0-9]" v)
+             (concat " " v))
+            ((string-match "\\`[^0-9]+" v)
+             (magit--put-face 0 (match-end 0) 'shadow v)
+             v)))))
 
 (defun magit-repolist-version< (a b)
   (save-match-data
     (let ((re "[0-9]+\\(\\.[0-9]*\\)*"))
-      (setq a (and (string-match re a) (match-string 0 a)))
-      (setq b (and (string-match re b) (match-string 0 b)))
+      (setq a (and (string-match re a) (match-str 0 a)))
+      (setq b (and (string-match re b) (match-str 0 b)))
       (cond ((and a b) (version< a b))
             (b nil)
-            (t t)))))
+            (t)))))
 
 (defun magit-repolist-column-branch (_)
   "Insert the current branch."
@@ -437,23 +440,27 @@ which only lists the first one found."
 
 (defun magit-repolist-column-unpulled-from-upstream (spec)
   "Insert number of upstream commits not in the current branch."
-  (and-let* ((br (magit-get-upstream-branch)))
-    (magit-repolist-insert-count (cadr (magit-rev-diff-count "HEAD" br)) spec)))
+  (and$ (magit-get-upstream-branch)
+        (magit-repolist-insert-count (cadr (magit-rev-diff-count "HEAD" $))
+                                     spec)))
 
 (defun magit-repolist-column-unpulled-from-pushremote (spec)
   "Insert number of commits in the push branch but not the current branch."
-  (and-let* ((br (magit-get-push-branch nil t)))
-    (magit-repolist-insert-count (cadr (magit-rev-diff-count "HEAD" br)) spec)))
+  (and$ (magit-get-push-branch nil t)
+        (magit-repolist-insert-count (cadr (magit-rev-diff-count "HEAD" $))
+                                     spec)))
 
 (defun magit-repolist-column-unpushed-to-upstream (spec)
   "Insert number of commits in the current branch but not its upstream."
-  (and-let* ((br (magit-get-upstream-branch)))
-    (magit-repolist-insert-count (car (magit-rev-diff-count "HEAD" br)) spec)))
+  (and$ (magit-get-upstream-branch)
+        (magit-repolist-insert-count (car (magit-rev-diff-count "HEAD" $))
+                                     spec)))
 
 (defun magit-repolist-column-unpushed-to-pushremote (spec)
   "Insert number of commits in the current branch but not its push branch."
-  (and-let* ((br (magit-get-push-branch nil t)))
-    (magit-repolist-insert-count (car (magit-rev-diff-count "HEAD" br)) spec)))
+  (and$ (magit-get-push-branch nil t)
+        (magit-repolist-insert-count (car (magit-rev-diff-count "HEAD" $))
+                                     spec)))
 
 (defun magit-repolist-column-branches (spec)
   "Insert number of branches."
@@ -490,7 +497,7 @@ instead."
   (if-let ((repos (and (not read-directory-name)
                        magit-repository-directories
                        (magit-repos-alist))))
-      (let ((reply (magit-completing-read "Git repository" repos)))
+      (let ((reply (magit-completing-read "Git repository" repos nil 'any)))
         (file-name-as-directory
          (or (cdr (assoc reply repos))
              (if (file-directory-p reply)
@@ -544,4 +551,15 @@ instead."
 
 ;;; _
 (provide 'magit-repos)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-repos.el ends here

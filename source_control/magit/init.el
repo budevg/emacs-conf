@@ -1,13 +1,13 @@
 (autoload 'magit-status "magit" nil t)
 (global-set-key [(meta m)] 'magit-status)
 
-(setq magit-version "4.3.5")
+(setq magit-version "4.5.0")
 
 (eval-after-load "magit"
   '(progn
      (setq-default diff-auto-refine-mode nil)
      (setq magit-push-always-verify nil)
-     (setq magit-section-visibility-indicator nil)
+     (setq magit-section-visibility-indicators nil)
      (setq magit-popup-show-common-commands nil)
      (setq magit-diff-highlight-hunk-body nil)
      (setq magit-save-repository-buffers nil)

@@ -1,6 +1,6 @@
 ;;; magit-bisect.el --- Bisect support for Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -53,7 +53,7 @@
 
 ;;; Commands
 
-;;;###autoload (autoload 'magit-bisect "magit-bisect" nil t)
+;;;###autoload(autoload 'magit-bisect "magit-bisect" nil t)
 (transient-define-prefix magit-bisect ()
   "Narrow in on the commit that introduced a bug."
   :man-page "git-bisect"
@@ -258,7 +258,7 @@ bisect run'."
                               (pop lines))
                          (seq-find (##string-match done-re %) lines))))
       (magit-insert-section ((eval (if bad-line 'commit 'bisect-output))
-                             (and bad-line (match-string 1 bad-line)))
+                             (and bad-line (match-str 1 bad-line)))
         (magit-insert-heading
           (propertize (or bad-line (pop lines))
                       'font-lock-face 'magit-section-heading))
@@ -291,7 +291,7 @@ bisect run'."
     (while (progn (setq beg (point-marker))
                   (re-search-forward
                    "^\\(\\(?:git bisect\\|# status:\\) [^\n]+\n\\)" nil t))
-      (if (string-prefix-p "# status:" (match-string 1))
+      (if (string-prefix-p "# status:" (match-str 1))
           (magit-delete-match)
         (magit-bind-match-strings (heading) nil
           (magit-delete-match)
@@ -315,4 +315,15 @@ bisect run'."
 
 ;;; _
 (provide 'magit-bisect)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-bisect.el ends here

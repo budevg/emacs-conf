@@ -3,7 +3,7 @@
        :description "It's Magit! An Emacs mode for Git."
        :type github
        :pkgname "magit/magit"
-       :depends (dash transient with-editor llama)
+       :depends (dash transient with-editor llama cond-let)
        :build `(,(concat "cp lisp/*.el "
                          (in-emacs-d "source_control/magit")))
        )

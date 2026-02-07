@@ -1,6 +1,6 @@
 ;;; magit-clone.el --- Clone a repository  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -123,7 +123,7 @@ directory where the repository has been cloned."
 
 ;;; Commands
 
-;;;###autoload (autoload 'magit-clone "magit-clone" nil t)
+;;;###autoload(autoload 'magit-clone "magit-clone" nil t)
 (transient-define-prefix magit-clone (&optional transient)
   "Clone a repository."
   :man-page "git-clone"
@@ -314,13 +314,13 @@ Then show the status buffer for the new repository."
 
 (defun magit-clone--url-to-name (url)
   (and (string-match "\\([^/:]+?\\)\\(/?\\.git\\)?$" url)
-       (match-string 1 url)))
+       (match-str 1 url)))
 
 (defun magit-clone--name-to-url (name)
   (or (seq-some
        (pcase-lambda (`(,re ,host ,user))
          (and (string-match re name)
-              (let ((repo (match-string 1 name)))
+              (let ((repo (match-str 1 name)))
                 (magit-clone--format-url host user repo))))
        magit-clone-name-alist)
       (user-error "Not an url and no matching entry in `%s'"
@@ -336,16 +336,27 @@ Then show the status buffer for the new repository."
       (format-spec
        url-format
        `((?h . ,host)
-         (?n . ,(if (string-search "/" repo)
-                    repo
-                  (if (string-search "." user)
-                      (if-let ((user (magit-get user)))
-                          (concat user "/" repo)
-                        (user-error "Set %S or specify owner explicitly" user))
-                    (concat user "/" repo))))))
+         (?n . ,(cond
+                  ((string-search "/" repo) repo)
+                  ((string-search "." user)
+                   (if-let ((user (magit-get user)))
+                       (concat user "/" repo)
+                     (user-error "Set %S or specify owner explicitly" user)))
+                  ((concat user "/" repo))))))
     (user-error
      "Bogus `magit-clone-url-format' (bad type or missing default)")))
 
 ;;; _
 (provide 'magit-clone)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-clone.el ends here

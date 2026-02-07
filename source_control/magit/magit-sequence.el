@@ -1,6 +1,6 @@
 ;;; magit-sequence.el --- History manipulation in Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -31,12 +31,15 @@
 (require 'magit)
 
 ;; For `magit-rebase--todo'.
-(declare-function git-rebase-current-line "git-rebase" ())
-(eval-when-compile
-  (cl-pushnew 'action-type eieio--known-slot-names)
+(declare-function git-rebase-current-line "git-rebase" (&optional batch))
+
+(eval-and-compile ;declare slot names
+  (cl-pushnew 'abbrev eieio--known-slot-names)
   (cl-pushnew 'action eieio--known-slot-names)
   (cl-pushnew 'action-options eieio--known-slot-names)
-  (cl-pushnew 'target eieio--known-slot-names))
+  (cl-pushnew 'action-type eieio--known-slot-names)
+  (cl-pushnew 'target eieio--known-slot-names)
+  (cl-pushnew 'trailer eieio--known-slot-names))
 
 ;;; Options
 ;;;; Faces
@@ -92,12 +95,12 @@
   "Resume the current cherry-pick or revert sequence."
   (interactive)
   (cond
-   ((not (magit-sequencer-in-progress-p))
-    (user-error "No cherry-pick or revert in progress"))
-   ((magit-anything-unmerged-p)
-    (user-error "Cannot continue due to unresolved conflicts"))
-   ((magit-run-git-sequencer
-     (if (magit-revert-in-progress-p) "revert" "cherry-pick") "--continue"))))
+    ((not (magit-sequencer-in-progress-p))
+     (user-error "No cherry-pick or revert in progress"))
+    ((magit-anything-unmerged-p)
+     (user-error "Cannot continue due to unresolved conflicts"))
+    ((magit-run-git-sequencer
+      (if (magit-revert-in-progress-p) "revert" "cherry-pick") "--continue"))))
 
 ;;;###autoload
 (defun magit-sequencer-skip ()
@@ -114,13 +117,13 @@
 This discards all changes made since the sequence started."
   (interactive)
   (cond
-   ((not (magit-sequencer-in-progress-p))
-    (user-error "No cherry-pick or revert in progress"))
-   ((magit-revert-in-progress-p)
-    (magit-confirm 'abort-revert "Really abort revert")
-    (magit-run-git-sequencer "revert" "--abort"))
-   ((magit-confirm 'abort-cherry-pick "Really abort cherry-pick")
-    (magit-run-git-sequencer "cherry-pick" "--abort"))))
+    ((not (magit-sequencer-in-progress-p))
+     (user-error "No cherry-pick or revert in progress"))
+    ((magit-revert-in-progress-p)
+     (magit-confirm 'abort-revert "Really abort revert")
+     (magit-run-git-sequencer "revert" "--abort"))
+    ((magit-confirm 'abort-cherry-pick "Really abort cherry-pick")
+     (magit-run-git-sequencer "cherry-pick" "--abort"))))
 
 (defun magit-sequencer-in-progress-p ()
   (or (magit-cherry-pick-in-progress-p)
@@ -131,7 +134,7 @@ This discards all changes made since the sequence started."
 (defvar magit-perl-executable "perl"
   "The Perl executable.")
 
-;;;###autoload (autoload 'magit-cherry-pick "magit-sequence" nil t)
+;;;###autoload(autoload 'magit-cherry-pick "magit-sequence" nil t)
 (transient-define-prefix magit-cherry-pick ()
   "Apply or transplant commits."
   :man-page "git-cherry-pick"
@@ -226,18 +229,18 @@ Remove the COMMITS from BRANCH and stay on the current branch.
 If a conflict occurs, then you have to fix that and finish the
 process manually."
   (interactive
-   (magit--cherry-move-read-args "harvest" nil
-     (lambda (commits)
-       (list (let ((branches (magit-list-containing-branches (car commits))))
-               (pcase (length branches)
-                 (0 nil)
-                 (1 (car branches))
-                 (_ (magit-completing-read
-                     (let ((len (length commits)))
-                       (if (= len 1)
-                           "Remove 1 cherry from branch"
-                         (format "Remove %s cherries from branch" len)))
-                     branches nil t))))))))
+    (magit--cherry-move-read-args "harvest" nil
+      (lambda (commits)
+        (list (let ((branches (magit-list-containing-branches (car commits))))
+                (pcase (length branches)
+                  (0 nil)
+                  (1 (car branches))
+                  (_ (magit-completing-read
+                      (let ((len (length commits)))
+                        (if (= len 1)
+                            "Remove 1 cherry from branch"
+                          (format "Remove %s cherries from branch" len)))
+                      branches nil t))))))))
   (magit--cherry-move commits branch (magit-get-current-branch) args nil t))
 
 ;;;###autoload
@@ -247,14 +250,14 @@ Remove COMMITS from the current branch and stay on that branch.
 If a conflict occurs, then you have to fix that and finish the
 process manually.  `HEAD' is allowed to be detached initially."
   (interactive
-   (magit--cherry-move-read-args "donate" t
-     (lambda (commits)
-       (list (magit-read-other-branch
-              (let ((len (length commits)))
-                (if (= len 1)
-                    "Move 1 cherry to branch"
-                  (format "Move %s cherries to branch" len))))))
-     'allow-detached))
+    (magit--cherry-move-read-args "donate" t
+      (lambda (commits)
+        (list (magit-read-other-branch
+               (let ((len (length commits)))
+                 (if (= len 1)
+                     "Move 1 cherry to branch"
+                   (format "Move %s cherries to branch" len))))))
+      'allow-detached))
   (magit--cherry-move commits
                       (or (magit-get-current-branch)
                           (magit-rev-parse "HEAD"))
@@ -305,32 +308,32 @@ the process manually."
                (process-put process 'inhibit-refresh t)
                (magit-process-sentinel process event)
                (cond
-                ((magit-rev-equal tip src)
-                 (magit-call-git "update-ref"
-                                 "-m" (format "reset: moving to %s" keep)
-                                 (magit-ref-fullname src)
-                                 keep tip)
-                 (if (not checkout-dst)
-                     (magit-run-git "checkout" src)
-                   (magit-refresh)))
-                (t
-                 (magit-git "checkout" src)
-                 (with-environment-variables
-                     (("GIT_SEQUENCE_EDITOR"
-                       (format "%s -i -ne '/^pick (%s)/ or print'"
-                               magit-perl-executable
-                               (mapconcat #'magit-rev-abbrev commits "|"))))
-                   (magit-run-git-sequencer "rebase" "-i" keep))
-                 (when checkout-dst
-                   (set-process-sentinel
-                    magit-this-process
-                    (lambda (process event)
-                      (when (memq (process-status process) '(exit signal))
-                        (if (> (process-exit-status process) 0)
-                            (magit-process-sentinel process event)
-                          (process-put process 'inhibit-refresh t)
-                          (magit-process-sentinel process event)
-                          (magit-run-git "checkout" dst))))))))))))))))
+                 ((magit-rev-equal tip src)
+                  (magit-call-git "update-ref"
+                                  "-m" (format "reset: moving to %s" keep)
+                                  (magit-ref-fullname src)
+                                  keep tip)
+                  (if (not checkout-dst)
+                      (magit-run-git "checkout" src)
+                    (magit-refresh)))
+                 (t
+                  (magit-git "checkout" src)
+                  (with-environment-variables
+                      (("GIT_SEQUENCE_EDITOR"
+                        (format "%s -i -ne '/^pick (%s)/ or print'"
+                                magit-perl-executable
+                                (mapconcat #'magit-rev-abbrev commits "|"))))
+                    (magit-run-git-sequencer "rebase" "-i" keep))
+                  (when checkout-dst
+                    (set-process-sentinel
+                     magit-this-process
+                     (lambda (process event)
+                       (when (memq (process-status process) '(exit signal))
+                         (if (> (process-exit-status process) 0)
+                             (magit-process-sentinel process event)
+                           (process-put process 'inhibit-refresh t)
+                           (magit-process-sentinel process event)
+                           (magit-run-git "checkout" dst))))))))))))))))
 
 (defun magit--cherry-pick (commits args &optional revert)
   (let ((command (if revert "revert" "cherry-pick")))
@@ -342,17 +345,16 @@ the process manually."
      (if revert "revert" "cherry-pick")
      (let ((merges (seq-filter #'magit-merge-commit-p commits)))
        (cond
-        ((not merges)
-         (seq-remove (##string-prefix-p "--mainline=" %) args))
-        ((cl-set-difference commits merges :test #'equal)
-         (user-error "Cannot %s merge and non-merge commits at once"
-                     command))
-        ((seq-find (##string-prefix-p "--mainline=" %) args)
-         args)
-        (t
-         (cons (format "--mainline=%s"
-                       (read-number "Replay merges relative to parent: "))
-               args))))
+         ((not merges)
+          (seq-remove (##string-prefix-p "--mainline=" %) args))
+         ((cl-set-difference commits merges :test #'equal)
+          (user-error "Cannot %s merge and non-merge commits at once"
+                      command))
+         ((seq-find (##string-prefix-p "--mainline=" %) args)
+          args)
+         ((cons (format "--mainline=%s"
+                        (read-number "Replay merges relative to parent: "))
+                args))))
      commits)))
 
 (defun magit-cherry-pick-in-progress-p ()
@@ -361,13 +363,12 @@ the process manually."
     (or (file-exists-p (expand-file-name "CHERRY_PICK_HEAD" dir))
         ;; And CHERRY_PICK_HEAD does not exist when a conflict happens
         ;; while picking a series of commits with --no-commit.
-        (and-let* ((line (magit-file-line
-                          (expand-file-name "sequencer/todo" dir))))
-          (string-prefix-p "pick" line)))))
+        (and$ (magit-file-line (expand-file-name "sequencer/todo" dir))
+              (string-prefix-p "pick" $)))))
 
 ;;; Revert
 
-;;;###autoload (autoload 'magit-revert "magit-sequence" nil t)
+;;;###autoload(autoload 'magit-revert "magit-sequence" nil t)
 (transient-define-prefix magit-revert ()
   "Revert existing commits, with or without creating new commits."
   :man-page "git-revert"
@@ -419,13 +420,12 @@ without prompting."
     (or (file-exists-p (expand-file-name "REVERT_HEAD" dir))
         ;; And REVERT_HEAD does not exist when a conflict happens
         ;; while reverting a series of commits with --no-commit.
-        (and-let* ((line (magit-file-line
-                          (expand-file-name "sequencer/todo" dir))))
-          (string-prefix-p "revert" line)))))
+        (and$ (magit-file-line (expand-file-name "sequencer/todo" dir))
+              (string-prefix-p "revert" $)))))
 
 ;;; Patch
 
-;;;###autoload (autoload 'magit-am "magit-sequence" nil t)
+;;;###autoload(autoload 'magit-am "magit-sequence" nil t)
 (transient-define-prefix magit-am ()
   "Apply patches received by email."
   :man-page "git-am"
@@ -491,11 +491,11 @@ without prompting."
   "Resume the current patch applying sequence."
   (interactive)
   (cond
-   ((not (magit-am-in-progress-p))
-    (user-error "Not applying any patches"))
-   ((magit-anything-unstaged-p t)
-    (user-error "Cannot continue due to unstaged changes"))
-   ((magit-run-git-sequencer "am" "--continue"))))
+    ((not (magit-am-in-progress-p))
+     (user-error "Not applying any patches"))
+    ((magit-anything-unstaged-p t)
+     (user-error "Cannot continue due to unstaged changes"))
+    ((magit-run-git-sequencer "am" "--continue"))))
 
 ;;;###autoload
 (defun magit-am-skip ()
@@ -519,7 +519,7 @@ This discards all changes made since the sequence started."
 
 ;;; Rebase
 
-;;;###autoload (autoload 'magit-rebase "magit-sequence" nil t)
+;;;###autoload(autoload 'magit-rebase "magit-sequence" nil t)
 (transient-define-prefix magit-rebase ()
   "Transplant commits and/or modify existing commits."
   :man-page "git-rebase"
@@ -587,7 +587,7 @@ This discards all changes made since the sequence started."
 (defun magit-git-rebase (target args)
   (magit-run-git-sequencer "rebase" args target))
 
-;;;###autoload (autoload 'magit-rebase-onto-pushremote "magit-sequence" nil t)
+;;;###autoload(autoload 'magit-rebase-onto-pushremote "magit-sequence" nil t)
 (transient-define-suffix magit-rebase-onto-pushremote (args)
   "Rebase the current branch onto its push-remote branch.
 
@@ -601,7 +601,7 @@ push-remote."
                (magit--select-push-remote "rebase onto that")))
     (magit-git-rebase (concat remote "/" branch) args)))
 
-;;;###autoload (autoload 'magit-rebase-onto-upstream "magit-sequence" nil t)
+;;;###autoload(autoload 'magit-rebase-onto-upstream "magit-sequence" nil t)
 (transient-define-suffix magit-rebase-onto-upstream (args)
   "Rebase the current branch onto its upstream branch.
 
@@ -622,20 +622,19 @@ the upstream."
     (magit-git-rebase upstream args)))
 
 (defun magit-rebase--upstream-description ()
-  (and-let* ((branch (magit-get-current-branch)))
+  (and-let ((branch (magit-get-current-branch)))
     (or (magit-get-upstream-branch branch)
         (let ((remote (magit-get "branch" branch "remote"))
               (merge  (magit-get "branch" branch "merge"))
               (u (magit--propertize-face "@{upstream}" 'bold)))
           (cond
-           ((magit--unnamed-upstream-p remote merge)
-            (concat u ", replacing unnamed"))
-           ((magit--valid-upstream-p remote merge)
-            (concat u ", replacing non-existent"))
-           ((or remote merge)
-            (concat u ", replacing invalid"))
-           (t
-            (concat u ", setting that")))))))
+            ((magit--unnamed-upstream-p remote merge)
+             (concat u ", replacing unnamed"))
+            ((magit--valid-upstream-p remote merge)
+             (concat u ", replacing non-existent"))
+            ((or remote merge)
+             (concat u ", replacing invalid"))
+            ((concat u ", setting that")))))))
 
 ;;;###autoload
 (defun magit-rebase-branch (target args)
@@ -658,29 +657,27 @@ START has to be selected from a list of recent commits."
                       (magit-get-upstream-branch))
                      nil
                      (magit-rebase-arguments)))
-  (if start
-      (progn (message "Rebasing...")
-             (magit-run-git-sequencer "rebase" "--onto" newbase start args)
-             (message "Rebasing...done"))
-    (magit-log-select
-      `(lambda (commit)
-         (magit-rebase-subset ,newbase (concat commit "^") (list ,@args)))
-      (concat "Type %p on a commit to rebase it "
-              "and commits above it onto " newbase ","))))
-
-(defvar magit-rebase-interactive-include-selected t)
+  (cond (start
+         (message "Rebasing...")
+         (magit-run-git-sequencer "rebase" "--onto" newbase start args)
+         (message "Rebasing...done"))
+        ((magit-log-select
+           `(lambda (commit)
+              (magit-rebase-subset ,newbase (concat commit "^") (list ,@args)))
+           (concat "Type %p on a commit to rebase it "
+                   "and commits above it onto " newbase ",")))))
 
 (defun magit-rebase-interactive-1
-    (commit args message &optional editor delay-edit-confirm noassert confirm)
+    ( commit args message
+      &optional editor delay-edit-confirm noassert confirm exact)
   (declare (indent 2))
-  (when commit
-    (unless (magit-rev-ancestor-p commit "HEAD")
-      (user-error "%s isn't an ancestor of HEAD" commit))
-    (if (magit-commit-parents commit)
-        (when (or (not (eq this-command 'magit-rebase-interactive))
-                  magit-rebase-interactive-include-selected)
-          (setq commit (concat commit "^")))
-      (setq args (cons "--root" args))))
+  (cond ((not commit))
+        ((not (magit-rev-ancestor-p commit "HEAD"))
+         (user-error "%s isn't an ancestor of HEAD" commit))
+        ((not (magit-commit-parents commit))
+         (setq args (cons "--root" args)))
+        ((not exact)
+         (setq commit (concat commit "^"))))
   (when (and commit (not noassert))
     (setq commit (magit-rebase-interactive-assert
                   commit delay-edit-confirm
@@ -746,6 +743,8 @@ START has to be selected from a list of recent commits."
     ;; The "--root" argument is being used.
     since))
 
+(defvar magit-rebase-interactive-include-selected t)
+
 ;;;###autoload
 (defun magit-rebase-interactive (commit args)
   "Start an interactive rebase sequence."
@@ -753,7 +752,8 @@ START has to be selected from a list of recent commits."
                      (magit-rebase-arguments)))
   (magit-rebase-interactive-1 commit args
     "Type %p on a commit to rebase it and all commits above it,"
-    nil t))
+    nil t nil nil
+    (not magit-rebase-interactive-include-selected)))
 
 ;;;###autoload
 (defun magit-rebase-autosquash (select args)
@@ -764,12 +764,12 @@ argument, prompt for the first commit to potentially squash into."
   (interactive (list current-prefix-arg
                      (magit-rebase-arguments)))
   (magit-rebase-interactive-1
-      (and-let* (((not select))
-                 (upstream (magit-get-upstream-branch)))
+      (and-let ((_(not select))
+                (upstream (magit-get-upstream-branch)))
         (magit-git-string "merge-base" upstream "HEAD"))
       (nconc (list "--autosquash" "--keep-empty") args)
     "Type %p on a commit to squash into it and then rebase as necessary,"
-    "true" nil t))
+    "true" nil t nil t))
 
 ;;;###autoload
 (defun magit-rebase-edit-commit (commit args)
@@ -822,25 +822,26 @@ argument, prompt for the first commit to potentially squash into."
 In some cases this pops up a commit message buffer for you do
 edit.  With a prefix argument the old message is reused as-is."
   (interactive "P")
-  (if (magit-rebase-in-progress-p)
-      (if (magit-anything-unstaged-p t)
-          (user-error "Cannot continue rebase with unstaged changes")
-        (let ((dir (magit-gitdir)))
-          (when (and (magit-anything-staged-p)
-                     (file-exists-p (expand-file-name "rebase-merge" dir))
-                     (not (member (magit-toplevel)
-                                  magit--rebase-public-edit-confirmed)))
-            (magit-commit-amend-assert
-             (magit-file-line
-              (expand-file-name "rebase-merge/orig-head" dir)))))
-        (if noedit
-            (with-environment-variables (("GIT_EDITOR" "true"))
-              (magit-run-git-async (magit--rebase-resume-command) "--continue")
-              (set-process-sentinel magit-this-process
-                                    #'magit-sequencer-process-sentinel)
-              magit-this-process)
-          (magit-run-git-sequencer (magit--rebase-resume-command) "--continue")))
-    (user-error "No rebase in progress")))
+  (cond
+    ((not (magit-rebase-in-progress-p))
+     (user-error "No rebase in progress"))
+    ((magit-anything-unstaged-p t)
+     (user-error "Cannot continue rebase with unstaged changes"))
+    (t
+     (let ((dir (magit-gitdir)))
+       (when (and (magit-anything-staged-p)
+                  (file-exists-p (expand-file-name "rebase-merge" dir))
+                  (not (member (magit-toplevel)
+                               magit--rebase-public-edit-confirmed)))
+         (magit-commit-amend-assert
+          (magit-file-line (expand-file-name "rebase-merge/orig-head" dir)))))
+     (if noedit
+         (with-environment-variables (("GIT_EDITOR" "true"))
+           (magit-run-git-async (magit--rebase-resume-command) "--continue")
+           (set-process-sentinel magit-this-process
+                                 #'magit-sequencer-process-sentinel)
+           magit-this-process)
+       (magit-run-git-sequencer (magit--rebase-resume-command) "--continue")))))
 
 ;;;###autoload
 (defun magit-rebase-skip ()
@@ -942,8 +943,7 @@ If no such sequence is in progress, do nothing."
                 (commit
                  (magit-sequence-insert-commit
                   "pick" commit 'magit-sequence-pick))
-                (t
-                 (magit-sequence-insert-am-patch
+                ((magit-sequence-insert-am-patch
                   "pick" patch 'magit-sequence-pick)))
           (cl-decf i)))
       (magit-sequence-insert-sequence nil "ORIG_HEAD")
@@ -997,7 +997,7 @@ status buffer (i.e., the reverse of how they will be applied)."
       (insert-file-contents
        (expand-file-name "rebase-merge/git-rebase-todo" (magit-gitdir)))
       (while (not (eobp))
-        (when-let ((obj (git-rebase-current-line)))
+        (when-let ((obj (git-rebase-current-line t)))
           (push obj actions)
           (when (memq (oref obj action-type) '(commit merge))
             (push obj commits)))
@@ -1010,7 +1010,7 @@ status buffer (i.e., the reverse of how they will be applied)."
                            (if (eq (oref obj action-type) 'merge)
                                (let ((options (oref obj action-options)))
                                  (and (string-match "-[cC] \\([^ ]+\\)" options)
-                                      (match-string 1 options)))
+                                      (match-str 1 options)))
                              (oref obj target)))
                          commits)))))
       (cl-assert (equal (length commits) (length abbrevs)))
@@ -1031,9 +1031,8 @@ status buffer (i.e., the reverse of how they will be applied)."
     (magit-sequence-insert-sequence
      (magit-file-line (expand-file-name "rebase-merge/stopped-sha" dir))
      onto
-     (and-let* ((lines (magit-file-lines
-                        (expand-file-name "rebase-merge/done" dir))))
-       (cadr (split-string (car (last lines))))))))
+     (and$ (magit-file-lines (expand-file-name "rebase-merge/done" dir))
+           (cadr (split-string (car (last $))))))))
 
 (defun magit-rebase-insert-apply-sequence (onto)
   (let* ((dir (magit-gitdir))
@@ -1067,38 +1066,37 @@ status buffer (i.e., the reverse of how they will be applied)."
         (if-let ((matched (car (assoc (##equal (magit-patch-id %) id) done))))
             (setq stop matched)
           (cond
-           ((assoc (##magit-rev-equal % stop) done)
-            ;; The commit's testament has been executed.
-            (magit-sequence-insert-commit "void" stop 'magit-sequence-drop))
-           ;; The faith of the commit is still undecided...
-           ((magit-anything-unmerged-p)
-            ;; ...and time travel isn't for the faint of heart.
-            (magit-sequence-insert-commit "join" stop 'magit-sequence-part))
-           ((magit-anything-modified-p t)
-            ;; ...and the dust hasn't settled yet...
-            (magit-sequence-insert-commit
-             (let* ((magit--refresh-cache nil)
-                    (staged   (magit-commit-tree "oO" nil "HEAD"))
-                    (unstaged (magit-commit-worktree "oO" "--reset")))
-               (cond
-                ;; ...but we could end up at the same tree just by committing.
-                ((or (magit-rev-equal staged   stop)
-                     (magit-rev-equal unstaged stop))
-                 "goal")
-                ;; ...but the changes are still there, untainted.
-                ((or (equal (magit-patch-id staged)   id)
-                     (equal (magit-patch-id unstaged) id))
-                 "same")
-                ;; ...and some changes are gone and/or others were added.
-                (t "work")))
-             stop 'magit-sequence-part))
-           ;; The commit is definitely gone...
-           ((assoc (##magit-rev-equal % stop) done)
-            ;; ...but all of its changes are still in effect.
-            (magit-sequence-insert-commit "poof" stop 'magit-sequence-drop))
-           (t
+            ((assoc (##magit-rev-equal % stop) done)
+             ;; The commit's testament has been executed.
+             (magit-sequence-insert-commit "void" stop 'magit-sequence-drop))
+            ;; The faith of the commit is still undecided...
+            ((magit-anything-unmerged-p)
+             ;; ...and time travel isn't for the faint of heart.
+             (magit-sequence-insert-commit "join" stop 'magit-sequence-part))
+            ((magit-anything-modified-p t)
+             ;; ...and the dust hasn't settled yet...
+             (magit-sequence-insert-commit
+              (let* ((magit--refresh-cache nil)
+                     (staged   (magit-commit-tree "oO" nil "HEAD"))
+                     (unstaged (magit-commit-worktree "oO" "--reset")))
+                (cond
+                  ;; ...but we could end up at the same tree just by committing.
+                  ((or (magit-rev-equal staged   stop)
+                       (magit-rev-equal unstaged stop))
+                   "goal")
+                  ;; ...but the changes are still there, untainted.
+                  ((or (equal (magit-patch-id staged)   id)
+                       (equal (magit-patch-id unstaged) id))
+                   "same")
+                  ;; ...and some changes are gone and/or others were added.
+                  ("work")))
+              stop 'magit-sequence-part))
+            ;; The commit is definitely gone...
+            ((assoc (##magit-rev-equal % stop) done)
+             ;; ...but all of its changes are still in effect.
+             (magit-sequence-insert-commit "poof" stop 'magit-sequence-drop))
             ;; ...and some changes are gone and/or other changes were added.
-            (magit-sequence-insert-commit "gone" stop 'magit-sequence-drop)))
+            ((magit-sequence-insert-commit "gone" stop 'magit-sequence-drop)))
           (setq stop nil))))
     (pcase-dolist (`(,rev ,abbrev ,msg) done)
       (apply #'magit-sequence-insert-commit
@@ -1116,8 +1114,7 @@ status buffer (i.e., the reverse of how they will be applied)."
                           abbrev msg))
                    ((equal rev head)
                     (list "done" rev 'magit-sequence-head abbrev msg))
-                   (t
-                    (list "done" rev 'magit-sequence-done abbrev msg)))))
+                   ((list "done" rev 'magit-sequence-done abbrev msg)))))
     (magit-sequence-insert-commit "onto" onto
                                   (if (equal onto head)
                                       'magit-sequence-head
@@ -1126,9 +1123,9 @@ status buffer (i.e., the reverse of how they will be applied)."
 (defun magit-sequence-insert-commit (type hash face &optional abbrev msg)
   (magit-insert-section (commit hash)
     (magit-insert-heading
-      (propertize type 'font-lock-face face) " "
+      (magit--propertize-face type face) " "
       (if abbrev
-          (concat (propertize abbrev 'face 'magit-hash) " " msg "\n")
+          (concat (magit--propertize-face abbrev 'magit-hash) " " msg "\n")
         (concat (magit-format-rev-summary hash) "\n")))))
 
 (defun magit-sequence-insert-step (type target)
@@ -1141,4 +1138,15 @@ status buffer (i.e., the reverse of how they will be applied)."
 
 ;;; _
 (provide 'magit-sequence)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-sequence.el ends here

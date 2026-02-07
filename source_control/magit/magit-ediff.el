@@ -1,6 +1,6 @@
 ;;; magit-ediff.el --- Ediff extension for Magit  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2025 The Magit Project Contributors
+;; Copyright (C) 2008-2026 The Magit Project Contributors
 
 ;; Author: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
 ;; Maintainer: Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>
@@ -115,7 +115,7 @@ recommend you do not further complicate that by enabling this.")
 
 (defvar magit-ediff-previous-winconf nil)
 
-;;;###autoload (autoload 'magit-ediff "magit-ediff" nil)
+;;;###autoload(autoload 'magit-ediff "magit-ediff" nil)
 (transient-define-prefix magit-ediff ()
   "Show differences using the Ediff package."
   :info-manual "(ediff)"
@@ -266,21 +266,21 @@ and alternative commands."
                            (goto-char (point-min))
                            (unless (re-search-forward "^<<<<<<< " nil t)
                              (magit-stage-files (list file)))))))))
-        (if fileC
-            (magit-ediff-buffers
-             ((magit-get-revision-buffer revA fileA)
-              (magit-find-file-noselect  revA fileA))
-             ((magit-get-revision-buffer revB fileB)
-              (magit-find-file-noselect  revB fileB))
-             ((magit-get-revision-buffer revC fileC)
-              (magit-find-file-noselect  revC fileC))
-             setup quit file)
-          (magit-ediff-buffers
-           ((magit-get-revision-buffer revA fileA)
-            (magit-find-file-noselect  revA fileA))
-           ((magit-get-revision-buffer revB fileB)
-            (magit-find-file-noselect  revB fileB))
-           nil setup quit file))))))
+        (cond (fileC
+               (magit-ediff-buffers
+                ((magit-get-revision-buffer revA fileA)
+                 (magit-find-file-noselect  revA fileA))
+                ((magit-get-revision-buffer revB fileB)
+                 (magit-find-file-noselect  revB fileB))
+                ((magit-get-revision-buffer revC fileC)
+                 (magit-find-file-noselect  revC fileC))
+                setup quit file))
+              ((magit-ediff-buffers
+                ((magit-get-revision-buffer revA fileA)
+                 (magit-find-file-noselect  revA fileA))
+                ((magit-get-revision-buffer revB fileB)
+                 (magit-find-file-noselect  revB fileB))
+                nil setup quit file)))))))
 
 ;;;###autoload
 (defun magit-ediff-resolve-rest (file)
@@ -319,9 +319,9 @@ and alternative commands."
   "Stage and unstage changes to FILE using Ediff.
 FILE has to be relative to the top directory of the repository."
   (interactive
-   (let ((files (magit-tracked-files)))
-     (list (magit-completing-read "Selectively stage file" files nil t nil nil
-                                  (car (member (magit-current-file) files))))))
+    (let ((files (magit-tracked-files)))
+      (list (magit-completing-read "Selectively stage file" files nil t nil nil
+                                   (car (member (magit-current-file) files))))))
   (magit-with-toplevel
     (let* ((bufA  (magit-get-revision-buffer "HEAD" file))
            (bufB  (magit-get-revision-buffer "{index}" file))
@@ -332,7 +332,7 @@ FILE has to be relative to the top directory of the repository."
            (bufC* (or bufC (find-file-noselect file)))
            (coding-system-for-read
             (buffer-local-value 'buffer-file-coding-system bufC*))
-           (bufA* (magit-find-file-noselect-1 "HEAD" file t))
+           (bufA* (magit-find-file-noselect "HEAD" file t))
            (bufB* (magit-find-file-index-noselect file t)))
       (with-current-buffer bufB* (setq buffer-read-only nil))
       (magit-ediff-buffers
@@ -367,10 +367,10 @@ the revisions, choose a revision to view changes along, starting
 at the common ancestor of both revisions (i.e., use a \"...\"
 range)."
   (interactive
-   (pcase-let ((`(,revA ,revB) (magit-ediff-compare--read-revisions
-                                nil current-prefix-arg)))
-     (nconc (list revA revB)
-            (magit-ediff-read-files revA revB))))
+    (pcase-let ((`(,revA ,revB) (magit-ediff-compare--read-revisions
+                                 nil current-prefix-arg)))
+      (nconc (list revA revB)
+             (magit-ediff-read-files revA revB))))
   (magit-ediff-buffers
    ((if revA (magit-get-revision-buffer revA fileA) (get-file-buffer    fileA))
     (if revA (magit-find-file-noselect  revA fileA) (find-file-noselect fileA)))
@@ -488,8 +488,7 @@ mind at all, then it asks the user for a command to run."
               (magit-ediff-show-stash revB))
              (file
               (funcall command file))
-             (t
-              (call-interactively command)))))))
+             ((call-interactively command)))))))
 
 ;;;###autoload
 (defun magit-ediff-show-staged (file)
@@ -500,9 +499,9 @@ and discard changes using Ediff, use `magit-ediff-stage'.
 
 FILE must be relative to the top directory of the repository."
   (interactive
-   (list (magit-read-file-choice "Show staged changes for file"
-                                 (magit-staged-files)
-                                 "No staged files")))
+    (list (magit-read-file-choice "Show staged changes for file"
+                                  (magit-staged-files)
+                                  "No staged files")))
   (magit-ediff-buffers ((magit-get-revision-buffer "HEAD" file)
                         (magit-find-file-noselect "HEAD" file))
                        ((get-buffer (concat file ".~{index}~"))
@@ -517,9 +516,9 @@ and discard changes using Ediff, use `magit-ediff-stage'.
 
 FILE must be relative to the top directory of the repository."
   (interactive
-   (list (magit-read-file-choice "Show unstaged changes for file"
-                                 (magit-unstaged-files)
-                                 "No unstaged files")))
+    (list (magit-read-file-choice "Show unstaged changes for file"
+                                  (magit-unstaged-files)
+                                  "No unstaged files")))
   (magit-ediff-buffers ((get-buffer (concat file ".~{index}~"))
                         (magit-find-file-index-noselect file t))
                        ((get-file-buffer file)
@@ -530,9 +529,9 @@ FILE must be relative to the top directory of the repository."
   "Show changes between `HEAD' and working tree using Ediff.
 FILE must be relative to the top directory of the repository."
   (interactive
-   (list (magit-read-file-choice "Show changes in file"
-                                 (magit-changed-files "HEAD")
-                                 "No changed files")))
+    (list (magit-read-file-choice "Show changes in file"
+                                  (magit-changed-files "HEAD")
+                                  "No changed files")))
   (magit-ediff-buffers ((magit-get-revision-buffer "HEAD" file)
                         (magit-find-file-noselect  "HEAD" file))
                        ((get-file-buffer file)
@@ -602,4 +601,15 @@ stash that were staged."
 
 ;;; _
 (provide 'magit-ediff)
+;; Local Variables:
+;; read-symbol-shorthands: (
+;;   ("and$"         . "cond-let--and$")
+;;   ("and>"         . "cond-let--and>")
+;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let"    . "cond-let--while-let")
+;;   ("match-string" . "match-string")
+;;   ("match-str"    . "match-string-no-properties"))
+;; End:
 ;;; magit-ediff.el ends here
