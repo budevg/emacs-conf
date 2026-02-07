@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/agent-shell
-;; Version: 0.29.1
-;; Package-Requires: ((emacs "29.1") (shell-maker "0.84.4") (acp "0.8.2"))
+;; Version: 0.33.2
+;; Package-Requires: ((emacs "29.1") (shell-maker "0.84.9") (acp "0.9.1"))
 
-(defconst agent-shell--version "0.29.1")
+(defconst agent-shell--version "0.33.2")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -46,31 +46,35 @@
 (require 'json)
 (require 'map)
 (unless (require 'markdown-overlays nil 'noerror)
-  (error "Please update 'shell-maker' to v0.84.4 or newer"))
-(require 'shell-maker)
-(require 'markdown-overlays)
-(require 'project)
-(require 'transient)
-(require 'agent-shell-ui)
-(require 'svg nil :noerror)
+  (error "Please update 'shell-maker' to v0.84.9 or newer"))
 (require 'agent-shell-anthropic)
 (require 'agent-shell-auggie)
+(require 'agent-shell-completion)
 (require 'agent-shell-cursor)
 (require 'agent-shell-diff)
-(require 'agent-shell-google)
+(require 'agent-shell-droid)
 (require 'agent-shell-github)
+(require 'agent-shell-google)
 (require 'agent-shell-goose)
+(require 'agent-shell-heartbeat)
 (require 'agent-shell-mistral)
 (require 'agent-shell-openai)
 (require 'agent-shell-opencode)
+(require 'agent-shell-pi)
+(require 'agent-shell-project)
 (require 'agent-shell-qwen)
-(require 'agent-shell-heartbeat)
+(require 'agent-shell-worktree)
+(require 'agent-shell-ui)
 (require 'agent-shell-viewport)
-(require 'agent-shell-droid)
+(require 'image)
+(require 'markdown-overlays)
+(require 'shell-maker)
+(require 'svg nil :noerror)
+(require 'transient)
 
-(declare-function projectile-current-project-files "projectile")
-(declare-function projectile-project-root "projectile")
-(declare-function projectile-project-p "projectile")
+;; Declare as special so byte-compilation doesn't turn `let' bindings into
+;; lexical bindings (which would not affect `auto-insert' behavior).
+(defvar auto-insert)
 
 (defcustom agent-shell-permission-icon "⚠"
   "Icon displayed when shell commands require permission to execute.
@@ -102,6 +106,14 @@ When non-nil, tool use sections are expanded."
   :type 'boolean
   :group 'agent-shell)
 
+(defcustom agent-shell-user-message-expand-by-default nil
+  "Whether user message sections should be expanded by default.
+
+When nil (the default), user message sections are collapsed.
+When non-nil, user message sections are expanded."
+  :type 'boolean
+  :group 'agent-shell)
+
 (defcustom agent-shell-show-config-icons t
   "Whether to show icons in agent config selection."
   :type 'boolean
@@ -119,11 +131,26 @@ returns the resolved path.  Set to nil to disable mapping."
   "Command prefix for executing commands in a container.
 
 When non-nil, both the agent command and shell commands will be
-executed using this runner.  Should be a list of command arguments.
+executed using this runner.  Can be a list of strings or a function
+that takes a buffer and returns a list.
 
-Example for devcontainer:
-  \\='(\"devcontainer\" \"exec\" \"--workspace-folder\" \".\")"
-  :type '(repeat string)
+Example for static devcontainer:
+  \\='(\"devcontainer\" \"exec\" \"--workspace-folder\" \".\")
+
+Example for dynamic per-agent containers:
+  (lambda (buffer)
+    (let ((config (agent-shell-get-config buffer)))
+      (pcase (map-elt config :identifier)
+        (\\='claude-code \\='(\"docker\" \"exec\" \"claude-dev\" \"--\"))
+        (\\='gemini-cli \\='(\"docker\" \"exec\" \"gemini-dev\" \"--\"))
+        (_ \\='(\"devcontainer\" \"exec\" \".\")))))
+
+Example for per-session containers:
+  (lambda (buffer)
+    (if (string-match \"project-a\" (buffer-name buffer))
+        \\='(\"docker\" \"exec\" \"project-a-dev\" \"--\")
+      \\='(\"docker\" \"exec\" \"project-b-dev\" \"--\")))"
+  :type '(choice (repeat string) function)
   :group 'agent-shell)
 
 (defcustom agent-shell-section-functions nil
@@ -149,7 +176,7 @@ See https://github.com/xenodium/agent-shell/issues/119"
   :group 'agent-shell)
 
 (defcustom agent-shell-context-sources '(files region error line)
-  "Sources to consider when determining context.
+  "Sources to consider when determining \\<agent-shell-mode-map>\\[agent-shell] automatic context.
 
 Each element can be:
 - A symbol: `files', `region', `error', or `line'
@@ -158,7 +185,7 @@ Each element can be:
 Sources are checked in order until one returns non-nil."
   :type '(repeat (choice (const :tag "Buffer files" files)
                          (const :tag "Selected region" region)
-                         (const :tag "Flymake error at point" error)
+                         (const :tag "Error at point" error)
                          (const :tag "Current line" line)
                          (function :tag "Custom function")))
   :group 'agent-shell)
@@ -175,11 +202,7 @@ passed through to `acp-make-client'.
 If `agent-shell-container-command-runner' is set, the command will be
 wrapped with the runner prefix."
   (let* ((full-command (append (list command) command-params))
-         (wrapped-command
-          (if agent-shell-container-command-runner
-              (append agent-shell-container-command-runner
-                      full-command)
-            full-command)))
+         (wrapped-command (agent-shell--build-command-for-execution full-command)))
     (acp-make-client :command (car wrapped-command)
                      :command-params (cdr wrapped-command)
                      :environment-variables environment-variables
@@ -192,16 +215,26 @@ See `acp-make-initialize-request' for details."
   :type 'boolean
   :group 'agent-shell)
 
+(defcustom agent-shell-write-inhibit-minor-modes '(aggressive-indent-mode)
+  "List of minor mode commands to inhibit during `fs/write_text_file' edits.
+
+Each element is a minor mode command symbol, such as
+`aggressive-indent-mode'.
+
+Agent Shell disables any listed modes that are enabled in the target
+buffer before applying `fs/write_text_file' edits, and then restores
+them.
+
+Modes whose variables are not buffer-local in the target buffer (for
+example, globalized minor modes) are ignored."
+  :type '(repeat symbol)
+  :group 'agent-shell)
+
 (defcustom agent-shell-display-action
   '(display-buffer-same-window)
   "Display action for agent shell buffers.
 See `display-buffer' for the format of display actions."
   :type '(cons (repeat function) alist)
-  :group 'agent-shell)
-
-(defcustom agent-shell-file-completion-enabled nil
-  "Non-nil automatically enables file completion when starting shells."
-  :type 'boolean
   :group 'agent-shell)
 
 (defcustom agent-shell-prefer-viewport-interaction nil
@@ -238,6 +271,11 @@ Can be one of:
   :type 'boolean
   :group 'agent-shell)
 
+(defcustom agent-shell-show-busy-indicator t
+  "Non-nil to show the busy indicator animation in the header and mode line."
+  :type 'boolean
+  :group 'agent-shell)
+
 (defcustom agent-shell-screenshot-command
   (if (eq system-type 'darwin)
       '("/usr/sbin/screencapture" "-i")
@@ -249,7 +287,21 @@ Assume screenshot file path will be appended to this list."
   :type '(repeat string)
   :group 'agent-shell)
 
-(cl-defun agent-shell-make-agent-config (&key mode-line-name welcome-function
+(defcustom agent-shell-buffer-name-format 'default
+  "Format to use when generating agent shell buffer names.
+
+Each element can be:
+- Default: For example \='Claude Code Agent @ My Project\='
+- Kebab case: For example \='claude-code-agent @ my-project\='
+- A function: Called with agent name and project name."
+  :type '(choice (const :tag "Default" default)
+                 (const :tag "Kebab case" kebab-case)
+                 (function :tag "Custom format"))
+  :group 'agent-shell)
+
+;;;###autoload
+(cl-defun agent-shell-make-agent-config (&key identifier
+                                              mode-line-name welcome-function
                                               buffer-name shell-prompt shell-prompt-regexp
                                               client-maker
                                               needs-authentication
@@ -261,6 +313,7 @@ Assume screenshot file path will be appended to this list."
   "Create an agent configuration alist.
 
 Keyword arguments:
+- IDENTIFIER: Symbol identifying agent type (e.g., \\='claude-code)
 - MODE-LINE-NAME: Name to display in the mode line
 - WELCOME-FUNCTION: Function to call for welcome message
 - BUFFER-NAME: Name of the agent buffer
@@ -275,7 +328,8 @@ Keyword arguments:
 - INSTALL-INSTRUCTIONS: Instructions to show when executable is not found
 
 Returns an alist with all specified values."
-  `((:mode-line-name . ,mode-line-name)
+  `((:identifier . ,identifier)
+    (:mode-line-name . ,mode-line-name)
     (:welcome-function . ,welcome-function)                     ;; function
     (:buffer-name . ,buffer-name)
     (:shell-prompt . ,shell-prompt)
@@ -303,6 +357,7 @@ Goose, Cursor, Auggie, and others."
         (agent-shell-goose-make-agent-config)
         (agent-shell-mistral-make-config)
         (agent-shell-opencode-make-agent-config)
+        (agent-shell-pi-make-agent-config)
         (agent-shell-qwen-make-agent-config)))
 
 (defcustom agent-shell-agent-configs
@@ -314,12 +369,46 @@ See `agent-shell-*-make-*-config' for details."
   :group 'agent-shell)
 
 (defcustom agent-shell-preferred-agent-config nil
-  "Default configuration to use for all new shells.
+  "Default agent to use for all new shells.
 
 If this is set, `agent-shell' will unconditionally use this
-config and not prompt you to select one."
-  :type '(alist :key-type symbol :value-type sexp)
+agent and not prompt you to select one.
+
+Can be set to a symbol identifier (e.g., `claude-code') or a full
+configuration alist for backwards compatibility."
+  :type '(choice (const :tag "None (prompt each time)" nil)
+                 (const :tag "Auggie" auggie)
+                 (const :tag "Claude Code" claude-code)
+                 (const :tag "Codex" codex)
+                 (const :tag "Copilot" copilot)
+                 (const :tag "Cursor" cursor)
+                 (const :tag "Droid" droid)
+                 (const :tag "Gemini CLI" gemini-cli)
+                 (const :tag "Goose" goose)
+                 (const :tag "Mistral" le-chat)
+                 (const :tag "OpenCode" opencode)
+                 (const :tag "Pi" pi)
+                 (const :tag "Qwen Code" qwen-code)
+                 (symbol :tag "Custom identifier")
+                 (alist :tag "Full configuration (legacy)"
+                        :key-type symbol :value-type sexp))
   :group 'agent-shell)
+
+(defun agent-shell--resolve-preferred-config ()
+  "Resolve `agent-shell-preferred-agent-config' to a full configuration.
+
+If the value is a symbol, look it up in `agent-shell-agent-configs'.
+If it's already an alist (legacy format), return it as-is.
+Returns nil if no matching configuration is found."
+  (cond
+   ((null agent-shell-preferred-agent-config) nil)
+   ((symbolp agent-shell-preferred-agent-config)
+    (seq-find (lambda (config)
+                (eq (map-elt config :identifier)
+                    agent-shell-preferred-agent-config))
+              agent-shell-agent-configs))
+   ((listp agent-shell-preferred-agent-config)
+    agent-shell-preferred-agent-config)))
 
 (defcustom agent-shell-mcp-servers nil
   "List of MCP servers to initialize when creating a new session.
@@ -360,8 +449,35 @@ Example configuration with multiple servers:
            (command . \"npx\")
            (args . (\"-y\"
                     \"@modelcontextprotocol/server-filesystem\" \"/tmp\"))
-           (env . ()))))"
-  :type '(repeat (alist :key-type symbol :value-type sexp))
+           (env . ()))))
+
+Lambdas can be used anywhere in the configuration hierarchy for dynamic
+evaluation at session startup time.  This is useful for values that
+depend on runtime context like the current working directory
+(`agent-shell-cwd').  Note: only lambdas are evaluated, not named
+functions, to avoid accidentally calling external symbols.
+
+For example, using the `claude-code-ide' package (see its documentation
+for more details), you can embed a lambda for the URL that registers
+the session and returns the appropriate endpoint:
+
+  (setq agent-shell-mcp-servers
+        \='(((name . \"emacs\")
+           (type . \"http\")
+           (headers . ())
+           (url . (lambda ()
+                    (require \='claude-code-ide-mcp-server)
+                    (let* ((project-dir (agent-shell-cwd))
+                           (session-id (format \"agent-shell-%s-%s\"
+                                         (file-name-nondirectory
+                                           (directory-file-name project-dir))
+                                         (format-time-string \"%Y%m%d-%H%M%S\"))))
+                      (puthash session-id `(:project-dir ,project-dir)
+                               claude-code-ide-mcp-server--sessions)
+                      (format \"http://localhost:%d/mcp/%s\"
+                              (claude-code-ide-mcp-server-ensure-server)
+                              session-id)))))))"
+  :type '(repeat (choice (alist :key-type symbol :value-type sexp) function))
   :group 'agent-shell)
 
 (cl-defun agent-shell--make-state (&key agent-config buffer client-maker needs-authentication authenticate-request-maker heartbeat)
@@ -404,9 +520,18 @@ HEARTBEAT, and AUTHENTICATE-REQUEST-MAKER."
 (defun agent-shell (&optional new-shell)
   "Start or reuse an existing agent shell.
 
+`agent-shell' carries some DWIM (do what I mean) behaviour.
+
 If in a project without a shell, offer to create one.
 
 If already in a shell, invoke `agent-shell-toggle'.
+
+If a region is active or point is on relevant context (ie.
+`dired' files or image buffers), carry them over to the
+shell input.
+
+See `agent-shell-context-sources' on how to control DWIM
+behaviour.
 
 With prefix argument NEW-SHELL, force start a new shell."
   (interactive "P")
@@ -426,53 +551,34 @@ handles viewport mode detection, existing shell reuse, and project context."
                    (derived-mode-p 'agent-shell-viewport-edit-mode)))
           (agent-shell-toggle)
         (agent-shell-viewport--show-buffer
-         :shell-buffer (when new-shell
-                         (agent-shell--start :config (or config
-                                                         agent-shell-preferred-agent-config
-                                                         (agent-shell-select-config
-                                                          :prompt "Start new agent: ")
-                                                         (error "No agent config found"))
-                                             :no-focus t
-                                             :new-session t))))
+         :shell-buffer (if new-shell
+                           (agent-shell--start :config (or config
+                                                           (agent-shell--resolve-preferred-config)
+                                                           (agent-shell-select-config
+                                                            :prompt "Start new agent: ")
+                                                           (error "No agent config found"))
+                                               :no-focus t
+                                               :new-session t)
+                         (agent-shell--shell-buffer))))
     (if new-shell
         (agent-shell-start :config (or config
-                                       agent-shell-preferred-agent-config
+                                       (agent-shell--resolve-preferred-config)
                                        (agent-shell-select-config
                                         :prompt "Start new agent: ")
                                        (error "No agent config found")))
-      (if (and (not new-shell)
-               (derived-mode-p 'agent-shell-mode))
-          (let ((text (agent-shell--context)))
+      (if (derived-mode-p 'agent-shell-mode)
+          (let* ((shell-buffer (agent-shell--shell-buffer :no-create t))
+                 (text (agent-shell--context :shell-buffer shell-buffer)))
             (agent-shell-toggle)
             (when text
-              (agent-shell--insert-to-shell-buffer :text text)))
-        (if-let ((existing-shell (seq-first (agent-shell-project-buffers))))
-            (let ((text (agent-shell--context)))
-              (agent-shell--display-buffer existing-shell)
-              (when text
-                (agent-shell--insert-to-shell-buffer :text text)))
-          (if-let ((other-project-shell (seq-first (agent-shell-buffers))))
-              (if (y-or-n-p "No shells in project.  Start a new one? ")
-                  (let ((text (agent-shell--context)))
-                    (agent-shell-start :config (or config
-                                                   agent-shell-preferred-agent-config
-                                                   (agent-shell-select-config
-                                                    :prompt "Start new agent: ")
-                                                   (error "No agent config found")))
-                    (when text
-                      (agent-shell--insert-to-shell-buffer :text text)))
-                (let ((text (agent-shell--context)))
-                  (agent-shell--display-buffer other-project-shell)
-                  (when text
-                    (agent-shell--insert-to-shell-buffer :text text))))
-            (let ((text (agent-shell--context)))
-              (agent-shell-start :config (or config
-                                             agent-shell-preferred-agent-config
-                                             (agent-shell-select-config
-                                              :prompt "Start new agent: ")
-                                             (error "No agent config found")))
-              (when text
-                (agent-shell--insert-to-shell-buffer :text text)))))))))
+              (agent-shell--insert-to-shell-buffer :text text
+                                                   :shell-buffer shell-buffer)))
+        (let* ((shell-buffer (agent-shell--shell-buffer))
+               (text (agent-shell--context :shell-buffer shell-buffer)))
+          (agent-shell--display-buffer shell-buffer)
+          (when text
+            (agent-shell--insert-to-shell-buffer :text text
+                                                 :shell-buffer shell-buffer)))))))
 
 ;;;###autoload
 (defun agent-shell-toggle ()
@@ -480,7 +586,9 @@ handles viewport mode detection, existing shell reuse, and project context."
   (interactive)
   (let ((shell-buffer (if agent-shell-prefer-viewport-interaction
                           (agent-shell-viewport--buffer)
-                        (agent-shell--current-shell))))
+                        (or (agent-shell--current-shell)
+                            (seq-first (agent-shell-project-buffers))
+                            (seq-first (agent-shell-buffers))))))
     (unless shell-buffer
       (user-error "No agent shell buffers available for current project"))
     (if-let ((window (get-buffer-window shell-buffer)))
@@ -544,11 +652,21 @@ Returns an empty string if no icon should be displayed."
     (map-elt choices selected-name)))
 
 (defun agent-shell-buffers ()
-  "Return all shell buffers."
-  (seq-filter (lambda (buffer)
-                (with-current-buffer buffer
-                  (derived-mode-p 'agent-shell-mode)))
-              (buffer-list)))
+  "Return all shell buffers ordered by recent access.
+Includes shells accessed via viewport buffers, preserving visited order."
+  (let (shell-buffers seen)
+    (dolist (buffer (buffer-list))
+      (with-current-buffer buffer
+        (when-let ((shell-buffer
+                    (cond ((derived-mode-p 'agent-shell-mode)
+                           buffer)
+                          ((or (derived-mode-p 'agent-shell-viewport-view-mode)
+                               (derived-mode-p 'agent-shell-viewport-edit-mode))
+                           (agent-shell-viewport--shell-buffer buffer)))))
+          (unless (memq shell-buffer seen)
+            (push shell-buffer seen)
+            (push shell-buffer shell-buffers)))))
+    (nreverse shell-buffers)))
 
 (defun agent-shell-other-buffer ()
   "Switch to other associated buffer (viewport vs shell)."
@@ -723,6 +841,30 @@ Flow:
      :create-new t
      :navigation 'never)))
 
+(defun agent-shell-get-config (buffer)
+  "Get the agent configuration for BUFFER.
+
+Returns the agent configuration alist for the given buffer, or nil
+if the buffer has no agent configuration.
+
+This function is intended for use in `agent-shell-container-command-runner'
+functions to access agent config properties like :identifier, :buffer-name, etc."
+  (with-current-buffer buffer
+    (map-elt agent-shell--state :agent-config)))
+
+(defun agent-shell--build-command-for-execution (command)
+  "Build COMMAND for the configured execution environment.
+
+COMMAND should be a list of command parts (executable and arguments).
+Returns the adapted command if a container runner is configured,
+otherwise returns COMMAND unchanged."
+  (pcase agent-shell-container-command-runner
+    ((pred functionp)
+     (append (funcall agent-shell-container-command-runner
+                      (current-buffer)) command))
+    ((pred listp) (append agent-shell-container-command-runner command))
+    (_ command)))
+
 (cl-defun agent-shell--on-notification (&key state notification)
   "Handle incoming notification using SHELL, STATE, and NOTIFICATION."
   (let-alist notification
@@ -745,7 +887,7 @@ Flow:
                               (cons :command (map-nested-elt update '(rawInput command)))
                               (cons :description (map-nested-elt update '(rawInput description)))
                               (cons :content (map-elt update 'content)))
-                        (when-let ((diff (agent-shell--make-diff-info (map-elt update 'content))))
+                        (when-let ((diff (agent-shell--make-diff-info :tool-call update)))
                           (list (cons :diff diff)))))
                (let ((tool-call-labels (agent-shell-make-tool-call-label
                                         state (map-elt update 'toolCallId))))
@@ -805,6 +947,28 @@ Flow:
                   :append t
                   :navigation 'never))
                (map-put! state :last-entry-type "agent_message_chunk"))
+              ((equal (map-elt update 'sessionUpdate) "user_message_chunk")
+               (unless (equal (map-elt state :last-entry-type) "user_message_chunk")
+                 (map-put! state :chunked-group-count (1+ (map-elt state :chunked-group-count)))
+                 (agent-shell--append-transcript
+                  :text (format "## User (%s)\n\n" (format-time-string "%F %T"))
+                  :file-path agent-shell--transcript-file))
+               (let-alist update
+                 (agent-shell--append-transcript
+                  :text (format "> %s\n" .content.text)
+                  :file-path agent-shell--transcript-file)
+                 (agent-shell--update-fragment
+                  :state state
+                  :block-id (format "%s-user_message_chunk"
+                                    (map-elt state :chunked-group-count))
+                  :label-left (propertize "User" 'font-lock-face 'font-lock-doc-markup-face)
+                  :body .content.text
+                  :create-new (not (equal (map-elt state :last-entry-type)
+                                          "user_message_chunk"))
+                  :append t
+                  :expanded agent-shell-user-message-expand-by-default
+                  :navigation 'never))
+               (map-put! state :last-entry-type "user_message_chunk"))
               ((equal (map-elt update 'sessionUpdate) "plan")
                (let-alist update
                  (agent-shell--update-fragment
@@ -832,7 +996,12 @@ Flow:
                                                 "bash"))
                                       (command (map-nested-elt update '(rawInput command))))
                             (list (cons :title command)))
-                          (when-let ((diff (agent-shell--make-diff-info (map-elt update 'content))))
+                          (when-let* ((title (or (map-nested-elt state `(:tool-calls ,.toolCallId :title)) ""))
+                                      (command (or (map-nested-elt update '(rawInput command))
+                                                   (map-nested-elt state `(:tool-calls ,.toolCallId :command))))
+                                      (should-upgrade-title (not (string-match-p (regexp-quote command) title))))
+                            (list (cons :title (concat command " " title))))
+                          (when-let ((diff (agent-shell--make-diff-info :tool-call update)))
                             (list (cons :diff diff)))))
                  (let* ((diff (map-nested-elt state `(:tool-calls ,.toolCallId :diff)))
                         (output (concat
@@ -952,7 +1121,8 @@ Flow:
                           (cons :status .params.toolCall.status)
                           (cons :kind .params.toolCall.kind)
                           (cons :permission-request-id .id))
-                    (when-let ((diff (agent-shell--make-diff-info .params.toolCall.content)))
+                    (when-let ((diff (agent-shell--make-diff-info
+                                      :tool-call .params.toolCall)))
                       (list (cons :diff diff)))))
            (agent-shell--update-fragment
             :state state
@@ -1045,6 +1215,17 @@ If the buffer's file has changed, prompt the user to reload it."
                    :error (acp-make-error
                            :code -32603
                            :message "Operation cancelled by user"))))
+      (file-missing
+       ;; File doesn't exist - return RESOURCE_NOT_FOUND (-32002).
+       ;; This allows agents to distinguish "file not found" from actual errors.
+       (acp-send-response
+        :client (map-elt state :client)
+        :response (acp-make-fs-read-text-file-response
+                   :request-id .id
+                   :error (acp-make-error
+                           :code -32002
+                           :message "Resource not found"
+                           :data `((path . ,(nth 3 err)))))))
       (error
        (acp-send-response
         :client (map-elt state :client)
@@ -1053,6 +1234,27 @@ If the buffer's file has changed, prompt the user to reload it."
                    :error (acp-make-error
                            :code -32603
                            :message (error-message-string err))))))))
+
+(defun agent-shell--call-with-inhibited-minor-modes (modes thunk)
+  "Call THUNK with MODES temporarily disabled in the current buffer.
+
+Disable each mode in MODES that is enabled in the current buffer and has
+a buffer-local mode variable.  Re-enable any modes disabled by this
+function before returning."
+  (let (disabled)
+    (unwind-protect
+        (progn
+          (dolist (mode modes)
+            (when (and (symbolp mode)
+                       (fboundp mode)
+                       (boundp mode)
+                       (symbol-value mode)
+                       (local-variable-p mode))
+              (funcall mode -1)
+              (push mode disabled)))
+          (funcall thunk))
+      (dolist (mode disabled)
+        (funcall mode 1)))))
 
 (cl-defun agent-shell--on-fs-write-text-file-request (&key state request)
   "Handle fs/write_text_file REQUEST with STATE."
@@ -1065,8 +1267,6 @@ If the buffer's file has changed, prompt the user to reload it."
                            ;; Prevent auto-insert-mode
                            ;; See issue #170
                            (let ((auto-insert nil))
-                             ;; Silence unused warning.
-                             (identity auto-insert)
                              (find-file-noselect path)))))
           (when (and dir (not (file-exists-p dir)))
             (make-directory dir t))
@@ -1079,7 +1279,10 @@ If the buffer's file has changed, prompt the user to reload it."
                   (widen)
                   ;; Set a time-out to prevent locking up on large files
                   ;; https://github.com/xenodium/agent-shell/issues/168
-                  (replace-buffer-contents content-buffer 1.0)
+                  (agent-shell--call-with-inhibited-minor-modes
+                   agent-shell-write-inhibit-minor-modes
+                   (lambda ()
+                     (replace-buffer-contents content-buffer 1.0)))
                   (basic-save-buffer)))))
           (acp-send-response
            :client (map-elt state :client)
@@ -1229,46 +1432,87 @@ Example output:
                                'font-lock-face 'font-lock-comment-face))))
      :joiner "\n")))
 
-(defun agent-shell--make-diff-info (acp-content)
-  "Make diff information from ACP's tool_call_update's ACP-CONTENT.
+(cl-defun agent-shell--make-diff-info (&key tool-call)
+  "Make diff information from TOOL-CALL.
 
-CONTENT is of the the type ToolCallContent as per ACP spec:
+TOOL-CALL is an ACP tool call object that may contain diff info in
+either `content' (standard ACP format) or `rawInput' (eg.  Copilot).
 
-https://agentclientprotocol.com/protocol/schema#toolcallcontent
+Standard ACP format uses content with type \"diff\" containing
+oldText/newText/path fields.
+
+See https://agentclientprotocol.com/protocol/schema#toolcallcontent
+
+Copilot sends old_str/new_str/path in rawInput instead.
+
+See https://github.com/xenodium/agent-shell/issues/217
 
 Returns in the form:
 
  `((:old . old-text)
    (:new . new-text)
    (:file . file-path))."
-  (when-let* ((diff-item (cond
-                          ;; Single diff object
-                          ((and acp-content (equal (map-elt acp-content 'type) "diff"))
-                           acp-content)
-                          ;; TODO: Is this needed?
-                          ;; Isn't acp-content always an alist?
-                          ;; Vector/array acp-content - find diff item
-                          ((vectorp acp-content)
-                           (seq-find (lambda (item)
-                                       (equal (map-elt item 'type) "diff"))
-                                     acp-content))
-                          ;; TODO: Is this needed?
-                          ;; Isn't acp-content always an alist?
-                          ;; List acp-content - find diff item
-                          ((listp acp-content)
-                           (seq-find (lambda (item)
-                                       (equal (map-elt item 'type) "diff"))
-                                     acp-content))))
-              ;; oldText can be nil for Write tools creating new files, default to ""
-              ;; TODO: Currently don't have a way to capture overwrites
-              (old-text (or (map-elt diff-item 'oldText) ""))
-              (new-text (map-elt diff-item 'newText))
-              (file-path (map-elt diff-item 'path)))
-    (append (list (cons :old old-text)
-                  (cons :new new-text))
-            (when file-path
-              (list (cons :file file-path))))))
+  (let ((content (map-elt tool-call 'content))
+        (raw-input (map-elt tool-call 'rawInput)))
+    (when-let* ((diff-item (cond
+                            ;; Single diff object
+                            ((and content (equal (map-elt content 'type) "diff"))
+                             content)
+                            ;; TODO: Is this needed?
+                            ;; Isn't content always an alist?
+                            ;; Vector/array content - find diff item
+                            ((vectorp content)
+                             (seq-find (lambda (item)
+                                         (equal (map-elt item 'type) "diff"))
+                                       content))
+                            ;; TODO: Is this needed?
+                            ;; Isn't content always an alist?
+                            ;; List content - find diff item
+                            ((and content (listp content))
+                             (seq-find (lambda (item)
+                                         (equal (map-elt item 'type) "diff"))
+                                       content))
+                            ;; Attempt to get from rawInput.
+                            ((and raw-input (map-elt raw-input 'new_str))
+                             `((oldText . ,(or (map-elt raw-input 'old_str) ""))
+                               (newText . ,(map-elt raw-input 'new_str))
+                               (path . ,(map-elt raw-input 'path))))
+                            ;; Attempt diff from rawInput (eg. Copilot).
+                            ((and raw-input (map-elt raw-input 'diff))
+                             (let ((parsed (agent-shell--parse-unified-diff
+                                            (map-elt raw-input 'diff))))
+                               `((oldText . ,(car parsed))
+                                 (newText . ,(cdr parsed))
+                                 (path . ,(or (map-elt raw-input 'fileName)
+                                              (map-elt raw-input 'path))))))))
+                ;; oldText can be nil for Write tools creating new files, default to ""
+                ;; TODO: Currently don't have a way to capture overwrites
+                (old-text (or (map-elt diff-item 'oldText) ""))
+                (new-text (map-elt diff-item 'newText))
+                (file-path (map-elt diff-item 'path)))
+      (append (list (cons :old old-text)
+                    (cons :new new-text))
+              (when file-path
+                (list (cons :file file-path)))))))
 
+;; Based on https://github.com/editor-code-assistant/eca-emacs/blob/298849d1aae3241bf8828b6558c6deb45d75a3c8/eca-diff.el#L22
+(defun agent-shell--parse-unified-diff (diff-string)
+  "Parse unified DIFF-STRING into old and new text.
+Returns a cons cell (OLD-TEXT . NEW-TEXT)."
+  (let (old-lines new-lines in-hunk)
+    (dolist (line (split-string diff-string "\n"))
+      (cond
+       ((string-match "^@@.*@@" line)
+        (setq in-hunk t))
+       ((and in-hunk (string-prefix-p " " line))
+        (push (substring line 1) old-lines)
+        (push (substring line 1) new-lines))
+       ((and in-hunk (string-prefix-p "-" line))
+        (push (substring line 1) old-lines))
+       ((and in-hunk (string-prefix-p "+" line))
+        (push (substring line 1) new-lines))))
+    (cons (string-join (nreverse old-lines) "\n")
+          (string-join (nreverse new-lines) "\n"))))
 
 (defun agent-shell--format-diff-as-text (diff)
   "Format DIFF info as text suitable for display in tool call body.
@@ -1449,11 +1693,11 @@ DESTINATION-DIR is required and must be provided."
                    (_ '("unknown" warning))))
          (label (car config))
          (face (cadr config))
-         (color (face-foreground face nil t)))
+         ;; Wrap the label in [ and ] in TUI which cannot render the box border.
+         (label-format (if (display-graphic-p) " %s " "[%s]")))
     (agent-shell--add-text-properties
-     (propertize (format " %s " label) 'font-lock-face 'default)
-     'font-lock-face
-     `(:foreground ,color :box (:color ,color)))))
+     (propertize (format label-format label) 'font-lock-face 'default)
+     'font-lock-face (list face '(:box t)))))
 
 (defun agent-shell--shorten-paths (text &optional include-project)
   "Shorten file paths in TEXT relative to project root.
@@ -1483,11 +1727,13 @@ Returns propertized labels in :status and :title propertized."
     `((:status . ,(let ((status (when (map-elt tool-call :status)
                                   (agent-shell--status-label (map-elt tool-call :status))))
                         (kind (when (map-elt tool-call :kind)
-                                (agent-shell--add-text-properties
-                                 (propertize (format " %s " (map-elt tool-call :kind))
-                                             'font-lock-face 'default)
-                                 'font-lock-face
-                                 `(:box t)))))
+                                ;; Wrap the label in [ and ] in TUI which cannot render the box border.
+                                (let* ((label-format (if (display-graphic-p) " %s " "[%s]")))
+                                  (agent-shell--add-text-properties
+                                   (propertize (format label-format (map-elt tool-call :kind))
+                                               'font-lock-face 'default)
+                                   'font-lock-face
+                                   `(:box t))))))
                     (concat
                      (when status
                        status)
@@ -1520,13 +1766,16 @@ Returns propertized labels in :status and :title propertized."
                (agent-shell--status-label (map-elt entry 'status)))
              (lambda (entry)
                (map-elt entry 'content)))
-   :separator "  "
+   :separator " "
    :joiner "\n"))
 
 (cl-defun agent-shell--make-button (&key text help kind action keymap)
   "Make button with TEXT, HELP text, KIND, KEYMAP, and ACTION."
+  ;; Use [ ] brackets in TUI which cannot render the box border.
   (let ((button (propertize
-                 (format " %s " text)
+                 (if (display-graphic-p)
+                     (format " %s " text)
+                   (format "[ %s ]" text))
                  'font-lock-face '(:box t)
                  'help-echo help
                  'pointer 'hand
@@ -1561,6 +1810,20 @@ PROPERTIES should be a plist of property-value pairs."
         (setq properties (cddr properties))))
     str))
 
+(defun agent-shell--format-buffer-name (agent-name project-name)
+  "Format `agent-shell' buffer name using AGENT-NAME and PROJECT-NAME."
+  (pcase agent-shell-buffer-name-format
+        ((pred functionp)
+         (funcall agent-shell-buffer-name-format agent-name project-name))
+        ('kebab-case
+         (format "%s-agent @ %s"
+                 (downcase (replace-regexp-in-string " " "-" agent-name))
+                 project-name))
+        ('default
+         (format "%s Agent @ %s"
+                 agent-name
+                 project-name))))
+
 (cl-defun agent-shell--apply (&key function alist)
   "Apply keyword ALIST to FUNCTION.
 
@@ -1582,10 +1845,10 @@ See `agent-shell-make-agent-config' for config format.
 
 Set NO-FOCUS to start in background.
 Set NEW-SESSION to start a separate new session."
-  (unless (version<= "0.84.4" shell-maker-version)
-    (error "Please update shell-maker to version 0.84.4 or newer"))
-  (unless (version<= "0.8.2" acp-package-version)
-    (error "Please update acp.el to version 0.8.2 or newer"))
+  (unless (version<= "0.84.9" shell-maker-version)
+    (error "Please update shell-maker to version 0.84.9 or newer"))
+  (unless (version<= "0.9.1" acp-package-version)
+    (error "Please update acp.el to version 0.9.1 or newer"))
   (when (boundp 'agent-shell--transcript-file-path-function)
     (user-error "'agent-shell--transcript-file-path-function is retired.
 
@@ -1602,9 +1865,7 @@ variable (see makunbound)"))
                              (when agent-shell-show-welcome-message
                                (map-elt config :welcome-function))
                              new-session
-                             (concat (map-elt config :buffer-name)
-                                     " Agent @ "
-                                     (agent-shell--project-name))
+                             (agent-shell--format-buffer-name (map-elt config :buffer-name) (agent-shell--project-name))
                              (map-elt config :mode-line-name))))
     ;; While sending the first prompt request would already validate
     ;; finding the ACP agent executable, users have to wait until they
@@ -1650,7 +1911,7 @@ variable (see makunbound)"))
       (when agent-shell-file-completion-enabled
         (agent-shell-completion-mode +1))
       (agent-shell--setup-modeline)
-      (setq-local agent-shell--transcript-file (agent-shell--init-transcript config))
+      (setq-local agent-shell--transcript-file (agent-shell--transcript-file-path))
       ;; agent-shell does not support restoring sessions from transcript
       ;; via shell-maker. Unalias this functionality so it's not
       ;; misleading to users or appear via M-x.
@@ -1923,6 +2184,46 @@ Returns:
           (when inherit-env
             process-environment)))
 
+(defvar-local agent-shell--header-cache nil
+  "Cache for graphical headers (no need for regenerating regularly).
+
+A buffer-local hash table mapping cache keys to header strings.")
+
+(cl-defun agent-shell--make-header-model (state &key qualifier bindings)
+  "Create a header model alist from STATE, QUALIFIER, and BINDINGS.
+The model contains all inputs needed to render the graphical header."
+  (let* ((model-name (or (map-elt (seq-find (lambda (model)
+                                              (string= (map-elt model :model-id)
+                                                       (map-nested-elt state '(:session :model-id))))
+                                            (map-nested-elt state '(:session :models)))
+                                  :name)
+                         (map-nested-elt state '(:session :model-id))))
+         (mode-id (map-nested-elt state '(:session :mode-id)))
+         (mode-name (when mode-id
+                      (or (agent-shell--resolve-session-mode-name
+                           mode-id
+                           (agent-shell--get-available-modes state))
+                          mode-id))))
+    `((:buffer-name . ,(map-nested-elt state '(:agent-config :buffer-name)))
+      (:icon-name . ,(map-nested-elt state '(:agent-config :icon-name)))
+      (:model-id . ,(map-nested-elt state '(:session :model-id)))
+      (:model-name . ,model-name)
+      (:mode-id . ,mode-id)
+      (:mode-name . ,mode-name)
+      (:directory . ,default-directory)
+      (:frame-width . ,(frame-pixel-width))
+      (:font-height . ,(default-font-height))
+      (:background-mode . ,(frame-parameter nil 'background-mode))
+      (:status-frame . ,(agent-shell--status-frame))
+      (:qualifier . ,qualifier)
+      (:bindings . ,bindings))))
+
+(defun agent-shell--header-cache-key (model)
+  "Generate a cache key from header MODEL.
+Joins all values from the model alist."
+  (mapconcat (lambda (pair) (format "%s" (cdr pair)))
+             model "|"))
+
 (cl-defun agent-shell--make-header (state &key qualifier bindings)
   "Return header text for current STATE.
 
@@ -1936,27 +2237,17 @@ BINDINGS is a list of alists defining key bindings to display, each with:
   :description - Description to display (e.g., \"next hunk\")"
   (unless state
     (error "STATE is required"))
-  (let* ((model-name (or (map-elt (seq-find (lambda (model)
-                                              (string= (map-elt model :model-id)
-                                                       (map-nested-elt state '(:session :model-id))))
-                                            (map-nested-elt state '(:session :models)))
-                                  :name)
-                         (map-nested-elt state '(:session :model-id))))
-         (mode-name (when-let ((mode-id (map-nested-elt state '(:session :mode-id))))
-                      (or (agent-shell--resolve-session-mode-name
-                           mode-id
-                           (agent-shell--get-available-modes state))
-                          (map-nested-elt state '(:session :mode-id)))))
+  (let* ((header-model (agent-shell--make-header-model state :qualifier qualifier :bindings bindings))
          (text-header (format " %s%s%s @ %s"
-                              (propertize (concat (map-nested-elt state '(:agent-config :buffer-name)) " Agent")
+                              (propertize (concat (map-elt header-model :buffer-name) " Agent")
                                           'font-lock-face 'font-lock-variable-name-face)
-                              (if model-name
-                                  (concat " ➤ " (propertize model-name 'font-lock-face 'font-lock-negation-char-face))
+                              (if (map-elt header-model :model-name)
+                                  (concat " ➤ " (propertize (map-elt header-model :model-name) 'font-lock-face 'font-lock-negation-char-face))
                                 "")
-                              (if mode-name
-                                  (concat " ➤ " (propertize mode-name 'font-lock-face 'font-lock-type-face))
+                              (if (map-elt header-model :mode-name)
+                                  (concat " ➤ " (propertize (map-elt header-model :mode-name) 'font-lock-face 'font-lock-type-face))
                                 "")
-                              (propertize (string-remove-suffix "/" (abbreviate-file-name default-directory))
+                              (propertize (string-remove-suffix "/" (abbreviate-file-name (map-elt header-model :directory)))
                                           'font-lock-face 'font-lock-string-face))))
     (pcase agent-shell-header-style
       ((or 'none (pred null)) nil)
@@ -1968,115 +2259,123 @@ BINDINGS is a list of alists defining key bindings to display, each with:
            ;; |      | Bottom text line
            ;; +------+
            ;; [Qualifier] Bindings row (optional, last row)
-           (let* ((image-height (* 3 (default-font-height)))
-                  (image-width image-height)
-                  (text-height 25)
-                  (row-spacing 0)  ; Spacing between icon/text rows and bindings row
-                  (icon-text-row-height image-height)
-                  (bindings-row-height (if (or bindings qualifier) text-height 0))
-                  (total-height (+ icon-text-row-height bindings-row-height 10))
-                  ;; Y positions for each row (baseline positions for text)
-                  (icon-y 0)
-                  (icon-text-y text-height)
-                  ;; Bindings positioned right after the bottom text (2 text lines) plus spacing
-                  (bindings-y (+ (* 3 text-height) row-spacing))
-                  (svg (svg-create (frame-pixel-width) total-height))
-                  (icon-filename
-                   (if (map-nested-elt state '(:agent-config :icon-name))
-                       (agent-shell--fetch-agent-icon (map-nested-elt state '(:agent-config :icon-name)))
-                     (agent-shell--make-agent-fallback-icon (map-nested-elt state '(:agent-config :buffer-name)) 100)))
-                  (image-type (or (agent-shell--image-type-to-mime icon-filename)
-                                  "image/png")))
-             ;; Icon
-             (when (and icon-filename image-type)
-               (svg-embed svg icon-filename
-                          image-type nil
-                          :x 0 :y icon-y :width image-width :height image-height))
-             ;; Top text line
-             (svg--append svg (let ((text-node (dom-node 'text
-                                                         `((x . ,(+ image-width 10))
-                                                           (y . ,icon-text-y)))))
-                                ;; Agent name
-                                (dom-append-child text-node
-                                                  (dom-node 'tspan
-                                                            `((fill . ,(face-attribute 'font-lock-variable-name-face :foreground)))
-                                                            (concat (map-nested-elt state '(:agent-config :buffer-name)) " Agent")))
-                                ;; Model name (optional)
-                                (when model-name
-                                  ;; Add separator arrow
-                                  (dom-append-child text-node
-                                                    (dom-node 'tspan
-                                                              `((fill . ,(face-attribute 'default :foreground))
-                                                                (dx . "8"))
-                                                              "➤"))
-                                  ;; Add model name
-                                  (dom-append-child text-node
-                                                    (dom-node 'tspan
-                                                              `((fill . ,(face-attribute 'font-lock-negation-char-face :foreground))
-                                                                (dx . "8"))
-                                                              model-name)))
-                                ;; Session mode (optional)
-                                (when-let ((mode-id (map-nested-elt state '(:session :mode-id))))
-                                  ;; Add separator arrow
-                                  (dom-append-child text-node
-                                                    (dom-node 'tspan
-                                                              `((fill . ,(face-attribute 'default :foreground))
-                                                                (dx . "8"))
-                                                              "➤"))
-                                  ;; Add session mode text
-                                  (dom-append-child text-node
-                                                    (dom-node 'tspan
-                                                              `((fill . ,(or (face-attribute 'font-lock-type-face :foreground nil t)
-                                                                             "#6699cc"))
-                                                                (dx . "8"))
-                                                              mode-name)))
-                                (when-let ((status-frame (agent-shell--status-frame)))
-                                  (dom-append-child text-node
-                                                    (dom-node 'tspan
-                                                              `((fill . ,(face-attribute 'default :foreground))
-                                                                (dx . "8"))
-                                                              status-frame)))
-                                text-node))
-             ;; Bottom text line
-             (svg-text svg (string-remove-suffix "/" (abbreviate-file-name default-directory))
-                       :x (+ image-width 10) :y (+ icon-text-y text-height)
-                       :fill (face-attribute 'font-lock-string-face :foreground))
-             ;; Bindings row (last row if bindings or qualifier present)
-             (when (or bindings qualifier)
-               (svg--append svg (let ((text-node (dom-node 'text
-                                                           `((x . 0)
-                                                             (y . ,bindings-y))))
-                                      (first t))
-                                  ;; Add qualifier if present
-                                  (when qualifier
-                                    (dom-append-child text-node
-                                                      (dom-node 'tspan
-                                                                `((fill . ,(face-attribute 'default :foreground)))
-                                                                qualifier))
-                                    (setq first nil))
-                                  (dolist (binding bindings)
-                                    (when (map-elt binding :description)
-                                      ;; Add key (XML-escape angle brackets)
+           (let* ((cache-key (agent-shell--header-cache-key header-model))
+                  (cached (progn
+                            (unless agent-shell--header-cache
+                              (setq agent-shell--header-cache (make-hash-table :test #'equal)))
+                            (map-elt agent-shell--header-cache cache-key))))
+             (or cached
+                 (let* ((image-height (* 3 (map-elt header-model :font-height)))
+                        (image-width image-height)
+                        (text-height 25)
+                        (row-spacing 0)  ; Spacing between icon/text rows and bindings row
+                        (icon-text-row-height image-height)
+                        (bindings-row-height (if (or bindings qualifier) text-height 0))
+                        (total-height (+ icon-text-row-height bindings-row-height 10))
+                        ;; Y positions for each row (baseline positions for text)
+                        (icon-y 0)
+                        (icon-text-y text-height)
+                        ;; Bindings positioned right after the bottom text (2 text lines) plus spacing
+                        (bindings-y (+ (* 3 text-height) row-spacing))
+                        (svg (svg-create (map-elt header-model :frame-width) total-height))
+                        (icon-filename
+                         (if (map-elt header-model :icon-name)
+                             (agent-shell--fetch-agent-icon (map-elt header-model :icon-name))
+                           (agent-shell--make-agent-fallback-icon (map-elt header-model :buffer-name) 100)))
+                        (image-type (or (agent-shell--image-type-to-mime icon-filename)
+                                        "image/png")))
+                   ;; Icon
+                   (when (and icon-filename image-type)
+                     (svg-embed svg icon-filename
+                                image-type nil
+                                :x 0 :y icon-y :width image-width :height image-height))
+                   ;; Top text line
+                   (svg--append svg (let ((text-node (dom-node 'text
+                                                               `((x . ,(+ image-width 10))
+                                                                 (y . ,icon-text-y)))))
+                                      ;; Agent name
                                       (dom-append-child text-node
                                                         (dom-node 'tspan
-                                                                  `((fill . ,(face-attribute 'help-key-binding :foreground))
-                                                                    ,@(unless first '((dx . "8"))))
-                                                                  (replace-regexp-in-string
-                                                                   "<" "&lt;"
-                                                                   (replace-regexp-in-string
-                                                                    ">" "&gt;"
-                                                                    (map-elt binding :key)))))
-                                      (setq first nil)
-                                      ;; Add space and description
-                                      (dom-append-child text-node
-                                                        (dom-node 'tspan
-                                                                  `((fill . ,(face-attribute 'default :foreground))
-                                                                    (dx . "8"))
-                                                                  (map-elt binding :description)))))
-                                  text-node)))
-             (format " %s" (with-temp-buffer
-                             (svg-insert-image svg)
-                             (buffer-string))))
+                                                                  `((fill . ,(face-attribute 'font-lock-variable-name-face :foreground)))
+                                                                  (concat (map-elt header-model :buffer-name) " Agent")))
+                                      ;; Model name (optional)
+                                      (when (map-elt header-model :model-name)
+                                        ;; Add separator arrow
+                                        (dom-append-child text-node
+                                                          (dom-node 'tspan
+                                                                    `((fill . ,(face-attribute 'default :foreground))
+                                                                      (dx . "8"))
+                                                                    "➤"))
+                                        ;; Add model name
+                                        (dom-append-child text-node
+                                                          (dom-node 'tspan
+                                                                    `((fill . ,(face-attribute 'font-lock-negation-char-face :foreground))
+                                                                      (dx . "8"))
+                                                                    (map-elt header-model :model-name))))
+                                      ;; Session mode (optional)
+                                      (when (map-elt header-model :mode-id)
+                                        ;; Add separator arrow
+                                        (dom-append-child text-node
+                                                          (dom-node 'tspan
+                                                                    `((fill . ,(face-attribute 'default :foreground))
+                                                                      (dx . "8"))
+                                                                    "➤"))
+                                        ;; Add session mode text
+                                        (dom-append-child text-node
+                                                          (dom-node 'tspan
+                                                                    `((fill . ,(or (face-attribute 'font-lock-type-face :foreground nil t)
+                                                                                   "#6699cc"))
+                                                                      (dx . "8"))
+                                                                    (map-elt header-model :mode-name))))
+                                      (when (map-elt header-model :status-frame)
+                                        (dom-append-child text-node
+                                                          (dom-node 'tspan
+                                                                    `((fill . ,(face-attribute 'default :foreground))
+                                                                      (dx . "8"))
+                                                                    (map-elt header-model :status-frame))))
+                                      text-node))
+                   ;; Bottom text line
+                   (svg-text svg (string-remove-suffix "/" (abbreviate-file-name (map-elt header-model :directory)))
+                             :x (+ image-width 10) :y (+ icon-text-y text-height)
+                             :fill (face-attribute 'font-lock-string-face :foreground))
+                   ;; Bindings row (last row if bindings or qualifier present)
+                   (when (or bindings qualifier)
+                     (svg--append svg (let ((text-node (dom-node 'text
+                                                                 `((x . 0)
+                                                                   (y . ,bindings-y))))
+                                            (first t))
+                                        ;; Add qualifier if present
+                                        (when qualifier
+                                          (dom-append-child text-node
+                                                            (dom-node 'tspan
+                                                                      `((fill . ,(face-attribute 'default :foreground)))
+                                                                      qualifier))
+                                          (setq first nil))
+                                        (dolist (binding bindings)
+                                          (when (map-elt binding :description)
+                                            ;; Add key (XML-escape angle brackets)
+                                            (dom-append-child text-node
+                                                              (dom-node 'tspan
+                                                                        `((fill . ,(face-attribute 'help-key-binding :foreground))
+                                                                          ,@(unless first '((dx . "8"))))
+                                                                        (replace-regexp-in-string
+                                                                         "<" "&lt;"
+                                                                         (replace-regexp-in-string
+                                                                          ">" "&gt;"
+                                                                          (map-elt binding :key)))))
+                                            (setq first nil)
+                                            ;; Add space and description
+                                            (dom-append-child text-node
+                                                              (dom-node 'tspan
+                                                                        `((fill . ,(face-attribute 'default :foreground))
+                                                                          (dx . "8"))
+                                                                        (map-elt binding :description)))))
+                                        text-node)))
+                   (let ((result (format " %s" (with-temp-buffer
+                                                 (svg-insert-image svg)
+                                                 (buffer-string)))))
+                     (map-put! agent-shell--header-cache cache-key result)
+                     result))))
          text-header))
       (_ text-header))))
 
@@ -2300,6 +2599,9 @@ Must provide ON-INITIATED (lambda ())."
    :client (map-elt agent-shell--state :client)
    :request (acp-make-initialize-request
              :protocol-version 1
+             :client-info `((name . "agent-shell")
+                            (title . "Emacs Agent Shell")
+                            (version . ,agent-shell--version))
              :read-text-file-capability agent-shell-text-file-capabilities
              :write-text-file-capability agent-shell-text-file-capabilities)
    :on-success (lambda (response)
@@ -2472,6 +2774,17 @@ Must provide ON-SESSION-INIT (lambda ())."
    :on-failure (agent-shell--make-error-handler
                 :state agent-shell--state :shell shell)))
 
+(defun agent-shell--eval-dynamic-values (obj)
+  "Recursively evaluate any lambda values in OBJ.
+Named functions (symbols) are not evaluated to avoid accidentally
+calling external symbols."
+  (cond
+   ((and (functionp obj) (not (symbolp obj))) (agent-shell--eval-dynamic-values (funcall obj)))
+   ((consp obj)
+    (cons (agent-shell--eval-dynamic-values (car obj))
+          (agent-shell--eval-dynamic-values (cdr obj))))
+   (t obj)))
+
 (defun agent-shell--mcp-servers ()
   "Return normalized MCP servers configuration for JSON serialization.
 
@@ -2481,16 +2794,20 @@ normalized server configs."
   (when agent-shell-mcp-servers
     (apply #'vector
            (mapcar (lambda (server)
+                     (setq server (agent-shell--eval-dynamic-values server))
                      (let ((normalized (copy-alist server)))
-                       (when-let ((args (map-elt normalized 'args))
-                                  ((listp args)))
-                         (map-put! normalized 'args (apply #'vector args)))
-                       (when-let ((env (map-elt normalized 'env))
-                                  ((listp env)))
-                         (map-put! normalized 'env (apply #'vector env)))
-                       (when-let ((headers (map-elt normalized 'headers))
-                                  ((listp headers)))
-                         (map-put! normalized 'headers (apply #'vector headers)))
+                       (when (map-contains-key normalized 'args)
+                         (let ((args (map-elt normalized 'args)))
+                           (when (listp args)
+                             (map-put! normalized 'args (apply #'vector args)))))
+                       (when (map-contains-key normalized 'env)
+                         (let ((env (map-elt normalized 'env)))
+                           (when (listp env)
+                             (map-put! normalized 'env (apply #'vector env)))))
+                       (when (map-contains-key normalized 'headers)
+                         (let ((headers (map-elt normalized 'headers)))
+                           (when (listp headers)
+                             (map-put! normalized 'headers (apply #'vector headers)))))
                        normalized))
                    agent-shell-mcp-servers))))
 
@@ -2522,10 +2839,15 @@ normalized server configs."
 Returns list of alists with :start, :end, and :path for each mention."
   (let ((mentions '())
         (pos 0))
-    (while (string-match "\\(?:^\\|[[:space:]]\\)@\\(?:\"\\([^\"]+\\)\"\\|\\([^[:space:]]+\\)\\)" prompt pos)
+    (while (string-match (rx (or line-start (not word))
+                             "@"
+                             (or (seq "\"" (group (+ (not "\""))) "\"")
+                                 (group (+ (not space)))))
+                         prompt pos)
       (push `((:start . ,(match-beginning 0))
               (:end . ,(match-end 0))
-              (:path . ,(or (match-string 1 prompt) (match-string 2 prompt))))
+              (:path . ,(when-let ((path (or (match-string 1 prompt) (match-string 2 prompt))))
+                          (substring-no-properties path))))
             mentions)
       (setq pos (match-end 0)))
     (nreverse mentions)))
@@ -2656,6 +2978,7 @@ If FILE-PATH is not an image, returns nil."
        (cond
         ((equal type "resource") (list (map-nested-elt content-block '(resource uri))))
         ((equal type "resource_link") (list (map-elt content-block 'uri)))
+        ((equal type "image") (list (map-elt content-block 'uri)))
         (t nil))))
    content-blocks))
 
@@ -2759,75 +3082,50 @@ If FILE-PATH is not an image, returns nil."
   "Return all shell buffers in the same project as current buffer."
   (let ((project-root (agent-shell-cwd)))
     (seq-filter (lambda (buffer)
-                  (with-current-buffer buffer
-                    (string-prefix-p project-root
-                                     (expand-file-name default-directory))))
+                  (equal project-root
+                         (with-current-buffer buffer
+                           (agent-shell-cwd))))
                 (agent-shell-buffers))))
 
 (cl-defun agent-shell--shell-buffer (&key viewport-buffer no-error no-create)
   "Get an `agent-shell' buffer for the current project.
 
-When VIEWPORT-BUFFER is non-nil, return counterpart.
+Resolution order:
+1. If VIEWPORT-BUFFER is provided, derive shell buffer from its name.
+2. If inside of a viewport buffer, derive shell buffer from its name.
+3. If currently in an `agent-shell-mode' buffer, return it.
+4. If there are shells in current project, return the first one found.
+5. Otherwise, ask user to pick one.
+
 When NO-CREATE is nil (default), prompt to create a new shell if none exists.
 When NO-CREATE is non-nil, return existing shell or nil/error if none exists.
 When NO-ERROR is non-nil, return nil instead of raising an error.
 
 Returns a buffer object or nil."
-  (let ((shell-buffer (if viewport-buffer
-                          (seq-first (seq-filter (lambda (shell-buffer)
-                                                   (equal (agent-shell-viewport--buffer
-                                                           :shell-buffer shell-buffer
-                                                           :existing-only t)
-                                                          viewport-buffer))
-                                                 (agent-shell-buffers)))
-                        (seq-first (agent-shell-project-buffers)))))
+  (let ((shell-buffer (or (agent-shell-viewport--shell-buffer
+                           (or viewport-buffer (current-buffer)))
+                          (if (derived-mode-p 'agent-shell-mode)
+                              (current-buffer)
+                            (seq-first (agent-shell-project-buffers))))))
     (if shell-buffer
         shell-buffer
       (if no-create
           (unless no-error
             (user-error "No agent shell buffers available for current project"))
-        (when (y-or-n-p "No shells in project.  Start a new one? ")
-          (get-buffer
-           (agent-shell--start :config (or agent-shell-preferred-agent-config
-                                           (agent-shell-select-config
-                                            :prompt "Start new agent: ")
-                                           (error "No agent config found"))
-                               :no-focus t
-                               :new-session t)))))))
-
-(defun agent-shell-cwd ()
-  "Return the CWD for this shell.
-
-If in a project, use project root."
-  (expand-file-name
-   (or (when (and (boundp 'projectile-mode)
-                  projectile-mode
-                  (fboundp 'projectile-project-root))
-         (projectile-project-root))
-       (when (fboundp 'project-root)
-         (when-let ((proj (project-current)))
-           (project-root proj)))
-       default-directory
-       (error "No CWD available"))))
-
-(defvar projectile-mode)
-(declare-function projectile-project-name "projectile")
-(declare-function projectile-project-root "projectile")
-
-(defun agent-shell--project-name ()
-  "Return the project name for this shell.
-
-If in a project, use project name."
-  (or (when-let (((boundp 'projectile-mode))
-                 projectile-mode
-                 ((fboundp 'projectile-project-name))
-                 (root (projectile-project-root)))
-        (projectile-project-name root))
-      (when-let (((fboundp 'project-name))
-                 (project (project-current)))
-        (project-name project))
-      (file-name-nondirectory
-       (string-remove-suffix "/" default-directory))))
+        (if (y-or-n-p "No shells in project.  Start a new one? ")
+            (get-buffer
+             (agent-shell--start :config (or (agent-shell--resolve-preferred-config)
+                                             (agent-shell-select-config
+                                              :prompt "Start new agent: ")
+                                             (error "No agent config found"))
+                                 :no-focus t
+                                 :new-session t))
+          (if-let ((shell-buffers (agent-shell-buffers)))
+              (get-buffer (completing-read "Choose a shell: "
+                                           (mapcar #'buffer-name shell-buffers)
+                                           nil t))
+            (unless no-error
+              (user-error "No agent shell buffers available"))))))))
 
 (defun agent-shell--current-shell ()
   "Current shell for viewport or shell buffer."
@@ -2877,14 +3175,13 @@ inserted into the shell buffer prompt."
          (proc (make-process
                 :name command
                 :buffer output-buffer
-                :command (let ((cmd (list shell-file-name
-                                          shell-command-switch
-                                          ;; Merge stderr into stdout output
-                                          ;; (all into output buffer)
-                                          (format "%s 2>&1" command))))
-                           (if agent-shell-container-command-runner
-                               (append agent-shell-container-command-runner cmd)
-                             cmd))
+                :command (with-current-buffer shell-buffer
+                           (agent-shell--build-command-for-execution
+                            (list shell-file-name
+                                  shell-command-switch
+                                  ;; Merge stderr into stdout output
+                                  ;; (all into output buffer)
+                                  (format "%s 2>&1" command))))
                 :connection-type 'pipe
                 :filter
                 (lambda (proc output)
@@ -2917,22 +3214,47 @@ inserted into the shell buffer prompt."
 
 ;;; Completion
 
-(cl-defun agent-shell--get-files-context (&key files)
-  "Process FILES into sendable text with image preview if applicable."
+(cl-defun agent-shell--get-files-context (&key files agent-cwd)
+  "Process FILES into sendable text with image preview if applicable.
+
+Uses AGENT-CWD to shorten file paths where necessary."
   (when files
     (mapconcat (lambda (file)
-                 (let ((text (concat "@" file)))
-                   (if-let ((image-display (agent-shell--load-image
-                                            :file-path (expand-file-name file (agent-shell-cwd))
-                                            :max-width 200)))
-                       ;; Propertize text to display the image
-                       (propertize text 'display image-display)
-                     ;; Not an image, insert as normal text
-                     text)))
+                 (when agent-cwd
+                   (setq file (expand-file-name file agent-cwd)))
+                 (if-let ((image-display (agent-shell--load-image
+                                          :file-path file
+                                          :max-width 200)))
+                     ;; Propertize text to display the image
+                     (agent-shell-ui-add-action-to-text
+                      (propertize (concat "@" file)
+                                  'display image-display
+                                  'pointer 'hand)
+                      (lambda ()
+                        (interactive)
+                        (find-file file))
+                      (lambda ()
+                        (message "Press RET to open"))
+                      ;; No link face for image (no underline).
+                      nil)
+                   ;; Not an image, insert as normal text
+                   (agent-shell-ui-add-action-to-text
+                    (if (and agent-cwd (file-in-directory-p file agent-cwd))
+                        ;; File within project, shorten path.
+                        (propertize (concat "@" (file-relative-name file agent-cwd))
+                                    'pointer 'hand)
+                      (propertize (concat "@" file)
+                                  'pointer 'hand))
+                    (lambda ()
+                      (interactive)
+                      (find-file file))
+                    (lambda ()
+                      (message "Press RET to open"))
+                    'link)))
                files
                "\n\n")))
 
-(defun agent-shell-send-file (&optional prompt-for-file)
+(defun agent-shell-send-file (&optional prompt-for-file pick-shell)
   "Insert a file into `agent-shell'.
 
 If visiting a file, send this file.
@@ -2941,7 +3263,9 @@ If invoked from shell, select a project file.
 
 If invoked from `dired', use selection or region files.
 
-With prefix argument PROMPT-FOR-FILE, always prompt for file selection."
+With prefix argument PROMPT-FOR-FILE, always prompt for file selection.
+
+When PICK-SHELL is non-nil, prompt for which shell buffer to use."
   (interactive "P")
   (if (and (region-active-p)
            (buffer-file-name))
@@ -2950,10 +3274,24 @@ With prefix argument PROMPT-FOR-FILE, always prompt for file selection."
            (files (if (or in-shell prompt-for-file)
                       (list (completing-read "Send file: " (agent-shell--project-files)))
                     (or (agent-shell--buffer-files)
+                        (when (buffer-file-name)
+                          (list (buffer-file-name)))
                         (list (completing-read "Send file: " (agent-shell--project-files)))
-                        (user-error "No file to send")))))
-      (agent-shell--insert-to-shell-buffer
-       :text (agent-shell--get-files-context :files files)))))
+                        (user-error "No file to send"))))
+           (shell-buffer (when pick-shell
+                           (completing-read "Send file to shell: "
+                                            (mapcar #'buffer-name (or (agent-shell-buffers)
+                                                                      (user-error "No shells available")))
+                                            nil t))))
+      (agent-shell-insert :text (agent-shell--get-files-context :files files)
+                          :shell-buffer shell-buffer))))
+
+(defun agent-shell-send-file-to (&optional prompt-for-file)
+  "Like `agent-shell-send-file' but prompt for which shell to use.
+
+With prefix argument PROMPT-FOR-FILE, always prompt for file selection."
+  (interactive "P")
+  (agent-shell-send-file prompt-for-file t))
 
 (cl-defun agent-shell--buffer-files (&key obvious)
   "Return buffer file(s) or `dired' selected file(s).
@@ -3008,78 +3346,6 @@ The captured screenshot file path is then inserted into the shell prompt."
     (agent-shell-insert
      :text (agent-shell--get-files-context :files (list screenshot-path)))))
 
-(defun agent-shell--project-files ()
-  "Get project files using projectile or project.el."
-  (cond
-   ((and (boundp 'projectile-mode)
-         projectile-mode
-         (projectile-project-p))
-    (mapcar (lambda (f)
-              (file-relative-name f (projectile-project-root)))
-            (projectile-current-project-files)))
-   ((fboundp 'project-current)
-    (when-let ((proj (project-current)))
-      (mapcar (lambda (f) (file-relative-name f (project-root proj)))
-              (project-files proj))))
-   (t nil)))
-
-(defun agent-shell--file-completion-at-point ()
-  "Complete project files after @."
-  (when-let* ((triggered (eq (char-before) ?@))
-              (start (point))
-              (end (save-excursion
-                     (skip-chars-forward "[:alnum:]/_.-")
-                     (point)))
-              (prefix (buffer-substring start end))
-              (files (agent-shell--project-files)))
-    (list start end
-          (seq-filter
-           (lambda (f) (string-prefix-p prefix (file-name-nondirectory f)))
-           files)
-          :exclusive 'no
-          :exit-function
-          (lambda (_status _string)
-            (insert " ")))))
-
-(defun agent-shell--command-completion-at-point ()
-  "Complete available commands after /."
-  (when (eq (char-before) ?/)
-    (let* ((start (point))
-           (end (save-excursion
-                  (skip-chars-forward "[:alnum:]_-")
-                  (point)))
-           (prefix (buffer-substring start end))
-           (commands (map-elt agent-shell--state :available-commands)))
-      (list start end
-            (mapcar (lambda (command)
-                      (map-elt command 'name))
-                    (seq-filter
-                     (lambda (command)
-                       (string-prefix-p prefix (map-elt command 'name)))
-                     commands))
-            :exclusive t ; prevent / file completion fallback (already covered by @).
-            :exit-function
-            (lambda (_status _string)
-              (insert " "))))))
-
-(defun agent-shell--trigger-completion-at-point ()
-  "Trigger completion when @ or / is typed."
-  (when (or (eq (char-before) ?@)
-            (eq (char-before) ?/))
-    (completion-at-point)))
-
-(define-minor-mode agent-shell-completion-mode
-  "Toggle agent shell completion with @ or / prefix."
-  :lighter " @/Compl"
-  (if agent-shell-completion-mode
-      (progn
-        (add-hook 'completion-at-point-functions #'agent-shell--file-completion-at-point nil t)
-        (add-hook 'completion-at-point-functions #'agent-shell--command-completion-at-point nil t)
-        (add-hook 'post-self-insert-hook #'agent-shell--trigger-completion-at-point nil t))
-    (remove-hook 'completion-at-point-functions #'agent-shell--file-completion-at-point t)
-    (remove-hook 'completion-at-point-functions #'agent-shell--command-completion-at-point t)
-    (remove-hook 'post-self-insert-hook #'agent-shell--trigger-completion-at-point t)))
-
 ;;; Permissions
 
 (cl-defun agent-shell--make-tool-call-permission-text (&key request client state)
@@ -3091,6 +3357,7 @@ For example:
 
        ⚠ Tool Permission ⚠
 
+       Add more cowbell
 
        [ View (v) ] [ Allow (y) ] [ Reject (n) ] [ Always Allow (!) ]
 
@@ -3136,6 +3403,22 @@ For example:
                                  (with-current-buffer shell-buffer
                                    (agent-shell-interrupt t))))
                    map))
+         (title (let* ((title (map-nested-elt request '(params toolCall title)))
+                       (command (map-nested-elt request '(params toolCall rawInput command)))
+                       (command-first-line (when (stringp command)
+                                             (if (string-match "\n" command)
+                                                 (concat (substring command 0 (match-beginning 0)) "...")
+                                               command))))
+                  ;; Some agents don't include the command in the
+                  ;; permission/tool call title, so it's hard to know
+                  ;; what the permission is actually allowing.
+                  ;; Display command if needed.
+                  (if (and (stringp title)
+                           (stringp command)
+                           (not (string-empty-p command))
+                           (string-match-p (regexp-quote command) title))
+                      title
+                    (or command-first-line title))))
          (diff-button (when diff
                         (agent-shell--make-permission-button
                          :text "View (v)"
@@ -3149,7 +3432,7 @@ For example:
                                   :tool-call-id tool-call-id)
                          :keymap keymap
                          :navigatable t
-                         :char ?v
+                         :char "v"
                          :option "view diff"))))
     (format "╭─
 
@@ -3165,9 +3448,9 @@ For example:
             (propertize "Tool Permission" 'font-lock-face 'bold)
             (propertize agent-shell-permission-icon
                         'font-lock-face 'warning)
-            (if (map-nested-elt request '(params toolCall title))
+            (if title
                 (propertize
-                 (format "\n\n\n    %s" (map-nested-elt request '(params toolCall title)))
+                 (format "\n\n\n    %s" title)
                  'font-lock-face 'comint-highlight-input)
               "")
             (if diff-button
@@ -3222,12 +3505,13 @@ MESSAGE-TEXT: Optional message to display after sending the response."
   ;; block-id must be the same as the one used as
   ;; agent-shell--update-fragment param by "session/request_permission".
   (agent-shell--delete-fragment :state state :block-id (format "permission-%s" tool-call-id))
-  (let ((updated-tool-calls (map-copy (map-elt state :tool-calls))))
-    (map-delete updated-tool-calls tool-call-id)
-    (map-put! state :tool-calls updated-tool-calls))
+  (map-put! state :tool-calls
+            (map-delete (map-elt state :tool-calls) tool-call-id))
   (when message-text
     (message "%s" message-text))
-  (goto-char (point-max)))
+  ;; Jump to any remaining permission buttons, or go to end of buffer.
+  (or (agent-shell-jump-to-latest-permission-button-row)
+      (goto-char (point-max))))
 
 (cl-defun agent-shell--resolve-permission-choice-to-action (&key choice actions)
   "Resolve `agent-shell-diff' CHOICE to permission action from ACTIONS.
@@ -3258,6 +3542,7 @@ ACTIONS as per `agent-shell--make-permission-action'."
       (agent-shell-diff
        :old (map-elt diff :old)
        :new (map-elt diff :new)
+       :file (map-elt diff :file)
        :title (file-name-nondirectory (map-elt diff :file))
        :bindings (list (list :key "n"
                              :description "next hunk"
@@ -3299,6 +3584,11 @@ ACTIONS as per `agent-shell--make-permission-action'."
                                             (kill-current-buffer))
                                           (with-current-buffer shell-buffer
                                             (agent-shell-interrupt t)))))
+                       (list :key "f"
+                             :description (concat "open " (file-name-nondirectory (map-elt diff :file)))
+                             :command (lambda ()
+                                        (interactive)
+                                        (find-file (map-elt diff :file))))
                        (list :key "q" :description "exit" :command 'kill-current-buffer))
        :on-exit (lambda ()
                   (if-let ((choice (condition-case nil
@@ -3346,28 +3636,43 @@ CHAR and OPTION are used for cursor sensor messages."
       ;;
       ;; For example, the "y" in:
       ;;
-      ;; [ Allow (y) ]
-      (put-text-property (- (length button) 3) (- (length button) 1)
-                         'agent-shell-permission-button t button)
-      (put-text-property (- (length button) 3) (- (length button) 1)
-                         'cursor-sensor-functions
-                         (list (lambda (_window _old-pos sensor-action)
-                                 (when (eq sensor-action 'entered)
-                                   (message "Press RET or %s to %s"
-                                            char option))))
-                         button))
+      ;; Graphical: " Allow (y) "
+      ;;
+      ;; Terminal: "[ Allow (y) ]"
+      ;;
+      ;; so adjust the offsets accordingly.
+      (let ((trailing (if (display-graphic-p) 2 3)))
+        (put-text-property (- (length button) (+ trailing 1))
+                           (- (length button) trailing)
+                           'agent-shell-permission-button t button)
+        (put-text-property (- (length button) (+ trailing 1))
+                           (- (length button) trailing)
+                           'cursor-sensor-functions
+                           (list (lambda (_window _old-pos sensor-action)
+                                   (when (eq sensor-action 'entered)
+                                     (if char
+                                         (message "Press RET or %s to %s" char option)
+                                       (message "Press RET to %s" option)))))
+                           button)))
     button))
 
 (defun agent-shell--make-permission-actions (acp-options)
   "Make actions from ACP-OPTIONS for shell rendering.
 
 See `agent-shell--make-permission-action' for ACP-OPTION and return schema."
-  (seq-sort (lambda (a b)
-              (< (length (map-elt a :label))
-                 (length (map-elt b :label))))
-            (delq nil (mapcar #'agent-shell--make-permission-action acp-options))))
+  (let (acp-seen-kinds)
+    (seq-sort (lambda (a b)
+                (< (length (map-elt a :label))
+                   (length (map-elt b :label))))
+              (delq nil (mapcar (lambda (acp-option)
+                                  (let ((action (agent-shell--make-permission-action
+                                                 :acp-option acp-option
+                                                 :acp-seen-kinds acp-seen-kinds)))
+                                    (push (map-elt acp-option 'kind) acp-seen-kinds)
+                                    action))
+                                acp-options)))))
 
-(defun agent-shell--make-permission-action (acp-option)
+(cl-defun agent-shell--make-permission-action (&key acp-option acp-seen-kinds)
   "Convert a single ACP-OPTION to an action alist.
 
 ACP-OPTION should be a PermissionOption per ACP spec:
@@ -3379,6 +3684,9 @@ ACP-OPTION should be a PermissionOption per ACP spec:
   ((\='kind . \"allow_once\")
    (\='name . \"Allow\")
    (\='optionId . \"allow\"))
+
+ACP-SEEN-KINDS is a list of kinds already processed.  If kind is in
+ACP-SEEN-KINDS, omit the keybinding to avoid duplicates.
 
 Returns an alist of the form:
 
@@ -3396,10 +3704,11 @@ Returns nil if the ACP-OPTION kind is not recognized."
                                                                                  agent-shell-mode-map t)))
                                            "n"))))
          (kind (map-elt acp-option 'kind))
-         (char (map-elt char-map kind))
+         (char (unless (member kind acp-seen-kinds)
+                 (map-elt char-map kind)))
          (name (map-elt acp-option 'name)))
-    (when char
-      (map-into `((:label . ,(format "%s (%s)" name char))
+    (when (map-elt char-map kind)
+      (map-into `((:label . ,(if char (format "%s (%s)" name char) name))
                   (:option . ,name)
                   (:char . ,char)
                   (:kind . ,kind)
@@ -3407,7 +3716,9 @@ Returns nil if the ACP-OPTION kind is not recognized."
                 'alist))))
 
 (defun agent-shell-jump-to-latest-permission-button-row ()
-  "Jump to the latest permission button row."
+  "Jump to the latest permission button row.
+
+Returns non-nil if a permission button was found, nil otherwise."
   (interactive)
   (when-let ((found (save-mark-and-excursion
                       (goto-char (point-max))
@@ -3417,7 +3728,8 @@ Returns nil if the ACP-OPTION kind is not recognized."
     (beginning-of-line)
     (agent-shell-next-permission-button)
     (when-let ((window (get-buffer-window (current-buffer))))
-      (set-window-point window (point)))))
+      (set-window-point window (point)))
+    t))
 
 (defun agent-shell-next-permission-button ()
   "Jump to the next button."
@@ -3449,8 +3761,11 @@ Returns nil if the ACP-OPTION kind is not recognized."
 
 ;;; Region
 
-(cl-defun agent-shell--insert-to-shell-buffer (&key text submit no-focus)
+(cl-defun agent-shell--insert-to-shell-buffer (&key shell-buffer text submit no-focus)
   "Insert TEXT into the agent shell buffer at `point-max'.
+
+SHELL-BUFFER, when non-nil, specifies the target shell buffer.
+Otherwise, uses `agent-shell--shell-buffer' to find one.
 
 SUBMIT, when non-nil, submits the shell buffer after insertion.
 
@@ -3463,7 +3778,8 @@ Returns an alist with insertion details or nil otherwise:
    (:end . END))"
   (unless text
     (user-error "No text provided to insert"))
-  (let* ((shell-buffer (agent-shell--shell-buffer :no-create t))
+  (let* ((shell-buffer (or shell-buffer
+                           (agent-shell--shell-buffer :no-create t)))
          (inhibit-read-only t)
          ;; Displaying before with-current-buffer below
          ;; ensures window is selected, thus window-point
@@ -3493,7 +3809,7 @@ Returns an alist with insertion details or nil otherwise:
       (:start . ,insert-start)
       (:end . ,insert-end))))
 
-(cl-defun agent-shell-insert (&key text submit no-focus)
+(cl-defun agent-shell-insert (&key text submit no-focus shell-buffer)
   "Insert TEXT into the agent shell at `point-max'.
 
 SUBMIT, when non-nil, submits the shell buffer after insertion.
@@ -3510,34 +3826,45 @@ Returns an alist with insertion details or nil otherwise:
    (:start . START)
    (:end . END))"
   (if agent-shell-prefer-viewport-interaction
-      (agent-shell-viewport--show-buffer :text text :submit submit :no-focus no-focus)
-    (agent-shell--insert-to-shell-buffer :text text :submit submit :no-focus no-focus)))
+      (agent-shell-viewport--show-buffer :text text :submit submit
+                                         :no-focus no-focus :shell-buffer shell-buffer)
+    (agent-shell--insert-to-shell-buffer :text text :submit submit
+                                         :no-focus no-focus :shell-buffer shell-buffer)))
 
 (cl-defun agent-shell-send-region ()
   "Send region to last accessed shell buffer in project."
   (interactive)
   (agent-shell-insert
-   :text (agent-shell--get-region-context :deactivate t :no-error t)))
+   :text (agent-shell--get-region-context
+          :deactivate t :no-error t
+          :agent-cwd (when-let ((shell-buffer (agent-shell--shell-buffer
+                                               :no-create t
+                                               :no-error t)))
+                       (with-current-buffer shell-buffer
+                         (agent-shell-cwd))))))
 
 (cl-defun agent-shell-send-dwim ()
   "Send region or error at point to last accessed shell buffer in project."
   (interactive)
   (agent-shell-insert :text (agent-shell--context)))
 
-(cl-defun agent-shell--get-region-context (&key deactivate no-error)
+(cl-defun agent-shell--get-region-context (&key deactivate no-error agent-cwd)
   "Get region as insertable text, ready for sending to agent.
 
 When DEACTIVATE is non-nil, deactivate region.
 
-When NO-ERROR is non-nil, return nil and continue without error."
+When NO-ERROR is non-nil, return nil and continue without error.
+
+Uses AGENT-CWD to shorten file paths where necessary."
   (let* ((region (or (agent-shell--get-region :deactivate deactivate)
                      (unless no-error
                        (user-error "No region selected"))))
          (processed-text (if (map-elt region :file)
                              (let ((file-link (agent-shell-ui-add-action-to-text
                                                (format "%s:%d-%d"
-                                                       (file-relative-name (map-elt region :file)
-                                                                           (agent-shell-cwd))
+                                                       (if (and agent-cwd (file-in-directory-p (map-elt region :file) agent-cwd))
+                                                           (file-relative-name (map-elt region :file) agent-cwd)
+                                                         (map-elt region :file))
                                                        (map-elt region :line-start)
                                                        (map-elt region :line-end))
                                                (lambda ()
@@ -3631,6 +3958,50 @@ If CAP is non-nil, truncate at CAP."
               (setq final-lines (append (seq-take final-lines cap) '("   ..."))))
             (string-join final-lines "\n")))))))
 
+(cl-defun agent-shell--format-diagnostic (&key buffer beg end line col type text)
+  "Format a diagnostic error with context.
+BUFFER is the buffer containing the error.
+BEG and END are the error region positions.
+LINE and COL are the line and column numbers.
+TYPE is the error type/level.
+TEXT is the error message."
+  (let* ((file (agent-shell--shorten-paths (buffer-file-name buffer) t))
+         (code (when (and beg end)
+                 (with-current-buffer buffer
+                   (buffer-substring beg end))))
+         (context-lines 3)
+         (context (when beg
+                    (with-current-buffer buffer
+                      (save-excursion
+                        (goto-char beg)
+                        (let* ((start-line (max 1 (- line context-lines)))
+                               (context-beg (progn
+                                              (goto-char (point-min))
+                                              (forward-line (1- start-line))
+                                              (point)))
+                               (context-end (progn
+                                              (forward-line (+ context-lines context-lines 1))
+                                              (point)))
+                               (numbered-region (agent-shell--get-numbered-region
+                                                 :buffer buffer
+                                                 :from context-beg
+                                                 :to context-end))
+                               ;; Replace the line number prefix for the error line
+                               (error-line-prefix (format "   %d:" line))
+                               (highlight-prefix (format "-> %d:" line)))
+                          (replace-regexp-in-string
+                           (regexp-quote error-line-prefix)
+                           highlight-prefix
+                           numbered-region
+                           nil 'literal)))))))
+    (if (or (not code) (string-empty-p (string-trim code)))
+        (format "%s:%d:%d: %s: %s"
+                (or file (buffer-name buffer))
+                line (or col 0) type text)
+      (format "%s:%d:%d: %s: %s\n\n%s"
+              (or file (buffer-name buffer))
+              line (or col 0) type text context))))
+
 (defun agent-shell--get-flymake-error-context ()
   "Get flymake error at point, ready for sending to agent."
   (when-let ((diagnostics (flymake-diagnostics (point))))
@@ -3641,78 +4012,100 @@ If CAP is non-nil, truncate at CAP."
               (end (flymake-diagnostic-end diagnostic))
               (type (flymake-diagnostic-type diagnostic))
               (text (flymake-diagnostic-text diagnostic))
-              (file (agent-shell--shorten-paths (buffer-file-name buffer) t))
               (line (with-current-buffer buffer
                       (line-number-at-pos beg)))
               (col (with-current-buffer buffer
                      (save-excursion
                        (goto-char beg)
-                       (current-column))))
-              (code (with-current-buffer buffer
-                      (buffer-substring beg end)))
-              (context-lines 3)
-              (context (with-current-buffer buffer
-                         (save-excursion
-                           (goto-char beg)
-                           (let* ((start-line (max 1 (- line context-lines)))
-                                  (context-beg (progn
-                                                 (goto-char (point-min))
-                                                 (forward-line (1- start-line))
-                                                 (point)))
-                                  (context-end (progn
-                                                 (forward-line (+ context-lines context-lines 1))
-                                                 (point)))
-                                  (numbered-region (agent-shell--get-numbered-region
-                                                    :buffer buffer
-                                                    :from context-beg
-                                                    :to context-end))
-                                  ;; Replace the line number prefix for the error line
-                                  (error-line-prefix (format "   %d:" line))
-                                  (highlight-prefix (format "-> %d:" line)))
-                             (replace-regexp-in-string
-                              (regexp-quote error-line-prefix)
-                              highlight-prefix
-                              numbered-region
-                              nil 'literal))))))
-         (format (if (string-empty-p (string-trim code))
-                     "%s:%d:%d: %s: %s
-
-%s")
-                 (or file (buffer-name buffer))
-                 line
-                 col
-                 type
-                 text
-                 context)))
+                       (current-column)))))
+         (agent-shell--format-diagnostic
+          :buffer buffer
+          :beg beg
+          :end end
+          :line line
+          :col col
+          :type type
+          :text text)))
      diagnostics
      "\n\n")))
 
-(defun agent-shell--get-current-line-context ()
-  "Get the current line as insertable text, ready for sending to agent."
+(defun agent-shell--get-flycheck-error-context ()
+  "Get flycheck error at point, ready for sending to agent."
+  (when-let (((bound-and-true-p flycheck-mode))
+             ((fboundp 'flycheck-overlay-errors-at))
+             (errors (flycheck-overlay-errors-at (point))))
+    (mapconcat
+     (lambda (err)
+       (let* ((buffer (current-buffer))
+              (beg (flycheck-error-pos err))
+              (end (when beg
+                     (save-excursion
+                       (goto-char beg)
+                       (if-let ((end-line (flycheck-error-end-line err))
+                                (end-col (flycheck-error-end-column err)))
+                           (progn
+                             (forward-line (- end-line (line-number-at-pos)))
+                             (move-to-column end-col)
+                             (point))
+                         beg))))
+              (type (flycheck-error-level err))
+              (text (flycheck-error-message err))
+              (line (flycheck-error-line err))
+              (col (flycheck-error-column err)))
+         (agent-shell--format-diagnostic
+          :buffer buffer
+          :beg beg
+          :end end
+          :line line
+          :col col
+          :type type
+          :text text)))
+     errors
+     "\n\n")))
+
+(defun agent-shell--get-error-context ()
+  "Get error at point from either flymake or flycheck, whichever is available.
+Tries flymake first, then flycheck."
+  (or (agent-shell--get-flymake-error-context)
+      (agent-shell--get-flycheck-error-context)))
+
+(cl-defun agent-shell--get-current-line-context (&key agent-cwd)
+  "Get the current line as insertable text, ready for sending to agent.
+
+Uses AGENT-CWD to shorten file paths where necessary."
   (save-excursion
     (let ((start (line-beginning-position))
           (end (line-end-position)))
       (goto-char start)
       (set-mark end)
       (activate-mark)
-      (agent-shell--get-region-context :deactivate t :no-error t))))
+      (agent-shell--get-region-context :deactivate t :no-error t :agent-cwd agent-cwd))))
 
-(defun agent-shell--context ()
+(cl-defun agent-shell--context (&key shell-buffer)
   "Return context (if available).  Nil otherwise.
+
+Uses optional SHELL-BUFFER to make paths relative to shell project.
 
 Context could be either a region or error at point or files.
 The sources checked are controlled by `agent-shell-context-sources'."
-  (seq-some
-   (lambda (source)
-     (pcase source
-       ('files (agent-shell--get-files-context
-                :files (agent-shell--buffer-files :obvious t)))
-       ('region (agent-shell--get-region-context
-                 :deactivate t :no-error t))
-       ('error (agent-shell--get-flymake-error-context))
-       ('line (agent-shell--get-current-line-context))
-       ((pred functionp) (funcall source))))
-   agent-shell-context-sources))
+  (unless (derived-mode-p 'agent-shell-mode)
+    (let ((agent-cwd (when shell-buffer
+                       (with-current-buffer shell-buffer
+                         (agent-shell-cwd)))))
+      (seq-some
+       (lambda (source)
+         (pcase source
+           ('files (agent-shell--get-files-context
+                    :files (agent-shell--buffer-files :obvious t)
+                    :agent-cwd agent-cwd))
+           ('region (agent-shell--get-region-context
+                     :deactivate t :no-error t
+                     :agent-cwd agent-cwd))
+           ('error (agent-shell--get-error-context))
+           ('line (agent-shell--get-current-line-context
+                   :agent-cwd agent-cwd))
+           ((pred functionp) (funcall source))))
+       agent-shell-context-sources))))
 
 (cl-defun agent-shell--get-region (&key deactivate)
   "Get the active region as an alist.
@@ -3726,14 +4119,8 @@ Available values:
     (let ((start (region-beginning))
           (end (region-end))
           (content (buffer-substring-no-properties (region-beginning) (region-end)))
-          (language (cond ((listp mode-name)
-                           (downcase (car mode-name)))
-                          ((stringp mode-name)
-                           (downcase mode-name))
-                          (t
-                           "")))
-          (file (when-let ((buffer-file-name (buffer-file-name)))
-                  (file-relative-name buffer-file-name (agent-shell-cwd)))))
+          (language (string-remove-suffix "-mode" (string-remove-suffix "-ts-mode" (symbol-name major-mode))))
+          (file (buffer-file-name)))
       (when deactivate
         (deactivate-mark))
       `((:file . ,file)
@@ -3827,7 +4214,8 @@ See https://agentclientprotocol.com/protocol/session-modes for details."
 
 (defun agent-shell--status-frame ()
   "Return busy frame string or nil if not busy."
-  (when (eq 'busy (map-nested-elt (agent-shell--state) '(:heartbeat :status)))
+  (when (and agent-shell-show-busy-indicator
+             (eq 'busy (map-nested-elt (agent-shell--state) '(:heartbeat :status))))
     (let ((frames [" ░   " " ░░  " " ░░░ " " ░░░░" " ░░░ " " ░░  " " ░   " "     "]))
       (seq-elt frames (mod (map-nested-elt (agent-shell--state) '(:heartbeat :value))
                            (length frames))))))
@@ -3835,12 +4223,18 @@ See https://agentclientprotocol.com/protocol/session-modes for details."
 (defun agent-shell--mode-line-format ()
   "Return `agent-shell''s mode-line format.
 
-Typically includes the model, session mode and activity or nil if unavailable.
+Typically includes the container indicator, model, session mode and activity
+or nil if unavailable.
 
-For example: \" [Sonnet] [Accept Edits] ░░░ \"."
+For example: \" [C] [Sonnet] [Accept Edits] ░░░ \".
+Shows \" [C]\" when running in a container."
   (when-let* (((derived-mode-p 'agent-shell-mode))
               ((memq agent-shell-header-style '(text none nil))))
-    (concat (when-let ((model-name (or (map-elt (seq-find (lambda (model)
+    (concat (when agent-shell-container-command-runner
+              (propertize " [C]"
+                          'face 'font-lock-constant-face
+                          'help-echo "Running in container"))
+            (when-let ((model-name (or (map-elt (seq-find (lambda (model)
                                                             (string= (map-elt model :model-id)
                                                                      (map-nested-elt (agent-shell--state) '(:session :model-id))))
                                                           (map-nested-elt (agent-shell--state) '(:session :models)))
@@ -4095,24 +4489,30 @@ For example:
          (filepath (expand-file-name filename dir)))
     filepath))
 
-(defun agent-shell--init-transcript (config)
-  "Initialize a new transcript file for this buffer using CONFIG.
-Returns the path to the transcript file, or nil if disabled."
-  (when-let* ((path-fn agent-shell-transcript-file-path-function)
-              (filepath (condition-case err
-                            (funcall path-fn)
-                          (error
-                           (message "Failed to generate transcript path: %S" err)
-                           nil)))
-              (dir (file-name-directory filepath))
-              (agent-name (or (map-elt config :mode-line-name)
-                              (map-elt config :buffer-name)
-                              "Unknown Agent")))
+(defun agent-shell--transcript-file-path ()
+  "Return the transcript file path, or nil if disabled."
+  (when-let ((path-fn agent-shell-transcript-file-path-function))
     (condition-case err
-        (progn
-          (make-directory dir t)
-          (write-region
-           (format "# Agent Shell Transcript
+        (funcall path-fn)
+      (error
+       (message "Failed to generate transcript path: %S" err)
+       nil))))
+
+(defun agent-shell--ensure-transcript-file ()
+  "Ensure the transcript file exists, creating it with header if needed.
+Returns the file path, or nil if disabled."
+  (unless (derived-mode-p 'agent-shell-mode)
+    (user-error "Not in an agent-shell buffer"))
+  (when-let* ((filepath agent-shell--transcript-file)
+              (dir (file-name-directory filepath)))
+    (unless (file-exists-p filepath)
+      (condition-case err
+          (let ((agent-name (or (map-nested-elt agent-shell--state '(:agent-config :mode-line-name))
+                                (map-nested-elt agent-shell--state '(:agent-config :buffer-name))
+                                "Unknown Agent")))
+            (make-directory dir t)
+            (write-region
+             (format "# Agent Shell Transcript
 
 **Agent:** %s
 **Started:** %s
@@ -4121,20 +4521,19 @@ Returns the path to the transcript file, or nil if disabled."
 ---
 
 "
-                   agent-name
-                   (format-time-string "%F %T")
-                   (agent-shell-cwd))
-           nil filepath nil 'no-message)
-          (message "Created %s"
-                   (agent-shell--shorten-paths filepath t))
-          filepath)
-      (error
-       (message "Failed to initialize transcript: %S" err)
-       nil))))
+                     agent-name
+                     (format-time-string "%F %T")
+                     (agent-shell-cwd))
+             nil filepath nil 'no-message)
+            (message "Created %s"
+                     (agent-shell--shorten-paths filepath t)))
+        (error
+         (message "Failed to initialize transcript: %S" err))))
+    filepath))
 
 (cl-defun agent-shell--append-transcript (&key text file-path)
   "Append TEXT to the transcript at FILE-PATH."
-  (when (and file-path (file-exists-p file-path))
+  (when (and file-path (agent-shell--ensure-transcript-file))
     (condition-case err
         (write-region text nil file-path t 'no-message)
       (error

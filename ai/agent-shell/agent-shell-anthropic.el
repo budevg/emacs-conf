@@ -33,6 +33,7 @@
 (declare-function agent-shell--indent-string "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
+(autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
 (cl-defun agent-shell-anthropic-make-authentication (&key api-key login)
@@ -117,6 +118,7 @@ Example usage to set a custom Anthropic API base URL:
 
 Returns an agent configuration alist using `agent-shell-make-agent-config'."
   (agent-shell-make-agent-config
+   :identifier 'claude-code
    :mode-line-name "Claude Code"
    :buffer-name "Claude Code"
    :shell-prompt "Claude Code> "

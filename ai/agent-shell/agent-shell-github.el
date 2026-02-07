@@ -32,6 +32,7 @@
 
 (declare-function agent-shell--indent-string "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
+(autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
@@ -57,6 +58,7 @@ starting the GitHub Copilot agent process."
 
 Returns an agent configuration alist using `agent-shell-make-agent-config'."
   (agent-shell-make-agent-config
+   :identifier 'copilot
    :mode-line-name "Copilot"
    :buffer-name "Copilot"
    :shell-prompt "Copilot> "

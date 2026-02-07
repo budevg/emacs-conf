@@ -4,7 +4,7 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/shell-maker
-;; Version: 0.84.7
+;; Version: 0.84.9
 ;; Package-Requires: ((emacs "27.1"))
 
 ;; This package is free software; you can redistribute it and/or modify
@@ -32,7 +32,7 @@
 
 ;;; Code:
 
-(defconst shell-maker-version "0.84.7")
+(defconst shell-maker-version "0.84.9")
 
 (require 'comint)
 (require 'goto-addr)
@@ -208,6 +208,7 @@ Set MODE-LINE-NAME to override the mode line name."
         `(define-derived-mode ,(shell-maker-major-mode config) comint-mode
            ,(or mode-line-name (shell-maker-config-name config))
            ,(format "Major mode for %s shell." (shell-maker-config-name config))
+           (keymap-set shell-maker-mode-map "<remap> <comint-delchar-or-maybe-eof>" #'delete-char)
            (keymap-set shell-maker-mode-map "<remap> <comint-send-input>" #'shell-maker-submit)
            (keymap-set shell-maker-mode-map "<remap> <comint-interrupt-subjob>" #'shell-maker-interrupt)
            (keymap-set shell-maker-mode-map "<remap> <comint-history-isearch-backward-regexp>" #'shell-maker-search-history))))

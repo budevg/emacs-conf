@@ -33,6 +33,7 @@
 (declare-function agent-shell--indent-string "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
+(autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
 (cl-defun agent-shell-openai-make-authentication (&key api-key codex-api-key login)
@@ -111,6 +112,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
   (when (and (boundp 'agent-shell-openai-key) agent-shell-openai-key)
     (user-error "Please migrate to use agent-shell-openai-authentication and eval (setq agent-shell-openai-key nil)"))
   (agent-shell-make-agent-config
+   :identifier 'codex
    :mode-line-name "Codex"
    :buffer-name "Codex"
    :shell-prompt "Codex> "

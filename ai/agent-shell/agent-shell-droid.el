@@ -33,6 +33,7 @@
 
 (declare-function agent-shell--indent-string "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
+(autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
@@ -101,6 +102,7 @@ Example usage to set custom environment variables:
 
 Returns an agent configuration alist using `agent-shell-make-agent-config'."
   (agent-shell-make-agent-config
+   :identifier 'droid
    :mode-line-name "Droid"
    :buffer-name "Droid"
    :shell-prompt "Droid> "

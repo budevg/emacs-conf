@@ -61,6 +61,7 @@
 (declare-function agent-shell-ui-backward-block "agent-shell")
 (declare-function agent-shell-ui-forward-block "agent-shell")
 (declare-function agent-shell-ui-mode "agent-shell")
+(declare-function agent-shell-completion-mode "agent-shell-completion")
 
 (defvar agent-shell-header-style)
 (defvar agent-shell-prefer-viewport-interaction)
@@ -89,9 +90,9 @@ Returns an alist with insertion details or nil otherwise:
     (let ((current (current-buffer)))
       (pop-to-buffer-same-window shell-buffer)
       (pop-to-buffer-same-window current)))
-  (when-let ((shell-buffer (or shell-buffer (agent-shell--shell-buffer)))
-             (viewport-buffer (agent-shell-viewport--buffer :shell-buffer shell-buffer))
-             (text (or text (agent-shell--context) "")))
+  (when-let* ((shell-buffer (or shell-buffer (agent-shell--shell-buffer)))
+              (viewport-buffer (agent-shell-viewport--buffer :shell-buffer shell-buffer))
+              (text (or text (agent-shell--context :shell-buffer shell-buffer) "")))
     (let ((insert-start nil)
           (insert-end nil))
       ;; Is there text to be inserted? Reject while busy.
@@ -114,8 +115,13 @@ Returns an alist with insertion details or nil otherwise:
                   (insert "\n\n" text))
                 (setq insert-end (point))))
           (agent-shell-viewport-edit-mode)
-          ;; Transitioned to edit mode. Start empty.
+          ;; Transitioned to edit mode. Wipe content.
           (agent-shell-viewport--initialize)
+          ;; Restore snapshot if needed.
+          (when-let ((snapshot agent-shell-viewport--compose-snapshot))
+            (insert (map-elt snapshot :content))
+            (goto-char (map-elt snapshot :location))
+            (setq agent-shell-viewport--compose-snapshot nil))
           (save-excursion
             (goto-char (point-max))
             (setq insert-start (point))
@@ -131,6 +137,7 @@ Returns an alist with insertion details or nil otherwise:
   (interactive)
   (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
     (user-error "Not in a shell viewport buffer"))
+  (setq agent-shell-viewport--compose-snapshot nil)
   (if agent-shell-prefer-viewport-interaction
       (agent-shell-viewport-compose-send-and-wait-for-response)
     (agent-shell-viewport-compose-send-and-kill)))
@@ -140,7 +147,7 @@ Returns an alist with insertion details or nil otherwise:
   (interactive)
   (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
     (user-error "Not in a shell viewport buffer"))
-  (let ((shell-buffer (agent-shell--shell-buffer))
+  (let ((shell-buffer (agent-shell-viewport--shell-buffer))
         (viewport-buffer (current-buffer))
         (prompt (buffer-string)))
     (with-current-buffer shell-buffer
@@ -156,8 +163,8 @@ Returns an alist with insertion details or nil otherwise:
   (catch 'exit
     (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
       (user-error "Not in a shell viewport buffer"))
-    (let ((shell-buffer (agent-shell--shell-buffer))
-          (viewport-buffer (agent-shell-viewport--buffer))
+    (let ((shell-buffer (agent-shell-viewport--shell-buffer))
+          (viewport-buffer (current-buffer))
           (prompt (string-trim (buffer-string))))
       (when (agent-shell-viewport--busy-p)
         (unless (y-or-n-p "Interrupt?")
@@ -185,6 +192,7 @@ Returns an alist with insertion details or nil otherwise:
           (agent-shell-viewport-edit-mode)
           (agent-shell-viewport--initialize))
         (agent-shell--insert-to-shell-buffer
+         :shell-buffer (agent-shell-viewport--shell-buffer)
          :text prompt
          :submit t
          :no-focus t)
@@ -197,7 +205,7 @@ Returns an alist with insertion details or nil otherwise:
   (interactive)
   (agent-shell-viewport--ensure-buffer)
   (catch 'exit
-    (let ((shell-buffer (agent-shell--shell-buffer)))
+    (let ((shell-buffer (agent-shell-viewport--shell-buffer)))
       (unless (agent-shell-viewport--busy-p)
         (user-error "No pending request"))
       (unless (y-or-n-p "Interrupt?")
@@ -217,7 +225,7 @@ Optionally set its PROMPT and RESPONSE."
   (let ((inhibit-read-only t)
         (viewport-buffer (current-buffer)))
     (erase-buffer)
-    (when-let ((shell-buffer (agent-shell--shell-buffer)))
+    (when-let ((shell-buffer (agent-shell-viewport--shell-buffer)))
       (with-current-buffer shell-buffer
         (unless (eq agent-shell-header-style 'graphical)
           ;; Insert read-only newline at the point-min
@@ -299,20 +307,40 @@ Optionally set its PROMPT and RESPONSE."
   "Cancel prompt composition."
   (interactive)
   (agent-shell-viewport--ensure-buffer)
-  (if (or (derived-mode-p 'agent-shell-viewport-view-mode)
-          (with-current-buffer (agent-shell--shell-buffer)
-            (not (shell-maker-history))))
-      (bury-buffer)
-    ;; Edit mode
-    (when (or (string-empty-p (string-trim (buffer-string)))
-              (y-or-n-p "Discard composed prompt? "))
-      (agent-shell-viewport-view-last))))
+  (setq agent-shell-viewport--compose-snapshot nil)
+  (let ((viewport-buffer (current-buffer))
+        (shell-buffer (agent-shell-viewport--shell-buffer)))
+    ;; View mode
+    (if (or (derived-mode-p 'agent-shell-viewport-view-mode)
+            (with-current-buffer shell-buffer
+              (not (shell-maker-history))))
+        (bury-buffer)
+      ;; Edit mode
+      (when (or (string-empty-p (string-trim (buffer-string)))
+                (y-or-n-p "Discard composed prompt? "))
+        (if agent-shell-prefer-viewport-interaction
+            (agent-shell-viewport-view-last)
+          (agent-shell-other-buffer)
+          (kill-buffer viewport-buffer))))))
+
+(defun agent-shell-viewport-compose-peek-last ()
+  "Save compose buffer snapshot and peek at the last interaction."
+  (interactive)
+  (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
+    (user-error "Not in a prompt compose buffer"))
+  (unless (with-current-buffer (agent-shell-viewport--shell-buffer)
+            (shell-maker-history))
+    (user-error "No items in history"))
+  (setq agent-shell-viewport--compose-snapshot
+        `((:content . ,(buffer-string))
+          (:location . ,(point))))
+  (agent-shell-viewport-view-last))
 
 (defun agent-shell-viewport-view-last ()
   "Display the last request/response interaction."
   (interactive)
   (agent-shell-viewport--ensure-buffer)
-  (when-let ((shell-buffer (agent-shell--shell-buffer)))
+  (when-let ((shell-buffer (agent-shell-viewport--shell-buffer)))
     (with-current-buffer shell-buffer
       (goto-char comint-last-input-start)))
   (agent-shell-viewport-view-mode)
@@ -322,8 +350,8 @@ Optionally set its PROMPT and RESPONSE."
   "Refresh viewport buffer content with current item from shell."
   (interactive)
   (agent-shell-viewport--ensure-buffer)
-  (when-let ((shell-buffer (agent-shell--shell-buffer))
-             (viewport-buffer (agent-shell-viewport--buffer))
+  (when-let ((shell-buffer (agent-shell-viewport--shell-buffer))
+             (viewport-buffer (current-buffer))
              (current (with-current-buffer shell-buffer
                         (or (shell-maker--command-and-response-at-point)
                             (shell-maker-next-command-and-response t)))))
@@ -419,8 +447,8 @@ With EXISTING-ONLY, only return existing buffers without creating."
   (when-let ((shell-buffer (or shell-buffer
                                (agent-shell--shell-buffer))))
     (with-current-buffer shell-buffer
-      (let* ((viewport-buffer-name (concat (buffer-name shell-buffer)
-                                          " [viewport]"))
+      (let* ((viewport-buffer-name (concat (buffer-name (get-buffer shell-buffer))
+                                           agent-shell-viewport--suffix))
              (viewport-buffer (get-buffer viewport-buffer-name)))
         (if viewport-buffer
             viewport-buffer
@@ -433,7 +461,7 @@ With EXISTING-ONLY, only return existing buffers without creating."
 (defun agent-shell-viewport-reply ()
   "Reply as a follow-up and compose another prompt/query."
   (interactive)
-  (unless (derived-mode-p 'agent-shell-viewport-edit-mode)
+  (unless (derived-mode-p 'agent-shell-viewport-view-mode)
     (user-error "Not in a shell viewport buffer"))
   (when (agent-shell-viewport--busy-p)
     (user-error "Busy, please wait"))
@@ -445,15 +473,20 @@ With EXISTING-ONLY, only return existing buffers without creating."
                                           (split-string region "\n")
                                           "\n")
                                "\n\n"))))
-    (with-current-buffer (agent-shell--shell-buffer)
+    (with-current-buffer (agent-shell-viewport--shell-buffer)
       (goto-char (point-max)))
-    (agent-shell-viewport-edit-mode)
-    (if block-quoted-text
-        (progn
-          (agent-shell-viewport--initialize :prompt block-quoted-text)
-          (goto-char (point-max)))
+    (let ((snapshot agent-shell-viewport--compose-snapshot))
+      (agent-shell-viewport-edit-mode)
       (agent-shell-viewport--initialize)
-      (goto-char (point-min)))
+      (when snapshot
+        (insert (map-elt snapshot :content))
+        (setq agent-shell-viewport--compose-snapshot nil))
+      (when block-quoted-text
+        (goto-char (point-max))
+        (insert (if snapshot "\n\n" "") block-quoted-text))
+      (goto-char (if (or snapshot block-quoted-text)
+                     (point-max)
+                   (point-min))))
     ;; Setting point isn't enough at times. Force scrolling.
     (set-window-start (selected-window) (point-min))))
 
@@ -466,34 +499,49 @@ With EXISTING-ONLY, only return existing buffers without creating."
   "Show next interaction (request / response).
 
 If BACKWARDS is non-nil, go to previous interaction.
-If START-AT-TOP is non-nil, position at point-min regardless of direction."
+If START-AT-TOP is non-nil, position at point-min regardless of direction.
+
+If there are no more next items and a compose snapshot exists, restore the
+buffer from the snapshot and switch to edit mode."
   (interactive)
   (unless (derived-mode-p 'agent-shell-viewport-view-mode)
     (error "Not in a viewport buffer"))
   (when (agent-shell-viewport--busy-p)
     (user-error "Busy... please wait"))
-  (when-let ((shell-buffer (agent-shell--shell-buffer))
-             (viewport-buffer (agent-shell-viewport--buffer))
-             (next (with-current-buffer shell-buffer
-                     (if backwards
-                         (when (save-excursion
-                                 (let ((orig-line (line-number-at-pos)))
-                                   (comint-previous-prompt 1)
-                                   (= orig-line (line-number-at-pos))))
-                           (error "No previous page"))
-                       (when (save-excursion
-                               (let ((orig-line (point)))
-                                 (comint-next-prompt 1)
-                                 (= orig-line (point))))
-                         (error "No next page")))
-                     (shell-maker-next-command-and-response backwards))))
-    (agent-shell-viewport--initialize
-     :prompt (car next) :response (cdr next))
-    (goto-char (if start-at-top
-                   (point-min)
-                 (if backwards (point-max) (point-min))))
-    (agent-shell-viewport--update-header)
-    next))
+  (let ((shell-buffer (agent-shell-viewport--shell-buffer))
+        (viewport-buffer (current-buffer))
+        (snapshot agent-shell-viewport--compose-snapshot)
+        (pos (agent-shell-viewport--position :force-refresh t)))
+    ;; Check if at last position going forward with a snapshot to restore
+    (if (and (not backwards) snapshot pos
+             (= (car pos) (cdr pos)))
+        (progn
+          (agent-shell-viewport-edit-mode)
+          (agent-shell-viewport--initialize)
+          (insert (map-elt snapshot :content))
+          (goto-char (map-elt snapshot :location))
+          (setq agent-shell-viewport--compose-snapshot nil)
+          (cl-return-from agent-shell-viewport-next-page))
+      (when-let ((next (with-current-buffer shell-buffer
+                         (if backwards
+                             (when (save-excursion
+                                     (let ((orig-line (line-number-at-pos)))
+                                       (comint-previous-prompt 1)
+                                       (= orig-line (line-number-at-pos))))
+                               (error "No previous page"))
+                           (when (save-excursion
+                                   (let ((orig-line (point)))
+                                     (comint-next-prompt 1)
+                                     (= orig-line (point))))
+                             (error "No next page")))
+                         (shell-maker-next-command-and-response backwards))))
+        (agent-shell-viewport--initialize
+         :prompt (car next) :response (cdr next))
+        (goto-char (if start-at-top
+                       (point-min)
+                     (if backwards (point-max) (point-min))))
+        (agent-shell-viewport--update-header)
+        next))))
 
 (defun agent-shell-viewport-set-session-model ()
   "Set session model."
@@ -549,7 +597,7 @@ When FORCE-REFRESH is non-nil, recalculate and update cache."
   (agent-shell-viewport--ensure-buffer)
   (if (and (not force-refresh) agent-shell-viewport--position-cache)
       agent-shell-viewport--position-cache
-    (let* ((shell-buffer (agent-shell--shell-buffer))
+    (let* ((shell-buffer (agent-shell-viewport--shell-buffer))
            (current (with-current-buffer shell-buffer
                       (shell-maker--command-and-response-at-point)))
            (history (with-current-buffer shell-buffer
@@ -598,7 +646,11 @@ Automatically determines qualifier and bindings based on current major mode."
                       `((:key . ,(key-description (where-is-internal
                                                    'agent-shell-viewport-compose-cancel
                                                    agent-shell-viewport-edit-mode-map t)))
-                        (:description . "cancel"))))
+                        (:description . "cancel"))
+                      `((:key . ,(key-description (where-is-internal
+                                                   'agent-shell-viewport-compose-peek-last
+                                                   agent-shell-viewport-edit-mode-map t)))
+                        (:description . "previous page"))))
                     ((derived-mode-p 'agent-shell-viewport-view-mode)
                      (append
                       (list
@@ -622,7 +674,7 @@ Automatically determines qualifier and bindings based on current major mode."
                                                       'agent-shell-viewport-interrupt
                                                       agent-shell-viewport-view-mode-map t)))
                            (:description . "interrupt")))))))))
-    (when-let* ((shell-buffer (agent-shell--shell-buffer))
+    (when-let* ((shell-buffer (agent-shell-viewport--shell-buffer))
                 (header (with-current-buffer shell-buffer
                           (cond
                            ((eq agent-shell-header-style 'graphical)
@@ -637,9 +689,30 @@ Automatically determines qualifier and bindings based on current major mode."
 
 (defvar-local agent-shell-viewport--clean-up t)
 
+(defconst agent-shell-viewport--suffix " [viewport]"
+  "Suffix appended to shell buffer name to create viewport buffer name.")
+
+(cl-defun agent-shell-viewport--shell-buffer (&optional viewport-buffer)
+  "Get the shell buffer associated with VIEWPORT-BUFFER.
+
+Derives shell buffer name by removing the viewport suffix from buffer name.
+Returns nil if VIEWPORT-BUFFER is not a viewport buffer or shell doesn't exist."
+  (when-let* ((viewport-name (buffer-name (or viewport-buffer (current-buffer))))
+              ((string-suffix-p agent-shell-viewport--suffix viewport-name))
+              (shell-name (substring viewport-name 0
+                                     (- (length viewport-name)
+                                        (length agent-shell-viewport--suffix)))))
+    (get-buffer shell-name)))
+
 ;; Continuously fetching position can get expensive. Cache it.
 (defvar-local agent-shell-viewport--position-cache nil
   "Cached position value (CURRENT . TOTAL).")
+
+(defvar-local agent-shell-viewport--compose-snapshot nil
+  "Alist with :content and :location from compose buffer before viewing history.")
+;; The viewport buffer transitions between major modes which clears
+;; buffer-local vars. Make snapshot permanent-local.
+(put 'agent-shell-viewport--compose-snapshot 'permanent-local t)
 
 (defun agent-shell-viewport--clean-up ()
   "Clean up resources.
@@ -668,6 +741,7 @@ For example, offer to kill associated shell session."
 (defvar agent-shell-viewport-edit-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-c") #'agent-shell-viewport-compose-send)
+    (define-key map (kbd "C-c C-p") #'agent-shell-viewport-compose-peek-last)
     (define-key map (kbd "C-c C-k") #'agent-shell-viewport-compose-cancel)
     (define-key map (kbd "C-<tab>") #'agent-shell-viewport-cycle-session-mode)
     (define-key map (kbd "C-c C-m") #'agent-shell-viewport-set-session-mode)
@@ -682,6 +756,8 @@ For example, offer to kill associated shell session."
 \\{agent-shell-viewport-edit-mode-map}"
   (cursor-intangible-mode +1)
   (setq buffer-read-only nil)
+  (when agent-shell-file-completion-enabled
+    (agent-shell-completion-mode +1))
   (agent-shell-viewport--update-header)
   (let ((inhibit-read-only t))
     (erase-buffer))
@@ -690,10 +766,10 @@ For example, offer to kill associated shell session."
 (defvar agent-shell-viewport-view-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-c") #'agent-shell-viewport-interrupt)
-    (define-key map (kbd "n") #'agent-shell-viewport-next-item)
-    (define-key map (kbd "p") #'agent-shell-viewport-previous-item)
     (define-key map (kbd "TAB") #'agent-shell-viewport-next-item)
     (define-key map (kbd "<backtab>") #'agent-shell-viewport-previous-item)
+    (define-key map (kbd "n") #'agent-shell-viewport-next-item)
+    (define-key map (kbd "p") #'agent-shell-viewport-previous-item)
     (define-key map (kbd "f") #'agent-shell-viewport-next-page)
     (define-key map (kbd "b") #'agent-shell-viewport-previous-page)
     (define-key map (kbd "r") #'agent-shell-viewport-reply)

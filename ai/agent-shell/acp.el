@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/acp.el
-;; Version: 0.8.2
+;; Version: 0.9.1
 ;; Package-Requires: ((emacs "28.1"))
 
-(defconst acp-package-version "0.8.2")
+(defconst acp-package-version "0.9.1")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -375,13 +375,18 @@ SYNC: When non-nil, send request synchronously."
   (unless response
     (error ":response is required"))
   (let* ((request-id (map-elt response :request-id))
-         (result-data (map-elt response :result)))
+         (result-data (map-elt response :result))
+         (error-data (map-elt response :error)))
     (map-put! client :request-id (or request-id
                                      (1+ (map-elt client :request-id))))
     (let* ((proc (map-elt client :process))
-           (response `((jsonrpc . ,acp--jsonrpc-version)
-                       (id . ,request-id)
-                       (result . ,result-data))))
+           (response (if error-data
+                         `((jsonrpc . ,acp--jsonrpc-version)
+                           (id . ,request-id)
+                           (error . ,error-data))
+                       `((jsonrpc . ,acp--jsonrpc-version)
+                         (id . ,request-id)
+                         (result . ,result-data)))))
       (let ((json (acp--serialize-json response)))
         (acp--log-traffic client 'outgoing 'response (acp--make-message :object response :json json))
         (process-send-string proc json)))))
@@ -420,11 +425,14 @@ When non-nil SYNC, send notification synchronously."
         result))))
 
 (cl-defun acp-make-initialize-request (&key protocol-version
+                                            client-info
                                             read-text-file-capability
                                             write-text-file-capability)
   "Instantiate an \"initialize\" request.
 
 PROTOCOL-VERSION is the version of the ACP protocol to use.
+CLIENT-INFO is an optional alist with client information containing
+keys like `name', `title', and `version'.
 READ-TEXT-FILE-CAPABILITY is a boolean indicating if the client
 can read text files.
 WRITE-TEXT-FILE-CAPABILITY is a boolean indicating if the client
@@ -435,7 +443,9 @@ and https://agentclientprotocol.com/protocol/schema#initializeresponse."
   (unless protocol-version
     (error ":protocol-version is required"))
   `((:method . "initialize")
-    (:params . ((protocolVersion . ,protocol-version)
+    (:params . (,@(when client-info
+                    `((clientInfo . ,client-info)))
+                (protocolVersion . ,protocol-version)
                 (clientCapabilities . ((fs . ((readTextFile . ,(if read-text-file-capability
                                                                    t
                                                                  :false))

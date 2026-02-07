@@ -86,9 +86,15 @@ Objective-C -> (\"objective-c\" . \"objc\")"
 (defun markdown-overlays-put ()
   "Put all Markdown overlays."
   (let* ((source-blocks (markdown-overlays--source-blocks))
-         (avoid-ranges (seq-map (lambda (block)
+         (source-block-ranges (seq-map (lambda (block)
                                   (map-elt block 'body))
-                                source-blocks)))
+                                source-blocks))
+         (inline-codes (markdown-overlays--markdown-inline-codes source-block-ranges))
+         (inline-code-ranges (seq-map (lambda (inline)
+                                        (map-elt inline 'body))
+                                      inline-codes))
+         (avoid-ranges (append inline-code-ranges
+                               source-block-ranges)))
     (markdown-overlays-remove)
     (dolist (block source-blocks)
       (markdown-overlays--fontify-source-block
@@ -140,7 +146,7 @@ Objective-C -> (\"objective-c\" . \"objc\")"
        (map-elt strikethrough 'end)
        (car (map-elt strikethrough 'text))
        (cdr (map-elt strikethrough 'text))))
-    (dolist (inline-code (markdown-overlays--markdown-inline-codes avoid-ranges))
+    (dolist (inline-code inline-codes)
       (markdown-overlays--fontify-inline-code
        (car (map-elt inline-code 'body))
        (cdr (map-elt inline-code 'body))))

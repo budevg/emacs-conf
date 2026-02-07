@@ -34,6 +34,7 @@
 (declare-function agent-shell--interpolate-gradient "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
+(autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
 (cl-defun agent-shell-google-make-authentication (&key api-key login vertex-ai none)
@@ -87,9 +88,7 @@ For no authentication (when using alternative authentication methods):
   :group 'agent-shell)
 
 (defcustom agent-shell-google-gemini-command
-  '("gemini" "--experimental-acp"
-    "--allowed-tools" "run_shell_command" "list_directory"
-    "read_many_files" "web_fetch" "google_web_search")
+  '("gemini" "--experimental-acp")
   "Command and parameters for the Gemini client.
 
 The first element is the command name, and the rest are command parameters."
@@ -119,6 +118,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
   (when (and (boundp 'agent-shell-google-key) agent-shell-google-key)
     (user-error "Please migrate to use agent-shell-google-authentication and eval (setq agent-shell-google-key nil)"))
   (agent-shell-make-agent-config
+   :identifier 'gemini-cli
    :mode-line-name "Gemini CLI"
    :buffer-name "Gemini CLI"
    :shell-prompt "Gemini> "

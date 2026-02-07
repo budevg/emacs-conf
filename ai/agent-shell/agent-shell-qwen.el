@@ -34,6 +34,7 @@
 (declare-function agent-shell--interpolate-gradient "agent-shell")
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell-make-agent-config "agent-shell")
+(autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
 (cl-defun agent-shell-qwen-make-authentication (&key login none)
@@ -96,6 +97,7 @@ Example usage to set custom environment variables:
 
 Returns an agent configuration alist using `agent-shell-make-agent-config'."
   (agent-shell-make-agent-config
+   :identifier 'qwen-code
    :mode-line-name "Qwen Code"
    :buffer-name "Qwen Code"
    :shell-prompt "qwen> "
