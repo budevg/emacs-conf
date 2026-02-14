@@ -14,10 +14,10 @@
 (use-package format-all
   :bind (("C-c p" . format-all-region-or-buffer))
   :config
-  (setq format-all-formatters
-        '(("Python" black)
-          ("Go" goimports)
-          ("Haskell" fourmolu)
-          ("C++" clang-format)
-          ("C" clang-format)
-          )))
+  (setq-default format-all-formatters
+                '(("Python" black)
+                  ("Go" goimports)
+                  ("Haskell" fourmolu)
+                  ("C++" clang-format)
+                  ("C" clang-format)
+                  )))
