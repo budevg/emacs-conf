@@ -70,7 +70,7 @@ For no authentication (when using alternative authentication methods):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-goose-command
+(defcustom agent-shell-goose-acp-command
   '("goose" "acp")
   "Command and parameters for the Goose client.
 
@@ -122,9 +122,11 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 Uses `agent-shell-goose-authentication' for authentication configuration."
   (unless buffer
     (error "Missing required argument: :buffer"))
+  (when (and (boundp 'agent-shell-goose-command) agent-shell-goose-command)
+    (user-error "Please migrate to use agent-shell-goose-acp-command and eval (setq agent-shell-goose-command nil)"))
   (let ((api-key (agent-shell-goose-key)))
-    (agent-shell--make-acp-client :command (car agent-shell-goose-command)
-                                  :command-params (cdr agent-shell-goose-command)
+    (agent-shell--make-acp-client :command (car agent-shell-goose-acp-command)
+                                  :command-params (cdr agent-shell-goose-acp-command)
                                   :environment-variables (append (cond ((map-elt agent-shell-goose-authentication :none)
                                                                         nil)
                                                                        (api-key

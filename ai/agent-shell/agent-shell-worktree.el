@@ -31,9 +31,7 @@
 (require 'subr-x)
 
 (declare-function agent-shell "agent-shell")
-
-;; Worktree subdirectory within project's .agent-shell folder
-(defconst agent-shell-worktree--subdirectory ".agent-shell/worktrees")
+(declare-function agent-shell--dot-subdir "agent-shell")
 
 ;; Word lists for generating random worktree names (Docker-style naming)
 (defconst agent-shell-worktree--adjectives
@@ -117,18 +115,14 @@ The user is prompted to confirm or edit the worktree path before creation."
   (interactive)
   (unless (agent-shell-worktree--git-repo-root)
     (user-error "Not in a git repository"))
-  (let* ((repo-root (agent-shell-worktree--git-repo-root))
+  (let* ((worktrees-dir (agent-shell--dot-subdir "worktrees"))
          (worktree-name (agent-shell-worktree--generate-name))
-         (default-path (file-name-concat
-                        repo-root
-                        agent-shell-worktree--subdirectory
-                        worktree-name))
+         (default-path (file-name-concat worktrees-dir worktree-name))
          (worktree-path (expand-file-name (read-directory-name
                                            "Worktree directory: "
                                            default-path))))
     (when (file-exists-p worktree-path)
       (user-error "Directory already exists: %s" worktree-path))
-    ;; Create parent directory if needed
     (make-directory (file-name-directory worktree-path) t)
     ;; Create the worktree
     (let ((output (shell-command-to-string
@@ -137,7 +131,7 @@ The user is prompted to confirm or edit the worktree path before creation."
       (unless (file-exists-p worktree-path)
         (user-error "Failed to create worktree: %s" output))
       (let ((default-directory worktree-path))
-        (agent-shell t)))))
+        (agent-shell '(4))))))
 
 (provide 'agent-shell-worktree)
 

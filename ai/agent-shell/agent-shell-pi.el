@@ -41,7 +41,7 @@
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
-(defcustom agent-shell-pi-command
+(defcustom agent-shell-pi-acp-command
   '("pi-acp")
   "Command and parameters for the Pi ACP client.
 
@@ -96,8 +96,10 @@ Pi uses OAuth login via the `/login' command, so no API key
 environment variables are required by default."
   (unless buffer
     (error "Missing required argument: :buffer"))
-  (agent-shell--make-acp-client :command (car agent-shell-pi-command)
-                                :command-params (cdr agent-shell-pi-command)
+  (when (and (boundp 'agent-shell-pi-command) agent-shell-pi-command)
+    (user-error "Please migrate to use agent-shell-pi-acp-command and eval (setq agent-shell-pi-command nil)"))
+  (agent-shell--make-acp-client :command (car agent-shell-pi-acp-command)
+                                :command-params (cdr agent-shell-pi-acp-command)
                                 :environment-variables agent-shell-pi-environment
                                 :context-buffer buffer))
 

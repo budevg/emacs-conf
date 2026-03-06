@@ -81,7 +81,7 @@ For Codex API key (function):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-openai-codex-command
+(defcustom agent-shell-openai-codex-acp-command
   '("codex-acp")
   "Command and parameters for the OpenAI Codex client.
 
@@ -143,13 +143,15 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 Uses `agent-shell-openai-authentication' for authentication configuration."
   (unless buffer
     (error "Missing required argument: :buffer"))
+  (when (and (boundp 'agent-shell-openai-codex-command) agent-shell-openai-codex-command)
+    (user-error "Please migrate to use agent-shell-openai-codex-acp-command and eval (setq agent-shell-openai-codex-command nil)"))
   (cond
    ((map-elt agent-shell-openai-authentication :api-key)
     (let ((api-key (agent-shell-openai-key)))
       (unless api-key
         (user-error "Please set your `agent-shell-openai-authentication'"))
-      (agent-shell--make-acp-client :command (car agent-shell-openai-codex-command)
-                                    :command-params (cdr agent-shell-openai-codex-command)
+      (agent-shell--make-acp-client :command (car agent-shell-openai-codex-acp-command)
+                                    :command-params (cdr agent-shell-openai-codex-acp-command)
                                     :environment-variables (append (list (format "OPENAI_API_KEY=%s" api-key))
                                                                    agent-shell-openai-codex-environment)
                                     :context-buffer buffer)))
@@ -157,14 +159,14 @@ Uses `agent-shell-openai-authentication' for authentication configuration."
     (let ((codex-key (agent-shell-openai-key)))
       (unless codex-key
         (user-error "Please set your `agent-shell-openai-authentication'"))
-      (agent-shell--make-acp-client :command (car agent-shell-openai-codex-command)
-                                    :command-params (cdr agent-shell-openai-codex-command)
+      (agent-shell--make-acp-client :command (car agent-shell-openai-codex-acp-command)
+                                    :command-params (cdr agent-shell-openai-codex-acp-command)
                                     :environment-variables (append (list (format "CODEX_API_KEY=%s" codex-key))
                                                                    agent-shell-openai-codex-environment)
                                     :context-buffer buffer)))
    ((map-elt agent-shell-openai-authentication :login)
-    (agent-shell--make-acp-client :command (car agent-shell-openai-codex-command)
-                                  :command-params (cdr agent-shell-openai-codex-command)
+    (agent-shell--make-acp-client :command (car agent-shell-openai-codex-acp-command)
+                                  :command-params (cdr agent-shell-openai-codex-acp-command)
                                   :environment-variables (append '("OPENAI_API_KEY=")
                                                                  agent-shell-openai-codex-environment)
                                   :context-buffer buffer))

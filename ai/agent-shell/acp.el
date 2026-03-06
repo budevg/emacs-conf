@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/acp.el
-;; Version: 0.9.1
+;; Version: 0.11.1
 ;; Package-Requires: ((emacs "28.1"))
 
-(defconst acp-package-version "0.9.1")
+(defconst acp-package-version "0.11.1")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@
 
 (cl-defun acp-make-client (&key context-buffer command command-params environment-variables
                                 request-sender notification-sender request-resolver
-                                response-sender)
+                                response-sender outgoing-request-decorator)
   "Create an ACP client.
 
 This returns a alist representing the client.
@@ -68,7 +68,13 @@ COMMAND-PARAMS is a list of strings for command arguments.
 ENVIRONMENT-VARIABLES is a list of strings in the form \"VAR=foo\".
 
 REQUEST-SENDER, NOTIFICATION-SENDER, REQUEST-RESOLVER, and RESPONSE-SENDER are
-functions for advanced customization or testing."
+functions for advanced customization or testing.
+
+OUTGOING-REQUEST-DECORATOR is an optional function of the form
+\(lambda (request) ...) that receives the JSON-RPC request object
+before it is sent and returns a (possibly modified) request.
+If the decorator returns nil, the original request is sent and
+the error is logged."
   (unless command
     (error ":command is required"))
   (list (cons :context-buffer context-buffer)
@@ -85,7 +91,8 @@ functions for advanced customization or testing."
         (cons :request-sender (or request-sender #'acp--request-sender))
         (cons :notification-sender (or notification-sender #'acp--notification-sender))
         (cons :request-resolver (or request-resolver #'acp--request-resolver))
-        (cons :response-sender (or response-sender #'acp--response-sender))))
+        (cons :response-sender (or response-sender #'acp--response-sender))
+        (cons :outgoing-request-decorator outgoing-request-decorator)))
 
 (defun acp--client-started-p (client)
   "Return non-nil if CLIENT process has been started."
@@ -155,7 +162,16 @@ functions for advanced customization or testing."
                                         (run-at-time 0 nil
                                                      (lambda ()
                                                        (while message-queue
-                                                         (let ((message (car message-queue)))
+                                                         ;; Bind print variables so the debugger
+                                                         ;; can safely print the client alist
+                                                         ;; without infinite recursion (#360).
+                                                         (let ((message (car message-queue))
+                                                               ;; Handle circular refs in client alist.
+                                                               (print-circle t)
+                                                               ;; Cap nesting depth.
+                                                               (print-level 25)
+                                                               ;; Cap list elements printed.
+                                                               (print-length 200))
                                                            (setq message-queue (cdr message-queue))
                                                            (acp--route-incoming-message
                                                             :message message
@@ -320,6 +336,12 @@ SYNC: When non-nil, send request synchronously."
     (error ":request is required"))
   (unless (acp--client-started-p client)
     (acp--start-client :client client))
+  (when-let ((decorator (map-elt client :outgoing-request-decorator)))
+    (if-let ((decorated (funcall decorator request)))
+        (setq request decorated)
+      (acp--log client "DECORATOR ERROR"
+                "Outgoing request decorator returned nil for \"%s\", sending original request"
+                (map-elt request :method))))
   (let* ((method (map-elt request :method))
          (params (map-elt request :params))
          (proc (map-elt client :process))
@@ -466,19 +488,26 @@ See https://agentclientprotocol.com/protocol/schema#authenticaterequest."
                         (when method
                           `((authMethod . ,method)))))))
 
-(cl-defun acp-make-session-new-request (&key cwd mcp-servers)
+(cl-defun acp-make-session-new-request (&key cwd mcp-servers meta)
   "Instantiate a \"session/new\" request.
 
 CWD is the current working directory for the session.
 MCP-SERVERS is a list of MCP servers to use.
+META is an optional alist of metadata to pass to the agent.
+  Supported keys include:
+  - `systemPrompt': Either a string (replaces default) or
+    an alist with key `append' containing a string to append
+    to the default system prompt.
 
 See https://agentclientprotocol.com/protocol/schema#newsessionrequest
 and https://agentclientprotocol.com/protocol/schema#newsessionresponse."
   (unless cwd
     (error ":cwd is required"))
   `((:method . "session/new")
-    (:params . ((cwd . ,(expand-file-name cwd))
-                (mcpServers . ,(or mcp-servers []))))))
+    ;; directory-file-name removes any trailing /
+    (:params . ((cwd . ,(directory-file-name (expand-file-name cwd)))
+                (mcpServers . ,(or mcp-servers []))
+                ,@(when meta `((_meta . ,meta)))))))
 
 (cl-defun acp-make-session-prompt-request (&key session-id prompt)
   "Instantiate a \"session/prompt\" request.
@@ -528,6 +557,75 @@ See https://docs.claude.com/en/api/agent-sdk/typescript"
   `((:method . "session/set_model")
     (:params . ((sessionId . ,session-id)
                 (modelId . ,model-id)))))
+
+(cl-defun acp-make-session-resume-request (&key session-id cwd mcp-servers)
+  "Instantiate a \"session/resume\" request.
+
+SESSION-ID is the ID of the session to resume.
+CWD is the current working directory for the resumed session.
+MCP-SERVERS is an optional list of MCP servers to use.
+
+This method resumes an existing session without returning previous messages
+\(unlike `session/load').  Only available if the agent advertises the
+`session.resume' capability.
+
+Note: This is an unstable ACP feature.
+
+See https://agentclientprotocol.com/rfds/session-resume."
+  (unless session-id
+    (error ":session-id is required"))
+  (unless cwd
+    (error ":cwd is required"))
+  `((:method . "session/resume")
+    (:params . ((sessionId . ,session-id)
+                ;; directory-file-name removes any trailing /
+                (cwd . ,(directory-file-name (expand-file-name cwd)))
+                (mcpServers . ,(or mcp-servers []))))))
+
+(cl-defun acp-make-session-list-request (&key cwd)
+  "Instantiate a \"session/list\" request.
+
+CWD is the current working directory used to filter sessions.
+
+Note: This is an unstable ACP feature.
+
+See https://agentclientprotocol.com/rfds/session-list."
+  (unless cwd
+    (error ":cwd is required"))
+  `((:method . "session/list")
+    ;; directory-file-name removes any trailing /
+    (:params . ((cwd . ,(directory-file-name (expand-file-name cwd)))))))
+
+(cl-defun acp-make-session-load-request (&key session-id cwd mcp-servers)
+  "Instantiate a \"session/load\" request.
+
+SESSION-ID is the ID of the session to load.
+CWD is the current working directory for the loaded session.
+MCP-SERVERS is an optional list of MCP servers to use.
+
+See https://agentclientprotocol.com/protocol/schema#session-load."
+  (unless session-id
+    (error ":session-id is required"))
+  (unless cwd
+    (error ":cwd is required"))
+  `((:method . "session/load")
+    (:params . ((sessionId . ,session-id)
+                ;; directory-file-name removes any trailing /
+                (cwd . ,(directory-file-name (expand-file-name cwd)))
+                (mcpServers . ,(or mcp-servers []))))))
+
+(cl-defun acp-make-session-delete-request (&key session-id)
+  "Instantiate a \"session/delete\" request.
+
+SESSION-ID is the ID of the session to delete.
+
+Note: This is an unstable ACP feature.
+
+See https://agentclientprotocol.com/rfds/session-delete."
+  (unless session-id
+    (error ":session-id is required"))
+  `((:method . "session/delete")
+    (:params . ((sessionId . ,session-id)))))
 
 (cl-defun acp-make-session-request-permission-response (&key request-id option-id cancelled)
   "Instantiate a \"session/request_permission\" response.
@@ -713,17 +811,59 @@ Returns non-nil if error was parseable."
               (error nil)))
         (error nil)))))
 
-(defun acp--log (client label format-string &rest args)
-  "Log CLIENT message using LABEL, FORMAT-STRING, and ARGS."
+(defun acp--format-log-message (label format-string &rest args)
+  "Return a log message formatted like `acp--log'.
+LABEL, FORMAT-STRING, and ARGS are passed to `format'."
   (unless format-string
     (error ":format-string is required"))
+  (let ((body (apply #'format format-string args)))
+    (if label
+        (format "%s >\n\n%s\n\n" label body)
+      (format "%s\n\n" body))))
+
+(defun acp--insert-log-entry (label format-string &rest args)
+  "Insert a log message at point and add a boundary marker.
+LABEL, FORMAT-STRING, and ARGS are passed to `format'."
+  (let ((entry-start (point)))
+    (insert (apply #'acp--format-log-message label format-string args))
+    (when (< entry-start (point))
+      (add-text-properties entry-start (1+ entry-start)
+                           '(acp-log-boundary t)))))
+
+(defun acp--log (client label format-string &rest args)
+  "Log CLIENT message using LABEL, FORMAT-STRING, and ARGS."
   (when acp-logging-enabled
     (let ((log-buffer (acp-logs-buffer :client client)))
       (with-current-buffer log-buffer
         (goto-char (point-max))
-        (if label
-            (insert label " >\n\n" (apply #'format format-string args) "\n\n")
-          (insert (apply #'format format-string args) "\n\n"))))))
+        (apply #'acp--insert-log-entry label format-string args))
+      (acp--trim-log-buffer log-buffer))))
+
+(defvar acp--log-buffer-max-bytes (* 100 1000 1000)
+  "Maximum size of the log buffer in bytes.")
+
+(defun acp--total-buffer-bytes (buffer)
+  "Return the total number of bytes in BUFFER."
+  (with-current-buffer buffer
+    (save-restriction
+      (widen)
+      (1- (position-bytes (point-max))))))
+
+(defun acp--trim-log-buffer (buffer &optional max-bytes)
+  "Trim BUFFER to a maximum size in bytes at log message boundaries.
+MAX-BYTES defaults to `acp--log-buffer-max-bytes'."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (save-excursion
+        (let ((max-bytes (or max-bytes acp--log-buffer-max-bytes))
+              (total-bytes (acp--total-buffer-bytes (current-buffer))))
+          (when (< max-bytes total-bytes)
+            (goto-char (byte-to-position (- total-bytes max-bytes)))
+            (when (get-text-property (point) 'acp-log-boundary)
+              (forward-char 1))
+            (delete-region (point-min)
+                           (next-single-property-change
+                            (point) 'acp-log-boundary nil (point-max)))))))))
 
 (defun acp--json-pretty-print (json)
   "Return a pretty-printed JSON string."
@@ -764,9 +904,15 @@ DIRECTION is either `incoming' or `outgoing', OBJECT is the parsed object."
 
 (cl-defun acp-logs-buffer (&key client)
   "Get CLIENT logs buffer."
-  (get-buffer-create (format "*acp-(%s)-%s log*"
-                             (map-elt client :command)
-                             (map-elt client :instance-count))))
+  (if-let* ((name
+             (format "*acp-(%s)-%s log*"
+                     (map-elt client :command)
+                     (map-elt client :instance-count)))
+            (buffer (get-buffer name)))
+      buffer
+    (with-current-buffer (get-buffer-create name)
+      (buffer-disable-undo)
+      (current-buffer))))
 
 (cl-defun acp-traffic-buffer (&key client)
   "Get CLIENT traffic buffer."

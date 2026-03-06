@@ -66,7 +66,7 @@ For no authentication (when using alternative authentication methods):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-auggie-command
+(defcustom agent-shell-auggie-acp-command
   '("auggie" "--acp")
   "Command and parameters for the Auggie client.
 
@@ -117,8 +117,10 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 Uses `agent-shell-auggie-authentication' for authentication configuration."
   (unless buffer
     (error "Missing required argument: :buffer"))
-  (agent-shell--make-acp-client :command (car agent-shell-auggie-command)
-                                :command-params (cdr agent-shell-auggie-command)
+  (when (and (boundp 'agent-shell-auggie-command) agent-shell-auggie-command)
+    (user-error "Please migrate to use agent-shell-auggie-acp-command and eval (setq agent-shell-auggie-command nil)"))
+  (agent-shell--make-acp-client :command (car agent-shell-auggie-acp-command)
+                                :command-params (cdr agent-shell-auggie-acp-command)
                                 :environment-variables (cond ((map-elt agent-shell-auggie-authentication :none)
                                                               agent-shell-auggie-environment)
                                                              ((map-elt agent-shell-auggie-authentication :login)

@@ -36,7 +36,7 @@
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
-(defcustom agent-shell-cursor-command
+(defcustom agent-shell-cursor-acp-command
   '("cursor-agent-acp")
   "Command and parameters for the Cursor agent client.
 
@@ -79,8 +79,10 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
   "Create a Cursor agent ACP client with BUFFER as context."
   (unless buffer
     (error "Missing required argument: :buffer"))
-  (agent-shell--make-acp-client :command (car agent-shell-cursor-command)
-                                :command-params (cdr agent-shell-cursor-command)
+  (when (and (boundp 'agent-shell-cursor-command) agent-shell-cursor-command)
+    (user-error "Please migrate to use agent-shell-cursor-acp-command and eval (setq agent-shell-cursor-command nil)"))
+  (agent-shell--make-acp-client :command (car agent-shell-cursor-acp-command)
+                                :command-params (cdr agent-shell-cursor-acp-command)
                                 :environment-variables agent-shell-cursor-environment
                                 :context-buffer buffer))
 

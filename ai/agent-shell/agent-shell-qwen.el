@@ -68,7 +68,7 @@ For no authentication (when using alternative authentication methods):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-qwen-command
+(defcustom agent-shell-qwen-acp-command
   '("qwen" "--experimental-acp")
   "Command and parameters for the Qwen Code client.
 
@@ -127,8 +127,10 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
   "Create a Qwen Code client with BUFFER as context."
   (unless buffer
     (error "Missing required argument: :buffer"))
-  (agent-shell--make-acp-client :command (car agent-shell-qwen-command)
-                                :command-params (cdr agent-shell-qwen-command)
+  (when (and (boundp 'agent-shell-qwen-command) agent-shell-qwen-command)
+    (user-error "Please migrate to use agent-shell-qwen-acp-command and eval (setq agent-shell-qwen-command nil)"))
+  (agent-shell--make-acp-client :command (car agent-shell-qwen-acp-command)
+                                :command-params (cdr agent-shell-qwen-acp-command)
                                 :environment-variables agent-shell-qwen-environment
                                 :context-buffer buffer))
 

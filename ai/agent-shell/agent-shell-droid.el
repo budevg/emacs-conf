@@ -73,7 +73,7 @@ For no authentication (e.g., using `droid-acp` built-in login):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-droid-command
+(defcustom agent-shell-droid-acp-command
   '("droid-acp")
   "Command and parameters for the Factory Droid ACP client.
 
@@ -125,9 +125,11 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 Uses `agent-shell-droid-authentication' for authentication configuration."
   (unless buffer
     (error "Missing required argument: :buffer"))
+  (when (and (boundp 'agent-shell-droid-command) agent-shell-droid-command)
+    (user-error "Please migrate to use agent-shell-droid-acp-command and eval (setq agent-shell-droid-command nil)"))
   (let ((api-key (agent-shell-droid-key)))
-    (agent-shell--make-acp-client :command (car agent-shell-droid-command)
-                                  :command-params (cdr agent-shell-droid-command)
+    (agent-shell--make-acp-client :command (car agent-shell-droid-acp-command)
+                                  :command-params (cdr agent-shell-droid-acp-command)
                                   :environment-variables (append (cond ((map-elt agent-shell-droid-authentication :none)
                                                                         nil)
                                                                        (api-key

@@ -87,7 +87,7 @@ For no authentication (when using alternative authentication methods):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-google-gemini-command
+(defcustom agent-shell-google-gemini-acp-command
   '("gemini" "--experimental-acp")
   "Command and parameters for the Gemini client.
 
@@ -174,27 +174,29 @@ Uses `agent-shell-google-authentication' for authentication configuration."
     (error "Missing required argument: :buffer"))
   (when (and (boundp 'agent-shell-google-key) agent-shell-google-key)
     (user-error "Please migrate to use agent-shell-google-authentication and eval (setq agent-shell-google-key nil)"))
+  (when (and (boundp 'agent-shell-google-gemini-command) agent-shell-google-gemini-command)
+    (user-error "Please migrate to use agent-shell-google-gemini-acp-command and eval (setq agent-shell-google-gemini-command nil)"))
   (cond
    ((map-elt agent-shell-google-authentication :api-key)
-    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-command)
-                                  :command-params (cdr agent-shell-google-gemini-command)
+    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-acp-command)
+                                  :command-params (cdr agent-shell-google-gemini-acp-command)
                                   :environment-variables (append (when-let ((api-key (agent-shell-google-key)))
                                                                    (list (format "GEMINI_API_KEY=%s" api-key)))
                                                                  agent-shell-google-gemini-environment)
                                   :context-buffer buffer))
    ((map-elt agent-shell-google-authentication :login)
-    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-command)
-                                  :command-params (cdr agent-shell-google-gemini-command)
+    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-acp-command)
+                                  :command-params (cdr agent-shell-google-gemini-acp-command)
                                   :environment-variables agent-shell-google-gemini-environment
                                   :context-buffer buffer))
    ((map-elt agent-shell-google-authentication :vertex-ai)
-    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-command)
-                                  :command-params (cdr agent-shell-google-gemini-command)
+    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-acp-command)
+                                  :command-params (cdr agent-shell-google-gemini-acp-command)
                                   :environment-variables agent-shell-google-gemini-environment
                                   :context-buffer buffer))
    ((map-elt agent-shell-google-authentication :none)
-    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-command)
-                                  :command-params (cdr agent-shell-google-gemini-command)
+    (agent-shell--make-acp-client :command (car agent-shell-google-gemini-acp-command)
+                                  :command-params (cdr agent-shell-google-gemini-acp-command)
                                   :environment-variables agent-shell-google-gemini-environment
                                   :context-buffer buffer))
    (t

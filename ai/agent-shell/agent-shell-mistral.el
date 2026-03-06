@@ -77,7 +77,7 @@ when starting a new shell."
   :type '(choice (const nil) string)
   :group 'agent-shell)
 
-(defcustom agent-shell-mistral-command
+(defcustom agent-shell-mistral-acp-command
   '("vibe-acp")
   "Command and parameters for the Mistral Vibe client.
 
@@ -131,13 +131,15 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 See `agent-shell-mistral-authentication' for authentication configuration."
   (unless buffer
     (error "Missing required argument: :buffer"))
+  (when (and (boundp 'agent-shell-mistral-command) agent-shell-mistral-command)
+    (user-error "Please migrate to use agent-shell-mistral-acp-command and eval (setq agent-shell-mistral-command nil)"))
   (unless agent-shell-mistral-authentication
     (user-error "Please set `agent-shell-mistral-authentication' with your API key"))
   (let ((api-key (agent-shell-mistral-key)))
     (unless api-key
       (user-error "Please set your `agent-shell-mistral-authentication'"))
-    (agent-shell--make-acp-client :command (car agent-shell-mistral-command)
-                                  :command-params (cdr agent-shell-mistral-command)
+    (agent-shell--make-acp-client :command (car agent-shell-mistral-acp-command)
+                                  :command-params (cdr agent-shell-mistral-acp-command)
                                   :environment-variables (append (list (format "MISTRAL_API_KEY=%s" api-key))
                                                                  agent-shell-mistral-environment)
                                   :context-buffer buffer)))

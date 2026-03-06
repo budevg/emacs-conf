@@ -36,12 +36,30 @@
 (declare-function agent-shell--make-acp-client "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
-(defcustom agent-shell-github-command
+(defcustom agent-shell-github-acp-command
   '("copilot" "--acp")
   "Command and parameters for the GitHub Copilot agent client.
 
 The first element is the command name, and the rest are command parameters."
   :type '(repeat string)
+  :group 'agent-shell)
+
+(defcustom agent-shell-github-default-model-id
+  nil
+  "Default GitHub Copilot model ID.
+
+Must be one of the model ID's displayed under \"Available models\"
+when starting a new shell."
+  :type '(choice (const nil) string)
+  :group 'agent-shell)
+
+(defcustom agent-shell-github-default-session-mode-id
+  nil
+  "Default GitHub Copilot session mode ID.
+
+Must be one of the mode ID's displayed under \"Available modes\"
+when starting a new shell."
+  :type '(choice (const nil) string)
   :group 'agent-shell)
 
 (defcustom agent-shell-github-environment
@@ -67,6 +85,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :welcome-function #'agent-shell-github--welcome-message
    :client-maker (lambda (buffer)
                    (agent-shell-github-make-client :buffer buffer))
+   :default-model-id (lambda () agent-shell-github-default-model-id)
+   :default-session-mode-id (lambda () agent-shell-github-default-session-mode-id)
    :install-instructions "See https://github.com/github/copilot-cli for installation."))
 
 (defun agent-shell-github-start-copilot ()
@@ -79,8 +99,10 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
   "Create a GitHub Copilot agent ACP client with BUFFER as context."
   (unless buffer
     (error "Missing required argument: :buffer"))
-  (agent-shell--make-acp-client :command (car agent-shell-github-command)
-                                :command-params (cdr agent-shell-github-command)
+  (when (and (boundp 'agent-shell-github-command) agent-shell-github-command)
+    (user-error "Please migrate to use agent-shell-github-acp-command and eval (setq agent-shell-github-command nil)"))
+  (agent-shell--make-acp-client :command (car agent-shell-github-acp-command)
+                                :command-params (cdr agent-shell-github-acp-command)
                                 :environment-variables agent-shell-github-environment
                                 :context-buffer buffer))
 
@@ -94,15 +116,15 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
             message)))
 
 (defun agent-shell-github--ascii-art ()
-  "GitHub Copilot ASCII art."
+  "GitHub Copilot ASCII art matching the official CLI banner."
   (let* ((is-dark (eq (frame-parameter nil 'background-mode) 'dark))
          (text (string-trim "
-  ██████╗  ██████╗  ██████╗  ██╗ ██╗       ██████╗  ████████╗
- ██╔════╝ ██╔═══██╗ ██╔══██╗ ██║ ██║      ██╔═══██╗ ╚══██╔══╝
- ██║      ██║   ██║ ██████╔╝ ██║ ██║      ██║   ██║    ██║
- ██║      ██║   ██║ ██╔═══╝  ██║ ██║      ██║   ██║    ██║
- ╚██████╗ ╚██████╔╝ ██║      ██║ ███████╗ ╚██████╔╝    ██║
-  ╚═════╝  ╚═════╝  ╚═╝      ╚═╝ ╚══════╝  ╚═════╝     ╚═╝
+  █████┐ █████┐ █████┐ ██┐██┐     █████┐ ██████┐
+ ██┌───┘██┌──██┐██┌─██┐██│██│    ██┌──██┐└─██┌─┘
+ ██│    ██│  ██│█████┌┘██│██│    ██│  ██│  ██│
+ ██│    ██│  ██│██┌──┘ ██│██│    ██│  ██│  ██│
+ └█████┐└█████┌┘██│    ██│██████┐└█████┌┘  ██│
+  └────┘ └────┘ └─┘    └─┘└─────┘ └────┘   └─┘
 " "\n")))
     (propertize text 'font-lock-face (if is-dark
                                          '(:foreground "#6e40c9" :inherit fixed-pitch)

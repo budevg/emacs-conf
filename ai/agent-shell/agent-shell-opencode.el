@@ -71,7 +71,25 @@ For no authentication (when using `opencode auth login`):
   :type 'alist
   :group 'agent-shell)
 
-(defcustom agent-shell-opencode-command
+(defcustom agent-shell-opencode-default-model-id
+  nil
+  "Default OpenCode model ID.
+
+Must be one of the model ID's displayed under \"Available models\"
+when starting a new shell."
+  :type '(choice (const nil) string)
+  :group 'agent-shell)
+
+(defcustom agent-shell-opencode-default-session-mode-id
+  nil
+  "Default OpenCode session mode ID.
+
+Must be one of the mode ID's displayed under \"Available modes\"
+when starting a new shell."
+  :type '(choice (const nil) string)
+  :group 'agent-shell)
+
+(defcustom agent-shell-opencode-acp-command
   '("opencode" "acp")
   "Command and parameters for the OpenCode client.
 
@@ -108,6 +126,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :welcome-function #'agent-shell-opencode--welcome-message
    :client-maker (lambda (buffer)
                    (agent-shell-opencode-make-client :buffer buffer))
+   :default-model-id (lambda () agent-shell-opencode-default-model-id)
+   :default-session-mode-id (lambda () agent-shell-opencode-default-session-mode-id)
    :install-instructions "See https://opencode.ai/docs for installation."))
 
 (defun agent-shell-opencode-start-agent ()
@@ -122,9 +142,11 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
 Uses `agent-shell-opencode-authentication' for authentication configuration."
   (unless buffer
     (error "Missing required argument: :buffer"))
+  (when (and (boundp 'agent-shell-opencode-command) agent-shell-opencode-command)
+    (user-error "Please migrate to use agent-shell-opencode-acp-command and eval (setq agent-shell-opencode-command nil)"))
   (let ((api-key (agent-shell-opencode-key)))
-    (agent-shell--make-acp-client :command (car agent-shell-opencode-command)
-                                  :command-params (cdr agent-shell-opencode-command)
+    (agent-shell--make-acp-client :command (car agent-shell-opencode-acp-command)
+                                  :command-params (cdr agent-shell-opencode-acp-command)
                                   :environment-variables (append (cond ((map-elt agent-shell-opencode-authentication :none)
                                                                         nil)
                                                                        (api-key

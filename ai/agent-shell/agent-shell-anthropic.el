@@ -36,25 +36,31 @@
 (autoload 'agent-shell-make-agent-config "agent-shell")
 (declare-function agent-shell--dwim "agent-shell")
 
-(cl-defun agent-shell-anthropic-make-authentication (&key api-key login)
+(cl-defun agent-shell-anthropic-make-authentication (&key api-key login oauth)
   "Create anthropic authentication configuration.
 
-API-KEY is the Anthropic API key string.
+API-KEY is the Anthropic API key string or a function returning one.
 LOGIN when non-nil indicates to use login-based authentication.
+OAUTH is an OAuth token string or a function returning one.
 
-Only one of API-KEY or LOGIN should be provided, never both."
+Only one of API-KEY, LOGIN, or OAUTH should be provided, never more than one."
   (when (and api-key login)
     (error "Cannot specify both :api-key and :login - choose one"))
-  (unless (or api-key login)
-    (error "Must specify either :api-key or :login"))
+  (when (and oauth login)
+    (error "Cannot specify both :oauth and :login - choose one"))
+  (when (and api-key oauth)
+    (error "Cannot specify both :api-key and :oauth - choose one"))
+  (unless (or api-key login oauth)
+    (error "Must specify either :api-key, :login, or :oauth"))
   (cond
+   (oauth `((:oauth . ,oauth)))
    (api-key `((:api-key . ,api-key)))
    (login `((:login . t)))))
 
 (defcustom agent-shell-anthropic-authentication
   (agent-shell-anthropic-make-authentication :login t)
   "Configuration for Anthropic authentication.
-For Subcription/login (default):
+For subscription/login (default):
 
   (setq agent-shell-anthropic-authentication
         (agent-shell-anthropic-make-authentication :login t))
@@ -62,12 +68,22 @@ For Subcription/login (default):
 For api key:
 
   (setq agent-shell-anthropic-authentication
-        (agent-shell-make-anthropic-authentication :api-key \"your-key\"))
+        (agent-shell-anthropic-make-authentication :api-key \"your-key\"))
 
   or
 
   (setq agent-shell-anthropic-authentication
-        (agent-shell-make-anthropic-authentication :api-key (lambda () ... )))"
+        (agent-shell-anthropic-make-authentication :api-key (lambda () ... )))
+
+For OAuth token:
+
+  (setq agent-shell-anthropic-authentication
+        (agent-shell-anthropic-make-authentication :oauth \"your-token\"))
+
+  or
+
+  (setq agent-shell-anthropic-authentication
+        (agent-shell-anthropic-make-authentication :oauth (lambda () ... )))"
   :type 'alist
   :group 'agent-shell)
 
@@ -76,8 +92,10 @@ For api key:
   "Default Anthropic model ID.
 
 Must be one of the model ID's displayed under \"Available models\"
-when starting a new shell."
-  :type '(choice (const nil) string)
+when starting a new shell.
+
+Can be set to either a string or a function that returns a string."
+  :type '(choice (const nil) string function)
   :group 'agent-shell)
 
 (defcustom agent-shell-anthropic-default-session-mode-id
@@ -89,8 +107,8 @@ when starting a new shell."
   :type '(choice (const nil) string)
   :group 'agent-shell)
 
-(defcustom agent-shell-anthropic-claude-command
-  '("claude-code-acp")
+(defcustom agent-shell-anthropic-claude-acp-command
+  '("claude-agent-acp")
   "Command and parameters for the Anthropic Claude client.
 
 The first element is the command name, and the rest are command parameters."
@@ -127,9 +145,11 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :welcome-function #'agent-shell-anthropic--claude-code-welcome-message
    :client-maker (lambda (buffer)
                    (agent-shell-anthropic-make-claude-client :buffer buffer))
-   :default-model-id (lambda () agent-shell-anthropic-default-model-id)
+   :default-model-id (lambda () (if (functionp agent-shell-anthropic-default-model-id)
+                                    (funcall agent-shell-anthropic-default-model-id)
+                                  agent-shell-anthropic-default-model-id))
    :default-session-mode-id (lambda () agent-shell-anthropic-default-session-mode-id)
-   :install-instructions "See https://github.com/zed-industries/claude-code-acp for installation."))
+   :install-instructions "See https://github.com/zed-industries/claude-agent-acp for installation."))
 
 (defun agent-shell-anthropic-start-claude-code ()
   "Start an interactive Claude Code agent shell."
@@ -147,16 +167,21 @@ additional environment variables."
     (error "Missing required argument: :buffer"))
   (when (and (boundp 'agent-shell-anthropic-key) agent-shell-anthropic-key)
     (user-error "Please migrate to use agent-shell-anthropic-authentication and eval (setq agent-shell-anthropic-key nil)"))
+  (when (and (boundp 'agent-shell-anthropic-claude-command) agent-shell-anthropic-claude-command)
+    (user-error "Please migrate to use agent-shell-anthropic-claude-acp-command and eval (setq agent-shell-anthropic-claude-command nil)"))
   (let ((env-vars-overrides (cond
                              ((map-elt agent-shell-anthropic-authentication :api-key)
                               (list (format "ANTHROPIC_API_KEY=%s"
                                             (agent-shell-anthropic-key))))
                              ((map-elt agent-shell-anthropic-authentication :login)
                               (list "ANTHROPIC_API_KEY="))
+                             ((map-elt agent-shell-anthropic-authentication :oauth)
+                              (list (format "CLAUDE_CODE_OAUTH_TOKEN=%s"
+                                            (agent-shell-anthropic-oauth-token))))
                              (t
                               (error "Invalid authentication configuration")))))
-    (agent-shell--make-acp-client :command (car agent-shell-anthropic-claude-command)
-                                  :command-params (cdr agent-shell-anthropic-claude-command)
+    (agent-shell--make-acp-client :command (car agent-shell-anthropic-claude-acp-command)
+                                  :command-params (cdr agent-shell-anthropic-claude-acp-command)
                                   :environment-variables (append env-vars-overrides
                                                                  agent-shell-anthropic-claude-environment)
                                   :context-buffer buffer)))
@@ -170,6 +195,18 @@ additional environment variables."
              (funcall (map-elt agent-shell-anthropic-authentication :api-key))
            (error
             "Api key not found.  Check out `agent-shell-anthropic-authentication'")))
+        (t
+         nil)))
+
+(defun agent-shell-anthropic-oauth-token ()
+  "Get the Anthropic OAuth token."
+  (cond ((stringp (map-elt agent-shell-anthropic-authentication :oauth))
+         (map-elt agent-shell-anthropic-authentication :oauth))
+        ((functionp (map-elt agent-shell-anthropic-authentication :oauth))
+         (condition-case _err
+             (funcall (map-elt agent-shell-anthropic-authentication :oauth))
+           (error
+            "OAuth token not found.  Check out `agent-shell-anthropic-authentication'")))
         (t
          nil)))
 

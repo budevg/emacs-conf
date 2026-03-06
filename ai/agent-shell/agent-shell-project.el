@@ -54,12 +54,25 @@
               (project-files proj))))
    (t nil)))
 
+(defcustom agent-shell-cwd-function nil
+  "When non-nil, a function called to determine the shell's CWD.
+
+The function receives no arguments and should return a directory path.
+
+When nil (the default), `agent-shell-cwd' uses project root detection."
+  :type '(choice (const :tag "Default (project root)" nil)
+                 (function :tag "Custom function"))
+  :group 'agent-shell)
+
 (defun agent-shell-cwd ()
   "Return the CWD for this shell.
 
-If in a project, use project root."
+If `agent-shell-cwd-function' is set, use it.
+Otherwise, if in a project, use project root."
   (expand-file-name
-   (or (when (and (boundp 'projectile-mode)
+   (or (when agent-shell-cwd-function
+         (funcall agent-shell-cwd-function))
+       (when (and (boundp 'projectile-mode)
                   projectile-mode
                   (fboundp 'projectile-project-root))
          (projectile-project-root))

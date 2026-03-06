@@ -169,10 +169,10 @@ combinations."
         agent-shell-show-config-icons nil
         agent-shell-header-style 'text
         agent-shell-goose-authentication (agent-shell-make-goose-authentication :none t)
-        agent-shell-goose-command (cons "goose-acp" (cdr agent-shell-goose-command))
+        agent-shell-goose-acp-command (cons "goose-acp" (cdr agent-shell-goose-acp-command))
         agent-shell-google-authentication (agent-shell-google-make-authentication :none t)
-        agent-shell-google-gemini-command (cons "gemini-acp" (cdr agent-shell-google-gemini-command))
-        agent-shell-opencode-command (cons "opencode-acp" (cdr agent-shell-opencode-command))
+        agent-shell-google-gemini-acp-command (cons "gemini-acp" (cdr agent-shell-google-gemini-acp-command))
+        agent-shell-opencode-acp-command (cons "opencode-acp" (cdr agent-shell-opencode-acp-command))
         agent-shell-agent-configs `(,(agent-shell-google-make-gemini-config)
                                     ,(agent-shell-goose-make-agent-config)
                                     ,(agent-shell-openai-make-codex-config)
