@@ -9,6 +9,15 @@
                    "${1:url}")))
        (format "yt-dlp -f 'bestvideo[height<=?%d]+bestaudio/best' '%s'" resolution url))
    #+END_SRC
+** youtube subs                                                     :results:
+   #+BEGIN_SRC emacs-lisp
+     (let* ((copied-str (current-kill 0 t))
+            (youtube-regex "^https?://")
+            (url (if (string-match-p youtube-regex copied-str)
+                     copied-str
+                   "${1:url}")))
+       (format "yt-dlp --write-subs --write-auto-subs --skip-download --sub-langs 'en' '%s'"  url))
+   #+END_SRC
 * docker
 ** build
    docker build  -t ${1:test} --progress plain .$0
