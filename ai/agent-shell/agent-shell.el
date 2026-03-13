@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/agent-shell
-;; Version: 0.44.1
-;; Package-Requires: ((emacs "29.1") (shell-maker "0.86.1") (acp "0.11.1"))
+;; Version: 0.47.2
+;; Package-Requires: ((emacs "29.1") (shell-maker "0.89.1") (acp "0.11.1"))
 
-(defconst agent-shell--version "0.44.1")
+(defconst agent-shell--version "0.47.2")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@
 (require 'json)
 (require 'map)
 (unless (require 'markdown-overlays nil 'noerror)
-  (error "Please update 'shell-maker' to v0.86.1 or newer"))
+  (error "Please update 'shell-maker' to v0.89.1 or newer"))
 (require 'agent-shell-anthropic)
 (require 'agent-shell-auggie)
 (require 'agent-shell-cline)
@@ -121,6 +121,53 @@ When nil (the default), tool use sections are collapsed.
 When non-nil, tool use sections are expanded."
   :type 'boolean
   :group 'agent-shell)
+
+(defvar agent-shell-permission-responder-function nil
+  "When non-nil, a function called before showing the permission prompt.
+
+Return non-nil to indicate the request was handled (UI is skipped).
+Return nil to fall back to the interactive permission dialog.
+
+Called with an alist containing:
+
+  :tool-call - the tool call alist with :title, :kind, :status,
+               :permission-request-id, and optionally :diff
+  :options   - enriched actions, each with :kind, :option-id,
+               :label, :option, :char
+  :respond   - function taking an option-id to respond programmatically
+
+See `agent-shell-permission-allow-always' for a built-in handler
+that auto-approves all requests.
+
+Example -- auto-approve reads:
+
+  (setq agent-shell-permission-responder-function
+        (lambda (permission)
+          (when-let (((equal (map-elt (map-elt permission :tool-call) :kind)
+                             \"read\"))
+                     (choice (seq-find
+                               (lambda (option)
+                                 (equal (map-elt option :kind) \"allow_once\"))
+                               (map-elt permission :options))))
+            (funcall (map-elt permission :respond)
+                     (map-elt choice :option-id))
+            t)))")
+
+(defun agent-shell-permission-allow-always (permission)
+  "Auto-approve all permission requests.
+
+Intended for use with `agent-shell-permission-responder-function'.
+
+Example:
+
+  (setq agent-shell-permission-responder-function
+        #\\='agent-shell-permission-allow-always)"
+  (when-let ((choice (seq-find
+                      (lambda (option) (equal (map-elt option :kind) "allow_once"))
+                      (map-elt permission :options))))
+    (funcall (map-elt permission :respond)
+             (map-elt choice :option-id))
+    t))
 
 (defcustom agent-shell-user-message-expand-by-default nil
   "Whether user message sections should be expanded by default.
@@ -608,7 +655,7 @@ OUTGOING-REQUEST-DECORATOR (passed through to `acp-make-client')."
         (cons :supports-session-resume nil)
         (cons :prompt-capabilities nil)
         (cons :event-subscriptions nil)
-        (cons :active-request-count 0)
+        (cons :active-requests nil)
         (cons :pending-requests nil)
         (cons :usage (list (cons :total-tokens 0)
                            (cons :input-tokens 0)
@@ -676,22 +723,24 @@ handles viewport mode detection, existing shell reuse, and project context."
                (or (derived-mode-p 'agent-shell-viewport-view-mode)
                    (derived-mode-p 'agent-shell-viewport-edit-mode)))
           (agent-shell-toggle)
-        (let ((shell-buffer
-               (cond (switch-to-shell
-                      (completing-read "Switch to shell: "
-                                       (mapcar #'buffer-name (or (agent-shell-buffers)
-                                                                 (user-error "No shells available")))
-                                       nil t))
-                     (new-shell
-                      (agent-shell--start :config (or config
-                                                      (agent-shell--resolve-preferred-config)
-                                                      (agent-shell-select-config
-                                                       :prompt "Start new agent: ")
-                                                      (error "No agent config found"))
-                                          :no-focus t
-                                          :new-session t))
-                     (t
-                      (agent-shell--shell-buffer)))))
+        (let* ((shell-buffer
+                (cond (switch-to-shell
+                       (get-buffer
+                        (completing-read "Switch to shell: "
+                                         (mapcar #'buffer-name (or (agent-shell-buffers)
+                                                                   (user-error "No shells available")))
+                                         nil t)))
+                      (new-shell
+                       (agent-shell--start :config (or config
+                                                       (agent-shell--resolve-preferred-config)
+                                                       (agent-shell-select-config
+                                                        :prompt "Start new agent: ")
+                                                       (error "No agent config found"))
+                                           :no-focus t
+                                           :new-session t))
+                      (t
+                       (agent-shell--shell-buffer))))
+               (text (agent-shell--context :shell-buffer shell-buffer)))
           (if (and (eq (buffer-local-value 'agent-shell-session-strategy shell-buffer) 'prompt)
                    (not (map-nested-elt (buffer-local-value 'agent-shell--state shell-buffer)
                                         '(:session :id))))
@@ -701,15 +750,18 @@ handles viewport mode detection, existing shell reuse, and project context."
                :event 'session-selected
                :on-event (lambda (_event)
                            (agent-shell-viewport--show-buffer
+                            :append text
                             :shell-buffer shell-buffer)))
             (agent-shell-viewport--show-buffer
+             :append text
              :shell-buffer shell-buffer))))
     (cond (switch-to-shell
            (let* ((shell-buffer
-                   (completing-read "Switch to shell: "
-                                    (mapcar #'buffer-name (or (agent-shell-buffers)
-                                                              (user-error "No shells available")))
-                                    nil t))
+                   (get-buffer
+                    (completing-read "Switch to shell: "
+                                     (mapcar #'buffer-name (or (agent-shell-buffers)
+                                                               (user-error "No shells available")))
+                                     nil t)))
                   (text (agent-shell--context :shell-buffer shell-buffer)))
              (agent-shell--display-buffer shell-buffer)
              (when text
@@ -804,19 +856,18 @@ OUTGOING-REQUEST-DECORATOR is an optional function passed through to
 
 (cl-defun agent-shell--config-icon (&key config)
   "Create icon string for CONFIG if available and icons are enabled.
-Returns an empty string if no icon should be displayed."
-  (if-let* ((graphics-capable (display-graphic-p))
-            (icon-filename (if (map-elt config :icon-name)
-                               (agent-shell--fetch-agent-icon
-                                (map-elt config :icon-name))
-                             (agent-shell--make-agent-fallback-icon
-                              (map-elt config :buffer-name) 100))))
-      (with-temp-buffer
-        (insert-image (create-image icon-filename nil nil
-                                    :ascent 'center
-                                    :height (frame-char-height)))
-        (buffer-string))
-    ""))
+Returns nil if no icon should be displayed."
+  (and-let* ((graphics-capable (display-graphic-p))
+             (icon-filename (if (map-elt config :icon-name)
+                                (agent-shell--fetch-agent-icon
+                                 (map-elt config :icon-name))
+                              (agent-shell--make-agent-fallback-icon
+                               (map-elt config :buffer-name) 100))))
+    (with-temp-buffer
+      (insert-image (create-image icon-filename nil nil
+                                  :ascent 'center
+                                  :height (frame-char-height)))
+      (buffer-string))))
 
 (cl-defun agent-shell-select-config (&key prompt)
   "Display PROMPT to select an agent config from `agent-shell-agent-configs'."
@@ -852,6 +903,9 @@ Includes shells accessed via viewport buffers, preserving visited order."
 
 (defun agent-shell-other-buffer ()
   "Switch to other associated buffer (viewport vs shell)."
+  (declare (modes agent-shell-mode
+                  agent-shell-viewport-view-mode
+                  agent-shell-viewport-edit-mode))
   (interactive)
   (cond ((or (derived-mode-p 'agent-shell-viewport-view-mode)
              (derived-mode-p 'agent-shell-viewport-edit-mode))
@@ -877,6 +931,7 @@ Includes shells accessed via viewport buffers, preserving visited order."
 
 (defun agent-shell-copy-session-id ()
   "Copy the current session ID to the kill ring."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in a shell"))
@@ -889,6 +944,7 @@ Includes shells accessed via viewport buffers, preserving visited order."
 (defun agent-shell-interrupt (&optional force)
   "Interrupt in-progress request and reject all pending permissions.
 When FORCE is non-nil, skip confirmation prompt."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -1149,6 +1205,10 @@ COMMAND, when present, may be a shell command string or an argv vector."
         ((null command) nil)
         (t (error "Unexpected tool-call command type: %S" (type-of command)))))
 
+(defun agent-shell--active-requests-p (state)
+  "Return non-nil if STATE has in-flight requests awaiting responses."
+  (map-elt state :active-requests))
+
 (cl-defun agent-shell--on-notification (&key state acp-notification)
   "Handle incoming ACP-NOTIFICATION using STATE."
   (cond ((equal (map-elt acp-notification 'method) "session/update")
@@ -1156,7 +1216,7 @@ COMMAND, when present, may be a shell command string or an argv vector."
           ((equal (map-nested-elt acp-notification '(params update sessionUpdate)) "tool_call")
            ;; Notification is out of context (session/prompt finished).
            ;; Cannot derive where to display, so show in minibuffer.
-           (if (zerop (map-elt state :active-request-count))
+           (if (not (agent-shell--active-requests-p state))
                (message "%s %s (stale, consider reporting to ACP agent)"
                         (agent-shell--make-status-kind-label
                          :status (map-nested-elt acp-notification '(params update status))
@@ -1208,7 +1268,7 @@ COMMAND, when present, may be a shell command string or an argv vector."
           ((equal (map-nested-elt acp-notification '(params update sessionUpdate)) "agent_thought_chunk")
            ;; Notification is out of context (session/prompt finished).
            ;; Cannot derive where to display, so show in minibuffer.
-           (if (zerop (map-elt state :active-request-count))
+           (if (not (agent-shell--active-requests-p state))
                (message "%s %s (stale, consider reporting to ACP agent): %s"
                         agent-shell-thought-process-icon
                         (propertize "Thought process" 'face font-lock-doc-markup-face)
@@ -1220,7 +1280,8 @@ COMMAND, when present, may be a shell command string or an argv vector."
                 :text (format "## Agent's Thoughts (%s)\n\n" (format-time-string "%F %T"))
                 :file-path agent-shell--transcript-file))
              (agent-shell--append-transcript
-              :text (map-nested-elt acp-notification '(params update content text))
+              :text (agent-shell--indent-markdown-headers
+                     (map-nested-elt acp-notification '(params update content text)))
               :file-path agent-shell--transcript-file)
              (agent-shell--update-fragment
               :state state
@@ -1238,7 +1299,7 @@ COMMAND, when present, may be a shell command string or an argv vector."
           ((equal (map-nested-elt acp-notification '(params update sessionUpdate)) "agent_message_chunk")
            ;; Notification is out of context (session/prompt finished).
            ;; Cannot derive where to display, so show in minibuffer.
-           (if (zerop (map-elt state :active-request-count))
+           (if (not (agent-shell--active-requests-p state))
                (message "Agent message (stale, consider reporting to ACP agent): %s"
                         (truncate-string-to-width (map-nested-elt acp-notification '(params update content text)) 100))
              (unless (equal (map-elt state :last-entry-type) "agent_message_chunk")
@@ -1246,8 +1307,13 @@ COMMAND, when present, may be a shell command string or an argv vector."
                (agent-shell--append-transcript
                 :text (format "\n## Agent (%s)\n\n" (format-time-string "%F %T"))
                 :file-path agent-shell--transcript-file))
+             ;; Indent markdown headers in LLM output so they nest
+             ;; below the transcript's ## section headers.  Applied
+             ;; per-chunk: if a header is split across chunks it may
+             ;; not be indented (graceful degradation).
              (agent-shell--append-transcript
-              :text (map-nested-elt acp-notification '(params update content text))
+              :text (agent-shell--indent-markdown-headers
+                     (map-nested-elt acp-notification '(params update content text)))
               :file-path agent-shell--transcript-file)
              (agent-shell--update-fragment
               :state state
@@ -1261,32 +1327,39 @@ COMMAND, when present, may be a shell command string or an argv vector."
               :render-body-images t)
              (map-put! state :last-entry-type "agent_message_chunk")))
           ((equal (map-nested-elt acp-notification '(params update sessionUpdate)) "user_message_chunk")
-           (let ((new-prompt-p (not (equal (map-elt state :last-entry-type)
-                                           "user_message_chunk"))))
-             (when new-prompt-p
-               (map-put! state :chunked-group-count (1+ (map-elt state :chunked-group-count)))
+           ;; Only handle user_message_chunks when there's an active session/load to avoid
+           ;; inserting a redundant shell prompt with the existing user submission.
+           (when (seq-find (lambda (r)
+                             (equal (map-elt r :method) "session/load"))
+                           (map-elt state :active-requests))
+             (let ((new-prompt-p (not (equal (map-elt state :last-entry-type)
+                                             "user_message_chunk"))))
+               (when new-prompt-p
+                 (map-put! state :chunked-group-count (1+ (map-elt state :chunked-group-count)))
+                 (agent-shell--append-transcript
+                  :text (format "## User (%s)\n\n" (format-time-string "%F %T"))
+                  :file-path agent-shell--transcript-file))
                (agent-shell--append-transcript
-                :text (format "## User (%s)\n\n" (format-time-string "%F %T"))
-                :file-path agent-shell--transcript-file))
-             (agent-shell--append-transcript
-              :text (format "> %s\n" (map-nested-elt acp-notification '(params update content text)))
-              :file-path agent-shell--transcript-file)
-             (agent-shell--update-text
-              :state state
-              :block-id (format "%s-user_message_chunk"
-                                (map-elt state :chunked-group-count))
-              :text (if new-prompt-p
-                        (concat (propertize
-                                 (map-nested-elt
-                                  state '(:agent-config :shell-prompt))
-                                 'font-lock-face 'comint-highlight-prompt)
-                                (propertize (map-nested-elt acp-notification '(params update content text))
-                                            'font-lock-face 'comint-highlight-input))
-                      (propertize (map-nested-elt acp-notification '(params update content text))
-                                  'font-lock-face 'comint-highlight-input))
-              :create-new new-prompt-p
-              :append t))
-           (map-put! state :last-entry-type "user_message_chunk"))
+                :text (format "> %s\n"
+                              (agent-shell--indent-markdown-headers
+                               (map-nested-elt acp-notification '(params update content text))))
+                :file-path agent-shell--transcript-file)
+               (agent-shell--update-text
+                :state state
+                :block-id (format "%s-user_message_chunk"
+                                  (map-elt state :chunked-group-count))
+                :text (if new-prompt-p
+                          (concat (propertize
+                                   (map-nested-elt
+                                    state '(:agent-config :shell-prompt))
+                                   'font-lock-face 'comint-highlight-prompt)
+                                  (propertize (map-nested-elt acp-notification '(params update content text))
+                                              'font-lock-face 'comint-highlight-input))
+                        (propertize (map-nested-elt acp-notification '(params update content text))
+                                    'font-lock-face 'comint-highlight-input))
+                :create-new new-prompt-p
+                :append t))
+             (map-put! state :last-entry-type "user_message_chunk")))
           ((equal (map-nested-elt acp-notification '(params update sessionUpdate)) "plan")
            (agent-shell--update-fragment
             :state state
@@ -1298,7 +1371,7 @@ COMMAND, when present, may be a shell command string or an argv vector."
           ((equal (map-nested-elt acp-notification '(params update sessionUpdate)) "tool_call_update")
            ;; Notification is out of context (session/prompt finished).
            ;; Cannot derive where to display, so show in minibuffer.
-           (if (zerop (map-elt state :active-request-count))
+           (if (not (agent-shell--active-requests-p state))
                (message "%s %s (stale, consider reporting to ACP agent)"
                         (agent-shell--make-status-kind-label
                          :status (map-nested-elt acp-notification '(params update status))
@@ -1369,11 +1442,11 @@ COMMAND, when present, may be a shell command string or an argv vector."
                          :output body-text)
                   :file-path agent-shell--transcript-file))
                ;; Hide permission after sending response.
-               ;; Status and permission are no longer pending. User
+               ;; Status is completed or failed so the user
                ;; likely selected one of: accepted/rejected/always.
                ;; Remove stale permission dialog.
-               (when (and (map-nested-elt acp-notification '(params update status))
-                          (not (equal (map-nested-elt acp-notification '(params update status)) "pending")))
+               (when (member (map-nested-elt acp-notification '(params update status))
+                             '("completed" "failed"))
                  ;; block-id must be the same as the one used as
                  ;; agent-shell--update-fragment param by "session/request_permission".
                  (agent-shell--delete-fragment :state state :block-id (format "permission-%s" (map-nested-elt acp-notification '(params update toolCallId)))))
@@ -1473,32 +1546,51 @@ COMMAND, when present, may be a shell command string or an argv vector."
                   (when-let ((diff (agent-shell--make-diff-info
                                     :acp-tool-call (map-nested-elt acp-request '(params toolCall)))))
                     (list (cons :diff diff)))))
-         (when (map-nested-elt acp-request '(params toolCall rawInput plan))
+         (unless (and (functionp agent-shell-permission-responder-function)
+                      (funcall agent-shell-permission-responder-function
+                               (list (cons :tool-call (map-nested-elt state (list :tool-calls (map-nested-elt acp-request '(params toolCall toolCallId)))))
+                                     (cons :options (agent-shell--make-permission-actions
+                                                     (map-nested-elt acp-request '(params options))))
+                                     (cons :respond (lambda (option-id)
+                                                      (agent-shell--send-permission-response
+                                                       :client (map-elt state :client)
+                                                       :request-id (map-elt acp-request 'id)
+                                                       :option-id option-id
+                                                       :state state
+                                                       :tool-call-id (map-nested-elt acp-request '(params toolCall toolCallId)))
+                                                      t)))))
+           (when (map-nested-elt acp-request '(params toolCall rawInput plan))
+             (agent-shell--update-fragment
+              :state state
+              :block-id (concat (map-nested-elt acp-request '(params toolCall toolCallId)) "-plan")
+              :label-left (propertize "Proposed plan" 'font-lock-face 'font-lock-doc-markup-face)
+              :body (map-nested-elt acp-request '(params toolCall rawInput plan))
+              :expanded t))
+           ;; block-id must be the same as the one used
+           ;; in agent-shell--delete-fragment param.
            (agent-shell--update-fragment
             :state state
-            :block-id (concat (map-nested-elt acp-request '(params toolCall toolCallId)) "-plan")
-            :label-left (propertize "Proposed plan" 'font-lock-face 'font-lock-doc-markup-face)
-            :body (map-nested-elt acp-request '(params toolCall rawInput plan))
-            :expanded t))
-         (agent-shell--update-fragment
-          :state state
-          ;; block-id must be the same as the one used
-          ;; in agent-shell--delete-fragment param.
-          :block-id (format "permission-%s" (map-nested-elt acp-request '(params toolCall toolCallId)))
-          :body (with-current-buffer (map-elt state :buffer)
-                  (agent-shell--make-tool-call-permission-text
-                   :acp-request acp-request
-                   :client (map-elt state :client)
-                   :state state))
-          :expanded t
-          :navigation 'never)
-         (agent-shell-jump-to-latest-permission-button-row)
-         (when-let (((map-elt state :buffer))
-                    (viewport-buffer (agent-shell-viewport--buffer
-                                      :shell-buffer (map-elt state :buffer)
-                                      :existing-only t)))
-           (with-current-buffer viewport-buffer
-             (agent-shell-jump-to-latest-permission-button-row)))
+            :block-id (format "permission-%s" (map-nested-elt acp-request '(params toolCall toolCallId)))
+            :body (with-current-buffer (map-elt state :buffer)
+                    (agent-shell--make-tool-call-permission-text
+                     :acp-request acp-request
+                     :client (map-elt state :client)
+                     :state state))
+            :expanded t
+            :navigation 'never)
+           (agent-shell-jump-to-latest-permission-button-row)
+           (when-let (((map-elt state :buffer))
+                      (viewport-buffer (agent-shell-viewport--buffer
+                                        :shell-buffer (map-elt state :buffer)
+                                        :existing-only t)))
+             (with-current-buffer viewport-buffer
+               (agent-shell-jump-to-latest-permission-button-row))))
+         (let ((tool-call-id (map-nested-elt acp-request '(params toolCall toolCallId))))
+           (agent-shell--emit-event
+            :event 'permission-request
+            :data (list (cons :request-id (map-elt acp-request 'id))
+                        (cons :tool-call-id tool-call-id)
+                        (cons :tool-call (map-nested-elt state (list :tool-calls tool-call-id))))))
          (map-put! state :last-entry-type "session/request_permission"))
         ((equal (map-elt acp-request 'method) "fs/read_text_file")
          (agent-shell--on-fs-read-text-file-request
@@ -1985,17 +2077,38 @@ For example, shut down ACP client."
   (agent-shell-heartbeat-stop
    :heartbeat (map-elt (agent-shell--state) :heartbeat)))
 
-(defun agent-shell--dot-subdir (subdir)
-  "Return path to .agent-shell/SUBDIR under project root, creating it if needed.
-When the directory is first created inside a git repo and
-.agent-shell/ is not yet ignored, automatically add it to .gitignore.
+(defcustom agent-shell-dot-subdir-function #'agent-shell--dot-subdir-in-repo
+  "Function used by `agent-shell--dot-subdir' to resolve subdirectory paths.
+Called with one argument, SUBDIR (a string such as \"screenshots\" or
+\"transcripts\"), and must return the absolute path to that subdirectory.
+Directory creation is handled by `agent-shell--dot-subdir', not by this
+function."
+  :type '(choice (const :tag "In repo (.agent-shell/)" agent-shell--dot-subdir-in-repo)
+                 (function :tag "Custom function"))
+  :group 'agent-shell)
+
+(defun agent-shell--dot-subdir-in-repo (subdir)
+  "Return path to .agent-shell/SUBDIR under the project root.
 
 For example:
 
-  (agent-shell--dot-subdir \"screenshots\")
-  => \"/path/to/project/.agent-shell/screenshots/\""
-  (let ((dir (expand-file-name (file-name-concat ".agent-shell" subdir)
-                               (agent-shell-cwd))))
+  (agent-shell--dot-subdir-in-repo \"screenshots\")
+  => \"/path/to/project/.agent-shell/screenshots\""
+  (expand-file-name (file-name-concat ".agent-shell" subdir)
+                    (agent-shell-cwd)))
+
+(defun agent-shell--dot-subdir (subdir)
+  "Return path to SUBDIR for agent-shell data, creating it if needed.
+Calls `agent-shell-dot-subdir-function' to resolve the path.
+When the directory is first created inside a git repo and
+.agent-shell/ is not yet ignored, automatically add it to .gitignore.
+This gitignore update is a one-time operation: if the entry is later
+removed from .gitignore it will not be re-added."
+  (unless (functionp agent-shell-dot-subdir-function)
+    (error "agent-shell-dot-subdir-function must be set to a function"))
+  (let ((dir (funcall agent-shell-dot-subdir-function subdir)))
+    (unless (and (stringp dir) (not (string-empty-p (string-trim dir))))
+      (error "Failed to resolve agent-shell data directory (subdir: %s). Resulting directory is not a non-empty string (dir: %s)" subdir dir))
     (unless (file-directory-p dir)
       (make-directory dir t)
       (agent-shell--ensure-gitignore (agent-shell-cwd)))
@@ -2247,8 +2360,8 @@ Set NO-FOCUS to start in background.
 Set NEW-SESSION to start a separate new session.
 SESSION-STRATEGY overrides `agent-shell-session-strategy' buffer-locally.
 OUTGOING-REQUEST-DECORATOR is passed through to `acp-make-client'."
-  (unless (version<= "0.86.1" shell-maker-version)
-    (error "Please update shell-maker to version 0.86.1 or newer"))
+  (unless (version<= "0.89.1" shell-maker-version)
+    (error "Please update shell-maker to version 0.89.1 or newer"))
   (unless (version<= "0.11.1" acp-package-version)
     (error "Please update acp.el to version 0.11.1 or newer"))
   (when (boundp 'agent-shell--transcript-file-path-function)
@@ -2275,6 +2388,8 @@ variable (see makunbound)"))
     ;; Better to check on shell creation and bail early (leaving no
     ;; shell behind).
     (with-current-buffer shell-buffer
+      ;; Apply dir-local variables in agent-shell buffer
+      (hack-dir-local-variables-non-file-buffer)
       (unless (and (map-elt config :client-maker)
                    (funcall (map-elt config :client-maker) (current-buffer)))
         (kill-buffer shell-buffer)
@@ -2577,12 +2692,14 @@ APPEND and CREATE-NEW control update behavior."
 
 (defun agent-shell-toggle-logging ()
   "Toggle logging."
+  (declare (modes agent-shell-mode))
   (interactive)
   (setq acp-logging-enabled (not acp-logging-enabled))
   (message "Logging: %s" (if acp-logging-enabled "ON" "OFF")))
 
 (defun agent-shell-reset-logs ()
   "Reset all log buffers."
+  (declare (modes agent-shell-mode))
   (interactive)
   (acp-reset-logs :client (map-elt (agent-shell--state) :client))
   (message "Logs reset"))
@@ -2593,6 +2710,7 @@ APPEND and CREATE-NEW control update behavior."
 Could be a prompt or an expandable item.
 If point is at the input prompt and a character key was pressed,
 insert the character instead."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -2629,6 +2747,7 @@ insert the character instead."
 Could be a prompt or an expandable item.
 If point is at the input prompt and a character key was pressed,
 insert the character instead."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -3061,6 +3180,7 @@ Return file path of the generated SVG."
 
 (defun agent-shell-view-traffic ()
   "View agent shell traffic buffer."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -3072,6 +3192,7 @@ Return file path of the generated SVG."
 
 (defun agent-shell-view-acp-logs ()
   "View agent shell ACP logs buffer."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -3169,8 +3290,12 @@ Session events:
     :data contains :tool-call-id and :tool-call
   `file-write'          - File written via fs/write_text_file
     :data contains :path and :content
+  `permission-request'  - Permission prompt displayed to user
+    :data contains :request-id, :tool-call-id, :tool-call
   `permission-response' - Permission response sent
     :data contains :request-id, :tool-call-id, :option-id, :cancelled
+  `turn-complete'       - Agent turn finished and prompt ready for input
+    :data contains :stop-reason and :usage
 
 Returns a subscription token for use with `agent-shell-unsubscribe'.
 
@@ -3285,26 +3410,35 @@ DATA is an optional alist of event-specific data."
     nil))
 
 (cl-defun agent-shell--send-request (&key state client request buffer on-success on-failure sync)
-  "Send ACP REQUEST, tracking it in STATE via :active-request-count.
+  "Send ACP REQUEST, tracking it in STATE via :active-requests.
 
-Wraps `acp-send-request' so that :active-request-count is incremented
-while a request is in-flight and decremented on success or failure.
+Wraps `acp-send-request' so that REQUEST is pushed to
+:active-requests while in-flight and removed on success or failure.
 
 CLIENT, REQUEST, BUFFER, ON-SUCCESS, ON-FAILURE, and SYNC are passed
 through to `acp-send-request'."
-  (map-put! state :active-request-count (1+ (map-elt state :active-request-count)))
+  ;; Migrate state for sessions created before :active-requests existed.
+  ;; Without this, map-put! fails on mid-session package updates.
+  (unless (assq :active-requests state)
+    (nconc state (list (cons :active-requests nil))))
+  (map-put! state :active-requests
+            (cons request (map-elt state :active-requests)))
   (acp-send-request
    :client client
    :request request
    :buffer buffer
    :on-success (lambda (acp-response)
-                 (map-put! state :active-request-count
-                           (1- (map-elt state :active-request-count)))
+                 (map-put! state :active-requests
+                           (seq-remove (lambda (r)
+                                         (equal r request))
+                                       (map-elt state :active-requests)))
                  (when on-success
                    (funcall on-success acp-response)))
    :on-failure (lambda (acp-error raw-message)
-                 (map-put! state :active-request-count
-                           (1- (map-elt state :active-request-count)))
+                 (map-put! state :active-requests
+                           (seq-remove (lambda (r)
+                                         (equal r request))
+                                       (map-elt state :active-requests)))
                  (when on-failure
                    (funcall on-failure acp-error raw-message)))
    :sync sync))
@@ -4091,7 +4225,7 @@ If FILE-PATH is not an image, returns nil."
     (agent-shell--append-transcript
      :text (format "## User (%s)\n\n%s\n\n"
                    (format-time-string "%F %T")
-                   prompt)
+                   (agent-shell--indent-markdown-headers prompt))
      :file-path agent-shell--transcript-file)
 
     (when-let ((viewport-buffer (agent-shell-viewport--buffer
@@ -4147,6 +4281,10 @@ If FILE-PATH is not an image, returns nil."
                        (agent-shell--display-pending-requests))
                      (shell-maker-finish-output :config shell-maker--config
                                                 :success t)
+                     (agent-shell--emit-event
+                      :event 'turn-complete
+                      :data (list (cons :stop-reason (map-elt acp-response 'stopReason))
+                                  (cons :usage (map-elt (agent-shell--state) :usage))))
                      ;; Update viewport header (longer busy)
                      (when-let ((viewport-buffer (agent-shell-viewport--buffer
                                                   :shell-buffer shell-buffer
@@ -4262,6 +4400,9 @@ Returns a buffer object or nil."
 
 The command executes asynchronously.  When finished, the output is
 inserted into the shell buffer prompt."
+  (declare (modes agent-shell-mode
+                  agent-shell-viewport-view-mode
+                  agent-shell-viewport-edit-mode))
   (interactive)
   (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
               (derived-mode-p 'agent-shell-viewport-edit-mode)
@@ -4501,6 +4642,9 @@ When PICK-SHELL is non-nil, prompt for which shell buffer to use."
   (interactive)
   (agent-shell-send-clipboard-image t))
 
+;; Inherit yank's `delete-selection' property so
+;; `delete-selection-mode' replaces the active region on paste.
+(put 'agent-shell-yank-dwim 'delete-selection 'yank)
 (defun agent-shell-yank-dwim (&optional arg)
   "Yank or paste clipboard image into `agent-shell'.
 
@@ -4897,6 +5041,7 @@ Returns nil if the ACP-OPTION kind is not recognized."
   "Jump to the latest permission button row.
 
 Returns non-nil if a permission button was found, nil otherwise."
+  (declare (modes agent-shell-mode))
   (interactive)
   (when-let ((found (save-mark-and-excursion
                       (goto-char (point-max))
@@ -4911,6 +5056,7 @@ Returns non-nil if a permission button was found, nil otherwise."
 
 (defun agent-shell-next-permission-button ()
   "Jump to the next button."
+  (declare (modes agent-shell-mode))
   (interactive)
   (when-let* ((found (save-mark-and-excursion
                        (when (get-text-property (point) 'agent-shell-permission-button)
@@ -4925,6 +5071,7 @@ Returns non-nil if a permission button was found, nil otherwise."
 
 (defun agent-shell-previous-permission-button ()
   "Jump to the previous button."
+  (declare (modes agent-shell-mode))
   (interactive)
   (when-let* ((found (save-mark-and-excursion
                        (when (get-text-property (point) 'agent-shell-permission-button)
@@ -5494,6 +5641,7 @@ Uses :eval so the mode updates automatically when state changes."
   "Cycle through available session modes for the current `agent-shell' session.
 
 Optionally, get notified of completion with ON-SUCCESS function."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
@@ -5534,6 +5682,7 @@ Optionally, get notified of completion with ON-SUCCESS function."
   "Set session mode (if any available).
 
 Optionally, get notified of completion with ON-SUCCESS function."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
@@ -5585,6 +5734,7 @@ Optionally, get notified of completion with ON-SUCCESS function."
   "Set session model.
 
 Optionally, get notified of completion with ON-SUCCESS function."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
@@ -5769,6 +5919,45 @@ Returns the file path, or nil if disabled."
          (message "Failed to initialize transcript: %S" err))))
     filepath))
 
+(defun agent-shell--indent-markdown-headers (text)
+  "Indent markdown headers in TEXT by 2 levels for transcript hierarchy.
+
+Increases the level of all markdown headers while leaving content
+inside code blocks unchanged.  Headers are capped at level 6
+since markdown doesn't support deeper levels.
+
+For example:
+
+  (agent-shell--indent-markdown-headers \"# Foo\")
+    => \"### Foo\"
+  (agent-shell--indent-markdown-headers \"##### Deep\")
+    => \"###### Deep\""
+  (unless (stringp text)
+    (setq text (or text "")))
+  (let ((lines (split-string text "\n"))
+        (in-code-block nil)
+        (result nil))
+    (dolist (line lines)
+      (cond
+       ;; Toggle code block state on fence lines (3+ backticks).
+       ((string-match "\\`\\(```+\\)" line)
+        (if in-code-block
+            (when (>= (length (match-string 1 line)) in-code-block)
+              (setq in-code-block nil))
+          (setq in-code-block (length (match-string 1 line))))
+        (push line result))
+       ;; Outside code blocks, indent header lines.
+       ((and (not in-code-block)
+             (string-match "\\`\\(#+\\) " line))
+        (let* ((hashes (match-string 1 line))
+               (new-level (min 6 (+ (length hashes) 2)))
+               (new-hashes (make-string new-level ?#)))
+          (push (replace-regexp-in-string "\\`#+ " (concat new-hashes " ") line)
+                result)))
+       (t (push line result))))
+    (mapconcat #'identity (nreverse result) "\n")))
+
+
 (cl-defun agent-shell--append-transcript (&key text file-path)
   "Append TEXT to the transcript at FILE-PATH."
   (when (and file-path (agent-shell--ensure-transcript-file))
@@ -5863,6 +6052,7 @@ Includes STATUS, TITLE, KIND, DESCRIPTION, COMMAND, PARAMETERS, and OUTPUT."
 
 (defun agent-shell-open-transcript ()
   "Open the transcript file for the current `agent-shell' buffer."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in an agent-shell buffer"))
@@ -5942,6 +6132,7 @@ automatically sent when the current request completes."
 
 (defun agent-shell-resume-pending-requests ()
   "Resume processing pending requests in the queue."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -5956,6 +6147,7 @@ automatically sent when the current request completes."
 
 When called interactively with pending requests, prompt to either remove all
 or select a specific request to remove."
+  (declare (modes agent-shell-mode))
   (interactive
    (let ((pending (map-elt agent-shell--state :pending-requests)))
      (unless (derived-mode-p 'agent-shell-mode)

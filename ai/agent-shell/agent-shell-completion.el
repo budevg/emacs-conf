@@ -90,7 +90,12 @@ preventing spurious completions mid-word or in paths."
   (when (and (memq (char-before) '(?@ ?/))
              (or (= (point) (1+ (line-beginning-position)))
                  (memq (char-before (1- (point))) '(?\s ?\t ?\n))))
-    (completion-at-point)))
+    (cond
+     ((eq (char-before) ?@)
+      (completion-at-point))
+     ((and (eq (char-before) ?/)
+           (agent-shell--command-completion-at-point))
+      (completion-at-point)))))
 
 (define-minor-mode agent-shell-completion-mode
   "Toggle agent shell completion with @ or / prefix."
