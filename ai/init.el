@@ -165,6 +165,8 @@ combinations."
          )
   :config
   (setq shell-maker-prompt-before-killing-buffer nil
+        agent-shell-session-strategy 'new
+        agent-shell-busy-indicator-frames 'wave
         agent-shell-transcript-file-path-function nil
         agent-shell-show-config-icons nil
         agent-shell-header-style 'text
