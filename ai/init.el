@@ -202,7 +202,7 @@ combinations."
                  t)))
     (pcase choice
       ("gptel" (call-interactively #'gptel))
-      ("shell-agent" (agent-shell t))
+      ("shell-agent" (agent-shell '(4)))
       ("pi" (call-interactively #'pi-coding-agent)))))
 
 (global-set-key (kbd "C-f i") #'ai-dispatch)
