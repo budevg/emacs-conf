@@ -50,6 +50,13 @@ NAMESPACE-ID, BLOCK-ID, LABEL-LEFT, LABEL-RIGHT, and BODY are the keys."
         (cons :label-right (agent-shell-ui--string-or-nil label-right))
         (cons :body (agent-shell-ui--string-or-nil body))))
 
+(defun agent-shell-ui--insert-read-only (text)
+  "Insert TEXT as read-only output."
+  (add-text-properties 0 (length text)
+                       '(read-only t front-sticky (read-only))
+                       text)
+  (insert text))
+
 (cl-defun agent-shell-ui-update-fragment (model &key append create-new on-post-process navigation expanded no-undo)
   "Update or add a fragment using MODEL.
 
@@ -121,10 +128,10 @@ For existing blocks, the current expansion state is preserved unless overridden.
           ;; Not found or create-new - insert new block
           (goto-char (point-max))
           (setq padding-start (point))
-          (insert (agent-shell-ui--required-newlines 2))
+          (agent-shell-ui--insert-read-only (agent-shell-ui--required-newlines 2))
           (setq block-start (point))
           (agent-shell-ui--insert-fragment model qualified-id expanded navigation)
-          (insert "\n\n")
+          (agent-shell-ui--insert-read-only "\n\n")
           (setq padding-end (point))))
       (when on-post-process
         (funcall on-post-process))
@@ -444,7 +451,7 @@ When NO-UNDO is non-nil, disable undo recording."
          (t
           (goto-char (point-max))
           (let ((padding-start (point)))
-            (insert (agent-shell-ui--required-newlines 2))
+            (agent-shell-ui--insert-read-only (agent-shell-ui--required-newlines 2))
             (let ((block-start (point)))
               (insert (apply #'propertize text props))
               (list (cons :block (list (cons :start block-start)

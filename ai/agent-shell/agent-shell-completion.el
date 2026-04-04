@@ -53,12 +53,25 @@ the word, nil otherwise."
   "Insert space after completion."
   (insert " "))
 
+(defvar-local agent-shell--project-files-cache nil
+  "Session-scoped cache for project files completion.")
+
+(defun agent-shell--clear-project-files-cache ()
+  "Clear project files cache when completion session ends."
+  (unless completion-in-region-mode
+    (setq agent-shell--project-files-cache nil)
+    (remove-hook 'completion-in-region-mode-hook
+                 #'agent-shell--clear-project-files-cache t)))
+
 (defun agent-shell--file-completion-at-point ()
   "Complete project files after @."
-  (when-let* ((bounds (agent-shell--completion-bounds "[:alnum:]/_.-" ?@))
-              (files (agent-shell--project-files)))
+  (when-let* ((bounds (agent-shell--completion-bounds "[:alnum:]/_.-" ?@)))
+    (unless agent-shell--project-files-cache
+      (setq agent-shell--project-files-cache (agent-shell--project-files))
+      (add-hook 'completion-in-region-mode-hook
+                #'agent-shell--clear-project-files-cache nil t))
     (list (map-elt bounds :start) (map-elt bounds :end)
-          files
+          agent-shell--project-files-cache
           :exclusive 'no
           :company-kind (lambda (f) (if (string-suffix-p "/" f) 'folder 'file))
           :exit-function #'agent-shell--capf-exit-with-space)))

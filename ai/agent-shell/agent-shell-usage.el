@@ -46,13 +46,18 @@ context window usage, and cost information after each agent response."
   :type 'boolean
   :group 'agent-shell)
 
-(defcustom agent-shell-show-context-usage-indicator t
-  "Non-nil to show the context usage indicator in the header and mode line.
+(defcustom agent-shell-show-context-usage-indicator 'detailed
+  "Whether and how to show the context usage indicator.
 
-The indicator displays context window usage as a vertical bar character,
-color-coded from green (low) to yellow (high) to red (critical).
+When set to t, displays a vertical bar character indicating
+fill level.  When set to `detailed', displays a numeric format
+like \"➤ 29k/200k (29%%)\".  When nil, no indicator is shown.
+
+Color-coded: green (low), yellow (high), red (critical).
 Only appears when the ACP server provides usage information."
-  :type 'boolean
+  :type '(choice (const :tag "Hidden" nil)
+                 (const :tag "Bar" t)
+                 (const :tag "Detailed" detailed))
   :group 'agent-shell)
 
 (cl-defun agent-shell--save-usage (&key state acp-usage)
@@ -191,9 +196,49 @@ When MULTILINE is non-nil, format as right-aligned labeled rows."
                    'font-lock-face 'font-lock-comment-face)
        cost))))
 
+(defun agent-shell--context-usage-face (percentage)
+  "Return the face for context usage at PERCENTAGE.
+Green for normal, yellow for warning, red for critical."
+  (cond
+   ((>= percentage 85) 'error)
+   ((>= percentage 60) 'warning)
+   (t 'success)))
+
+(defun agent-shell--context-usage-indicator-bar (usage context-used context-size)
+  "Return a bar indicator for context USAGE.
+CONTEXT-USED and CONTEXT-SIZE are token counts."
+  (let* ((percentage (/ (* 100.0 context-used) context-size))
+         (indicator (cond
+                     ((>= percentage 100) "█")
+                     ((>= percentage 87.5) "▇")
+                     ((>= percentage 75) "▆")
+                     ((>= percentage 62.5) "▅")
+                     ((>= percentage 50) "▄")
+                     ((>= percentage 37.5) "▃")
+                     ((>= percentage 25) "▂")
+                     ((> percentage 0) "▁")
+                     (t nil))))
+    (when indicator
+      (propertize indicator
+                  'face (agent-shell--context-usage-face percentage)
+                  'help-echo (agent-shell--format-usage usage)))))
+
+(defun agent-shell--context-usage-indicator-detailed (usage context-used context-size)
+  "Return a detailed indicator for context USAGE.
+CONTEXT-USED and CONTEXT-SIZE are token counts.
+Format: \"29k/200k (29%)\"."
+  (let ((percentage (/ (* 100.0 context-used) context-size)))
+    (propertize (format "%s/%s (%.0f%%%%)"
+                        (agent-shell--format-number-compact context-used)
+                        (agent-shell--format-number-compact context-size)
+                        percentage)
+                'face (agent-shell--context-usage-face percentage)
+                'help-echo (agent-shell--format-usage usage))))
+
 (defun agent-shell--context-usage-indicator ()
-  "Return a single character indicating context usage percentage.
-Uses Unicode vertical block characters to show fill level.
+  "Return a string indicating context usage percentage.
+Dispatches to bar or detailed indicator based on
+`agent-shell-show-context-usage-indicator'.
 Only returns an indicator if enabled and usage data is available."
   (when-let* ((agent-shell-show-context-usage-indicator)
               ((agent-shell--usage-has-data-p (map-elt (agent-shell--state) :usage)))
@@ -201,26 +246,11 @@ Only returns an indicator if enabled and usage data is available."
               (context-used (map-elt usage :context-used))
               (context-size (map-elt usage :context-size))
               ((> context-size 0)))
-    (let* ((percentage (/ (* 100.0 context-used) context-size))
-           ;; Unicode vertical block characters from empty to full
-           (indicator (cond
-                       ((>= percentage 100) "█")  ; Full
-                       ((>= percentage 87.5) "▇")
-                       ((>= percentage 75) "▆")
-                       ((>= percentage 62.5) "▅")
-                       ((>= percentage 50) "▄")
-                       ((>= percentage 37.5) "▃")
-                       ((>= percentage 25) "▂")
-                       ((> percentage 0) "▁")
-                       (t nil)))  ; Return nil for no usage
-           (face (cond
-                  ((>= percentage 85) 'error)         ; Red for critical
-                  ((>= percentage 60) 'warning)       ; Yellow/orange for warning
-                  (t 'success))))                     ; Green for normal
-      (when indicator
-        (propertize indicator
-                    'face face
-                    'help-echo (agent-shell--format-usage usage))))))
+    (pcase agent-shell-show-context-usage-indicator
+      ('detailed
+       (agent-shell--context-usage-indicator-detailed usage context-used context-size))
+      (_
+       (agent-shell--context-usage-indicator-bar usage context-used context-size)))))
 
 (provide 'agent-shell-usage)
 ;;; agent-shell-usage.el ends here

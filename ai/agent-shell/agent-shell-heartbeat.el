@@ -84,12 +84,12 @@ Returns the heartbeat alist with the timer started."
       (map-put! heartbeat :heartbeat-timer
                 (run-at-time 0 (/ 1.0 (map-elt heartbeat :beats-per-second))
                              (lambda ()
-                               (map-put! heartbeat :status 'busy)
-                               (map-put! heartbeat :value
-                                         (1+ (map-elt heartbeat :value)))
-                               (funcall (map-elt heartbeat :on-heartbeat)
-                                        (map-elt heartbeat :value)
-                                        (map-elt heartbeat :status))))))
+                               (when-let ((value (map-elt heartbeat :value)))
+                                 (map-put! heartbeat :status 'busy)
+                                 (map-put! heartbeat :value (1+ value))
+                                 (funcall (map-elt heartbeat :on-heartbeat)
+                                          (map-elt heartbeat :value)
+                                          (map-elt heartbeat :status)))))))
     heartbeat))
 
 (cl-defun agent-shell-heartbeat-stop (&key heartbeat)

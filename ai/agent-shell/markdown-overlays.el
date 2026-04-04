@@ -315,35 +315,34 @@ Use QUOTES1-START QUOTES1-END LANG LANG-START LANG-END BODY-START
                                     (markdown-overlays--resolve-internal-language lang)
                                     (downcase (string-trim lang)))
                                    "-mode")))
-        (string (buffer-substring-no-properties body-start body-end))
-        (pos 0)
-        (props)
-        (overlay)
-        (propertized-text))
+        (string (buffer-substring-no-properties body-start body-end)))
     (if (and markdown-overlays-highlight-blocks
              (fboundp lang-mode))
-        (progn
-          (setq propertized-text
-                (with-current-buffer
-                    (get-buffer-create
-                     (format " *markdown-overlays-fontification:%s*" lang-mode))
-                  (let ((inhibit-modification-hooks nil)
-                        (inhibit-message t))
-                    (erase-buffer)
-                    ;; Additional space ensures property change.
-                    (insert string " ")
-                    (funcall lang-mode)
-                    (font-lock-ensure))
-                  (buffer-string)))
-          (while (< pos (length propertized-text))
-            (setq props (text-properties-at pos propertized-text))
-            (setq overlay (make-overlay (+ body-start pos)
-                                        (+ body-start (1+ pos))))
-            (markdown-overlays--put
-             overlay
-             'evaporate t
-             'face (plist-get props 'face))
-            (setq pos (1+ pos))))
+        (let ((propertized
+               (with-current-buffer
+                   (get-buffer-create
+                    (format " *markdown-overlays-fontification:%s*" lang-mode))
+                 (let ((inhibit-modification-hooks nil)
+                       (inhibit-message t))
+                   (erase-buffer)
+                   ;; Additional space ensures property change.
+                   (insert string " ")
+                   (funcall lang-mode)
+                   (font-lock-ensure))
+                 (buffer-string)))
+              (len (- body-end body-start))
+              (pos 0))
+          (setq len (min len (length propertized)))
+          (while (< pos len)
+            (let ((next (next-single-property-change
+                         pos 'face propertized len))
+                  (face (get-text-property pos 'face propertized)))
+              (when face
+                (markdown-overlays--put
+                 (make-overlay (+ body-start pos) (+ body-start next))
+                 'evaporate t
+                 'face face))
+              (setq pos next))))
       (markdown-overlays--put
        (make-overlay body-start body-end)
        'evaporate t
@@ -835,6 +834,7 @@ Return alist with :file and :line if URL points to an existing file.
 For example:
 
   \"foo.el#L10\"              => ((:file . \"/abs/foo.el\") (:line . 10))
+  \"foo.el\"                  => ((:file . \"/abs/foo.el\") (:line . nil))
   \"file:src/bar.el:5\"       => ((:file . \"/abs/src/bar.el\") (:line . 5))
   \"file:///tmp/baz.el#L20\"  => ((:file . \"/tmp/baz.el\") (:line . 20))
   \"file:///tmp/baz.el\"      => ((:file . \"/tmp/baz.el\") (:line . nil))
@@ -864,7 +864,8 @@ For example:
                ;; path#L123 (GitHub-style line)
                ((string-match
                  (rx bos
-                     (group (one-or-more (not (any ":#"))))
+                     (group (? (optional "/") alpha ":/") ;; Windows drive letter
+                            (one-or-more (not (any ":#"))))
                      "#L" (group (one-or-more digit))
                      eos)
                  url)
@@ -872,11 +873,15 @@ For example:
                ;; path:123 (colon line number)
                ((string-match
                  (rx bos
-                     (group (one-or-more (not (any ":#"))))
+                     (group (? (optional "/") alpha ":/") ;; Windows drive letter
+                            (one-or-more (not (any ":#"))))
                      ":" (group (one-or-more digit))
                      eos)
                  url)
-                (cons (match-string 1 url) (match-string 2 url)))))
+                (cons (match-string 1 url) (match-string 2 url)))
+               ;; plain local path with no line suffix
+               ((not (string-empty-p url))
+                (cons url nil))))
              (filepath (expand-file-name (car match))))
     (when (file-exists-p filepath)
       (list (cons :file filepath)
@@ -1005,6 +1010,7 @@ URL-START and URL-END delimit the image URL."
               ((display-graphic-p))
               (image (create-image path nil nil
                                    :max-width (markdown-overlays--image-max-width))))
+    (image-flush image)
     (markdown-overlays--put
      (make-overlay start end)
      'evaporate t
@@ -1022,6 +1028,7 @@ PATH-START and PATH-END delimit the path text."
               ((display-graphic-p))
               (image (create-image path nil nil
                                    :max-width (markdown-overlays--image-max-width))))
+    (image-flush image)
     (markdown-overlays--put
      (make-overlay start end)
      'evaporate t

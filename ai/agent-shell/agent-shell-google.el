@@ -119,8 +119,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
     (user-error "Please migrate to use agent-shell-google-authentication and eval (setq agent-shell-google-key nil)"))
   (agent-shell-make-agent-config
    :identifier 'gemini-cli
-   :mode-line-name "Gemini CLI"
-   :buffer-name "Gemini CLI"
+   :mode-line-name "Gemini"
+   :buffer-name "Gemini"
    :shell-prompt "Gemini> "
    :shell-prompt-regexp "Gemini> "
    :icon-name "gemini.png"

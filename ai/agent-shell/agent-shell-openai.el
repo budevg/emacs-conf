@@ -105,6 +105,26 @@ Example usage to set custom environment variables:
   :type '(repeat string)
   :group 'agent-shell)
 
+(defcustom agent-shell-openai-default-model-id
+  nil
+  "Default Codex model ID.
+
+Must be one of the model ID's displayed under \"Available models\"
+when starting a new Codex shell.
+
+Can be set to either a string or a function that returns a string."
+  :type '(choice (const nil) string function)
+  :group 'agent-shell)
+
+(defcustom agent-shell-openai-default-session-mode-id
+  nil
+  "Default Codex session mode ID.
+
+Must be one of the mode ID's displayed under \"Available modes\"
+when starting a new Codex shell."
+  :type '(choice (const nil) string)
+  :group 'agent-shell)
+
 (defun agent-shell-openai-make-codex-config ()
   "Create a Codex agent configuration.
 
@@ -120,6 +140,10 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :welcome-function #'agent-shell-openai--codex-welcome-message
    :icon-name "openai.png"
    :needs-authentication t
+   :default-model-id (lambda () (if (functionp agent-shell-openai-default-model-id)
+                                    (funcall agent-shell-openai-default-model-id)
+                                  agent-shell-openai-default-model-id))
+   :default-session-mode-id (lambda () agent-shell-openai-default-session-mode-id)
    :authenticate-request-maker (lambda ()
                                  (cond ((map-elt agent-shell-openai-authentication :api-key)
                                         (acp-make-authenticate-request :method-id "openai-api-key"))

@@ -4,10 +4,10 @@
 
 ;; Author: Alvaro Ramirez https://xenodium.com
 ;; URL: https://github.com/xenodium/acp.el
-;; Version: 0.11.1
+;; Version: 0.11.3
 ;; Package-Requires: ((emacs "28.1"))
 
-(defconst acp-package-version "0.11.1")
+(defconst acp-package-version "0.11.3")
 
 ;; This package is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -109,7 +109,9 @@ the error is logged."
     (error "\"%s\" command line utility not found.  Please install it" (map-elt client :command)))
   (when (acp--client-started-p client)
     (error "Client already started"))
-  (let* ((pending-input "")
+  (let* ((coding-system-for-read 'utf-8-unix)
+         (coding-system-for-write 'utf-8-unix)
+         (pending-input "")
          (message-queue nil)
          (message-queue-busy nil)
          (process-environment (append (map-elt client :environment-variables)
@@ -122,6 +124,7 @@ the error is logged."
                                      (map-elt client :command)
                                      (map-elt client :instance-count))
                        :buffer stderr-buffer
+                       :noquery t
                        :filter (lambda (_process raw-output)
                                  (acp--log client "STDERR" "%s" (string-trim raw-output))
                                  (when-let ((std-error (cond
@@ -142,6 +145,7 @@ the error is logged."
                                    (map-elt client :command-params))
                     :stderr stderr-proc
                     :connection-type 'pipe
+                    :noquery t
                     :filter (lambda (_proc input)
                               (acp--log client "INCOMING TEXT" "%s" input)
                               (setq pending-input (concat pending-input input))
@@ -399,8 +403,6 @@ SYNC: When non-nil, send request synchronously."
   (let* ((request-id (map-elt response :request-id))
          (result-data (map-elt response :result))
          (error-data (map-elt response :error)))
-    (map-put! client :request-id (or request-id
-                                     (1+ (map-elt client :request-id))))
     (let* ((proc (map-elt client :process))
            (response (if error-data
                          `((jsonrpc . ,acp--jsonrpc-version)
@@ -577,6 +579,30 @@ See https://agentclientprotocol.com/rfds/session-resume."
   (unless cwd
     (error ":cwd is required"))
   `((:method . "session/resume")
+    (:params . ((sessionId . ,session-id)
+                ;; directory-file-name removes any trailing /
+                (cwd . ,(directory-file-name (expand-file-name cwd)))
+                (mcpServers . ,(or mcp-servers []))))))
+
+(cl-defun acp-make-session-fork-request (&key session-id cwd mcp-servers)
+  "Instantiate a \"session/fork\" request.
+
+SESSION-ID is the ID of the session to fork from.
+CWD is the current working directory for the forked session.
+MCP-SERVERS is an optional list of MCP servers to use.
+
+This method forks an existing session, creating a new session that
+shares the conversation history of the original.  Only available if the
+agent advertises the `session.fork' capability.
+
+Note: This is an unstable ACP feature.
+
+See https://agentclientprotocol.com/rfds/session-fork."
+  (unless session-id
+    (error ":session-id is required"))
+  (unless cwd
+    (error ":cwd is required"))
+  `((:method . "session/fork")
     (:params . ((sessionId . ,session-id)
                 ;; directory-file-name removes any trailing /
                 (cwd . ,(directory-file-name (expand-file-name cwd)))
