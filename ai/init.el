@@ -118,10 +118,8 @@ combinations."
     :endpoint "/v1/chat/completions"
     :key 'gptel-api-key
     :stream t
-    :models '(deepseek-ai/DeepSeek-V3-0324
-              deepseek-ai/DeepSeek-R1-0528
-              Qwen/Qwen3-Coder-480B-A35B-Instruct
-              Qwen/Qwen3-Coder-30B-A3B-Instruct))
+    :models '(moonshotai/Kimi-K2.5
+              zai-org/GLM-5))
 
   ;; ~/.authinfo
   ;; machine api.perplexity.ai login apikey password <KEY>
@@ -131,9 +129,9 @@ combinations."
     :stream t
     )
 
-  (setq gptel-backend (cdr (assoc "gemini" gptel--known-backends #'equal))
+  (setq gptel-backend (cdr (assoc "nebius" gptel--known-backends #'equal))
         gptel-include-reasoning nil
-        gptel-model 'gemini-2.5-flash-lite
+        gptel-model 'moonshotai/Kimi-K2.5
         gptel-directives
         (let* ((suffix " Also, use only plain text. Do not use Markdown, bullet points, numbering, bold, italics, or any other formatting. Output should be simple unformatted text only. Use only code blocks when necessary")
                (directives
