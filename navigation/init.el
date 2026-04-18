@@ -148,7 +148,9 @@ Fall back to `completing-read' otherwise."
 
 (defun app-open-file-at-point ()
   (interactive)
-  (let* ((file-path (ffap-file-at-point))
+  (let* ((file-path (or (ffap-file-at-point)
+                        (and (derived-mode-p 'dired-mode)
+                             (ignore-errors (dired-get-file-for-visit)))))
          (open-exec (or (executable-find "xdg-open")
                         (executable-find "gnome-open")
                         (executable-find "nautilus")
