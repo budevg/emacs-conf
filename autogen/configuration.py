@@ -192,8 +192,6 @@ ai = [Node(path = "ai/gptel",
            msg = ""),
       Node(path = "ai/agent-shell",
            msg = ""),
-      Node(path = "ai/pi",
-           msg = ""),
       Node(path = "ai/init.el",
            msg = "ai"),
       ]

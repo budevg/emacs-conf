@@ -184,25 +184,10 @@ combinations."
   (defun shell-maker-welcome-message (config) "")
 )
 
-(use-package pi-coding-agent
-  :commands pi-coding-agent
-  :custom
-  (pi-coding-agent-conf-dir (format "%s/.pi" (file-name-directory (executable-find "pi"))))
-  :bind (:map pi-coding-agent-chat-mode-map
-         ("g" . (lambda () (interactive) (delete-other-windows) (pi-coding-agent)))
-         )
-  )
+(defhydra hydra-ai ()
+  "ai"
+  ("g" (call-interactively #'gptel) "gptel" :color blue)
+  ("s" (agent-shell '(4)) "agent-shell" :color blue)
+  ("q" nil "cancel" :color blue))
 
-(defun ai-dispatch ()
-  (interactive)
-  (let ((choice (completing-read
-                 "AI: "
-                 '("gptel" "shell-agent" "pi")
-                 nil
-                 t)))
-    (pcase choice
-      ("gptel" (call-interactively #'gptel))
-      ("shell-agent" (agent-shell '(4)))
-      ("pi" (call-interactively #'pi-coding-agent)))))
-
-(global-set-key (kbd "C-f i") #'ai-dispatch)
+(global-set-key (kbd "C-f i") #'hydra-ai/body)
