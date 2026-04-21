@@ -20,6 +20,8 @@
               (c-basic-offset . 4)
               (indent-tabs-mode . nil)
               (eval . (c-set-offset 'innamespace 0))
+              (eval . (c-set-offset 'defun-open 0))
+              (eval . (c-set-offset 'inline-open 0))
               ))
 
  (python-mode . ((python-indent-offset . 4)
