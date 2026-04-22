@@ -154,7 +154,11 @@ combinations."
   )
 
 (use-package agent-shell
-  :commands agent-shell
+  :commands (agent-shell
+             agent-shell-openai-start-codex
+             agent-shell-anthropic-start-claude-code
+             agent-shell-pi-start-agent
+             agent-shell-opencode-start-agent)
   :bind (("S-<f1>" . (lambda () (interactive) (agent-shell t)))
          :map agent-shell-mode-map
          ("C-<tab>" . nil)
@@ -178,6 +182,7 @@ combinations."
         agent-shell-agent-configs `(,(agent-shell-openai-make-codex-config)
                                     ,(agent-shell-anthropic-make-claude-code-config)
                                     ,(agent-shell-opencode-make-agent-config)
+                                    ,(agent-shell-pi-make-agent-config)
                                     ,(agent-shell-google-make-gemini-config)
                                     ,(agent-shell-goose-make-agent-config))
         )
@@ -188,6 +193,10 @@ combinations."
   "ai"
   ("g" (call-interactively #'gptel) "gptel" :color blue)
   ("s" (agent-shell '(4)) "agent-shell" :color blue)
+  ("x" agent-shell-openai-start-codex "codex" :color blue)
+  ("c" agent-shell-anthropic-start-claude-code "claude" :color blue)
+  ("p" agent-shell-pi-start-agent "pi" :color blue)
+  ("o" agent-shell-opencode-start-agent "opencode" :color blue)
   ("q" nil "cancel" :color blue))
 
 (global-set-key (kbd "C-f i") #'hydra-ai/body)
