@@ -44,6 +44,7 @@
 (require 'url-handlers)
 (require 'xdg)
 (require 'json)
+(require 'subr-x)
 
 (require 'keymap-popup)
 (require 'yeetube-scraper)
@@ -244,8 +245,10 @@ videos from.")
 (defun yeetube-channel-id-at-point ()
   "Return yeetube channel id at point."
   (let* ((id (tabulated-list-get-id))
-         (item (yeetube--find-item id)))
-    (plist-get item :channel-id)))
+         (item (yeetube--find-item id))
+         (channel-id (plist-get item :channel-id)))
+    (unless (or (null channel-id) (string-empty-p channel-id))
+      channel-id)))
 
 (defun yeetube-read-query ()
   "Interactively read a search term."
@@ -536,7 +539,9 @@ Optionally, provide custom own URL."
   (interactive (list (or (yeetube-channel-id-at-point)
 			 (format "@%s" (read-string "Channel: ")))))
   (with-current-buffer (get-buffer-create "*yeetube*")
-    (setf yeetube--channel-id (substring channel-id 2))
+    (setf yeetube--channel-id (string-remove-prefix
+                               "@"
+                               (string-remove-prefix "/" channel-id)))
     (yeetube-display-content-from-url
      (format "https://youtube.com/%s/videos?ucbcb=1" channel-id))))
 
@@ -545,7 +550,9 @@ Optionally, provide custom own URL."
   (interactive (list (or (yeetube-channel-id-at-point)
 			 (format "@%s" (read-string "Channel: ")))))
   (with-current-buffer (get-buffer-create "*yeetube*")
-    (setf yeetube--channel-id (substring channel-id 2))
+    (setf yeetube--channel-id (string-remove-prefix
+                               "@"
+                               (string-remove-prefix "/" channel-id)))
     (yeetube-display-content-from-url (format "https://youtube.com/%s/streams?ucbcb=1" channel-id))))
 
 (defun yeetube-channel-search (channel-id query)
