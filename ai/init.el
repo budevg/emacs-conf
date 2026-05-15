@@ -8,7 +8,6 @@
          ("C-c C-e" . gptel-menu)
          ("C-c C-m" . gptel-switch-model))
   :config
-  (require 'gptel-curl)
   (require 'gptel-gemini)
   (require 'gptel-openai)
   (require 'gptel-openai-extras)

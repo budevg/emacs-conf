@@ -1,6 +1,6 @@
 ;;; gptel-org.el --- Org functions for gptel         -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  Karthik Chikmagalur
+;; Copyright (C) 2024-2026  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthikchikmagalur@gmail.com>
 ;; Keywords:
@@ -398,15 +398,15 @@ first nil value in REST is guaranteed to be correct."
               (readablep (or (eq resource-type 'url) (file-remote-p path)
                              (file-readable-p path)))
               (mime-valid
-               (if (or (eq resource-type 'url)
-                       (cdr (with-memoization
-                                (alist-get (expand-file-name path)
-                                           gptel--link-type-cache
-                                           nil nil #'string=)
-                              (cons t (gptel--file-binary-p path)))))
-                   (gptel--model-mime-capable-p
-                    (setq mime (mailcap-file-name-to-mime-type path)))
-                 t)))
+               (or (eq resource-type 'url)
+                   (and (with-memoization
+                            (alist-get (expand-file-name path)
+                                       gptel--link-type-cache
+                                       nil nil #'string=)
+                          (if (gptel--file-binary-p path) t))
+                        (setq mime (mailcap-file-name-to-mime-type path))
+                        (gptel--model-mime-capable-p mime))
+                   t)))
         (list t link-type path resource-type user-check readablep mime-valid mime)
       (list nil link-type path resource-type user-check readablep mime-valid mime))))
 
