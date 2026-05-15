@@ -1,0 +1,8 @@
+(:name keymap-popup
+       :description "A macro that defines a keymap with embedded descriptions and a popup to display them"
+       :type git
+       :url "https://codeberg.org/thanosapollo/emacs-keymap-popup.git"
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "lisp_lib")))
+
+       )

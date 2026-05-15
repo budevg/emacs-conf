@@ -29,6 +29,8 @@
 (require 'ol)
 (require 'ox)
 
+(declare-function yeetube--find-item "yeetube")
+
 (defsubst yeetube-ol--store-link (type)
   "Create an Org link to current Yeetube item of TYPE.
 TYPE must be either `video' or `playlist'.
@@ -37,9 +39,9 @@ and/or the item at point is not of type TYPE."
   (when (derived-mode-p 'yeetube-mode)
     (let* ((id (or (tabulated-list-get-id)
                    (save-excursion (end-of-line) (tabulated-list-get-id))))
-           (entry (cadr (assoc id yeetube-content)))
-           (title (aref entry (if yeetube-display-thumbnails-p 1 0))))
-      (when (eq (aref entry (1- (length entry))) type)
+           (item (yeetube--find-item id))
+           (title (plist-get item :title)))
+      (when (eq (plist-get item :type) type)
         (org-link-store-props :type (format "yt-%S" type)
                               :link (format "yt-%S:%s" type id)
                               :description title)))))
