@@ -30,6 +30,10 @@
  (js-mode . ((js-indent-level . 4)
              ))
 
+ (typescript-mode . ((eglot-workspace-configuration . (:typescript (:format (:tabSize 4 :indentSize 4 :convertTabsToSpaces t))))
+                     (typescript-indent-level . 4)
+                     ))
+
  (web-mode . ((web-mode-markup-indent-offset . 4)
               (web-mode-code-indent-offset . 4)
               (web-mode-code-indent-offset . 4)
