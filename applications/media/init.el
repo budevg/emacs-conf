@@ -21,8 +21,10 @@
     (interactive)
     (browse-url (yeetube-get-url)))
 
-  (define-key yeetube-mode-map (kbd "w") #'yeetube-copy-url)
-  (define-key yeetube-mode-map (kbd "/") #'yeetube-browse-youtube-url)
-
-  :bind (("C-f v v" . yeetube-search))
+  :bind (("C-f v v" . yeetube-search)
+         :map yeetube-mode-map
+         ("w" . yeetube-copy-url)
+         ("/" . yeetube-browse-youtube-url)
+         ("]" . tabulated-list-sort)
+         )
   )
