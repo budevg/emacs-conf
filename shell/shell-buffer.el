@@ -89,10 +89,12 @@ If N is negative, search forwards for the -Nth following match."
   (eat-enable-shell-prompt-annotation nil)
   :bind (("<f3>" . eat)
          ("C-<f3>" . (lambda() (interactive) (eat nil t)))
+         :map eat-semi-char-mode-map
+         ("M-RET" . eat-cycle-modes)
          :map eat-line-mode-map
-         ("C-c C-l" . eat-cycle-modes)
+         ("M-RET" . eat-cycle-modes)
          :map eat-mode-map
-         ("C-c C-l" . eat-cycle-modes)
+         ("M-RET" . eat-cycle-modes)
          )
   :config
   (defun eat-cycle-modes ()
@@ -100,6 +102,7 @@ If N is negative, search forwards for the -Nth following match."
     (cond
      (eat--line-mode
       (eat-semi-char-mode)
+      (end-of-buffer)
       (when (and (boundp 'cursor-type-modified) cursor-type-modified)
         (setq cursor-type nil)
         (kill-local-variable 'cursor-type-modified)))
