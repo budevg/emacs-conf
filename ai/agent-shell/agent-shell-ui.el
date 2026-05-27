@@ -70,88 +70,100 @@ When EXPANDED is non-nil, body will be expanded by default.
 When NO-UNDO is non-nil, disable undo recording for this operation.
 
 For existing blocks, the current expansion state is preserved unless overridden."
-  (save-mark-and-excursion
-    (let* ((inhibit-read-only t)
-           (buffer-undo-list (if no-undo t buffer-undo-list))
-           (namespace-id (map-elt model :namespace-id))
-           (qualified-id (format "%s-%s" namespace-id (map-elt model :block-id)))
-           (new-label-left (map-elt model :label-left))
-           (new-label-right (map-elt model :label-right))
-           (new-body (map-elt model :body))
-           (block-start nil)
-           (padding-start nil)
-           (padding-end nil)
-           (match (save-mark-and-excursion
-                    (goto-char (point-max))
-                    (text-property-search-backward
-                     'agent-shell-ui-state nil
-                     (lambda (_ state)
-                       (equal (map-elt state :qualified-id) qualified-id))
-                     t))))
-      (when (or new-label-left new-label-right new-body)
-        (when match
-          (goto-char (prop-match-beginning match)))
-        (if (and match (not create-new))
-            ;; Found existing block - delete and regenerate
-            (let* ((existing-model (agent-shell-ui--read-fragment-at-point))
-                   (state (get-text-property (point) 'agent-shell-ui-state))
-                   (existing-body (map-elt existing-model :body))
-                   (block-end (prop-match-end match))
-                   (final-body (if new-body
-                                   (if (and append existing-body)
-                                       (concat existing-body new-body)
-                                     new-body)
-                                 existing-body))
-                   (final-model (list (cons :namespace-id namespace-id)
-                                      (cons :block-id (map-elt model :block-id))
-                                      (cons :label-left (or new-label-left
-                                                            (map-elt existing-model :label-left)))
-                                      (cons :label-right (or new-label-right
-                                                             (map-elt existing-model :label-right)))
-                                      (cons :body final-body))))
-              (setq block-start (prop-match-beginning match))
+  (let* ((inhibit-read-only t)
+         (buffer-undo-list (if no-undo t buffer-undo-list))
+         (window (get-buffer-window (current-buffer)))
+         (saved-point (point))
+         (saved-mark (mark t))
+         (saved-mark-active mark-active)
+         (saved-window-start (and window (window-start window)))
+         (namespace-id (map-elt model :namespace-id))
+         (qualified-id (format "%s-%s" namespace-id (map-elt model :block-id)))
+         (new-label-left (map-elt model :label-left))
+         (new-label-right (map-elt model :label-right))
+         (new-body (map-elt model :body))
+         (block-start nil)
+         (padding-start nil)
+         (padding-end nil)
+         (match (save-mark-and-excursion
+                  (goto-char (point-max))
+                  (text-property-search-backward
+                   'agent-shell-ui-state nil
+                   (lambda (_ state)
+                     (equal (map-elt state :qualified-id) qualified-id))
+                   t))))
+    (unwind-protect
+        (progn
+          (when (or new-label-left new-label-right new-body)
+            (when match
+              (goto-char (prop-match-beginning match)))
+            (if (and match (not create-new))
+                ;; Found existing block - delete and regenerate
+                (let* ((existing-model (agent-shell-ui--read-fragment-at-point))
+                       (state (get-text-property (point) 'agent-shell-ui-state))
+                       (existing-body (map-elt existing-model :body))
+                       (block-end (prop-match-end match))
+                       (final-body (if new-body
+                                       (if (and append existing-body)
+                                           (concat existing-body new-body)
+                                         new-body)
+                                     existing-body))
+                       (final-model (list (cons :namespace-id namespace-id)
+                                          (cons :block-id (map-elt model :block-id))
+                                          (cons :label-left (or new-label-left
+                                                                (map-elt existing-model :label-left)))
+                                          (cons :label-right (or new-label-right
+                                                                 (map-elt existing-model :label-right)))
+                                          (cons :body final-body))))
+                  (setq block-start (prop-match-beginning match))
 
-              ;; Safely replace existing block using narrow-to-region
-              (save-excursion
-                (goto-char block-start)
-                (skip-chars-backward "\n")
-                (setq padding-start (point)))
+                  ;; Safely replace existing block using narrow-to-region
+                  (save-excursion
+                    (goto-char block-start)
+                    (skip-chars-backward "\n")
+                    (setq padding-start (point)))
 
-              ;; Replace block
-              (delete-region block-start block-end)
-              (goto-char block-start)
-              (agent-shell-ui--insert-fragment final-model qualified-id
-                                               (not (map-elt state :collapsed))
-                                               navigation)
-              (setq padding-end (point)))
+                  ;; Replace block
+                  (delete-region block-start block-end)
+                  (goto-char block-start)
+                  (agent-shell-ui--insert-fragment final-model qualified-id
+                                                   (not (map-elt state :collapsed))
+                                                   navigation)
+                  (setq padding-end (point)))
 
-          ;; Not found or create-new - insert new block
-          (goto-char (point-max))
-          (setq padding-start (point))
-          (agent-shell-ui--insert-read-only (agent-shell-ui--required-newlines 2))
-          (setq block-start (point))
-          (agent-shell-ui--insert-fragment model qualified-id expanded navigation)
-          (agent-shell-ui--insert-read-only "\n\n")
-          (setq padding-end (point))))
-      (when on-post-process
-        (funcall on-post-process))
-      (when-let ((block-range (agent-shell-ui--block-range :position block-start)))
-        (list (cons :block block-range)
-              (cons :body (agent-shell-ui--nearest-range-matching-property
-                           :property 'agent-shell-ui-section :value 'body
-                           :from (map-elt block-range :start)
-                           :to (map-elt block-range :end)))
-              (cons :label-left (agent-shell-ui--nearest-range-matching-property
-                                 :property 'agent-shell-ui-section :value 'label-left
-                                 :from (map-elt block-range :start)
-                                 :to (map-elt block-range :end)))
-              (cons :label-right (agent-shell-ui--nearest-range-matching-property
-                                  :property 'agent-shell-ui-section :value 'label-right
-                                  :from (map-elt block-range :start)
-                                  :to (map-elt block-range :end)))
-              (cons :padding (when (and padding-start padding-end)
-                               (list (cons :start padding-start)
-                                     (cons :end padding-end)))))))))
+              ;; Not found or create-new - insert new block
+              (goto-char (point-max))
+              (setq padding-start (point))
+              (agent-shell-ui--insert-read-only (agent-shell-ui--required-newlines 2))
+              (setq block-start (point))
+              (agent-shell-ui--insert-fragment model qualified-id expanded navigation)
+              (agent-shell-ui--insert-read-only "\n\n")
+              (setq padding-end (point))))
+          (when on-post-process
+            (funcall on-post-process))
+          (when-let ((block-range (agent-shell-ui--block-range :position block-start)))
+            (list (cons :block block-range)
+                  (cons :body (agent-shell-ui--nearest-range-matching-property
+                               :property 'agent-shell-ui-section :value 'body
+                               :from (map-elt block-range :start)
+                               :to (map-elt block-range :end)))
+                  (cons :label-left (agent-shell-ui--nearest-range-matching-property
+                                     :property 'agent-shell-ui-section :value 'label-left
+                                     :from (map-elt block-range :start)
+                                     :to (map-elt block-range :end)))
+                  (cons :label-right (agent-shell-ui--nearest-range-matching-property
+                                      :property 'agent-shell-ui-section :value 'label-right
+                                      :from (map-elt block-range :start)
+                                      :to (map-elt block-range :end)))
+                  (cons :padding (when (and padding-start padding-end)
+                                   (list (cons :start padding-start)
+                                         (cons :end padding-end)))))))
+      (goto-char saved-point)
+      (when saved-mark
+        (set-marker (mark-marker) saved-mark))
+      (setq mark-active saved-mark-active)
+      (when window
+        (set-window-start window saved-window-start t)))))
 
 
 (defun agent-shell-ui--read-fragment-at (position qualified-id)

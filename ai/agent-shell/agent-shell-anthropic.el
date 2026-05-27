@@ -149,7 +149,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
                                     (funcall agent-shell-anthropic-default-model-id)
                                   agent-shell-anthropic-default-model-id))
    :default-session-mode-id (lambda () agent-shell-anthropic-default-session-mode-id)
-   :install-instructions "See https://github.com/zed-industries/claude-agent-acp for installation."))
+   :install-instructions "See https://github.com/agentclientprotocol/claude-agent-acp for installation."))
 
 (defun agent-shell-anthropic-start-claude-code ()
   "Start an interactive Claude Agent shell."
