@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: cluset
+# key: clush
+# --
+cluset -e --separator='\n' $0

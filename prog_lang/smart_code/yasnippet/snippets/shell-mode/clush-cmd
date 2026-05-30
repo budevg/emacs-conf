@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: clush
+# key: clush
+# --
+clush --hostfile ${1:nodes.txt} -f 50 -b -- 'sudo bash -c "${2:hostname}"'$0

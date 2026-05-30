@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: tf
+# key: main
+# --
+{ pkgs ? import <nixpkgs> { } }:
+with pkgs;
+mkShell {
+  buildInputs = [ terraform ];
+  shellHook = ''
+  '';
+}$0

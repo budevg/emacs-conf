@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: nohup
+# key: nohup
+# --
+nohup sh -c '$1' &>/dev/null &$0

@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: xargsp
+# key: xargsp
+# --
+xargs -P10 -I {} bash -c "echo {} |& sed 's/^/{} /'" | ts "%Y-%m-%d %H:%M:%.S"$0
