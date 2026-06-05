@@ -221,4 +221,4 @@ FRAME = Node(x=0,
              y=26,
              height=51,
              width =159,
-             font="-unknown-DejaVu Sans Mono-normal-normal-normal-*-14-*-*-*-m-0-iso10646-1")
+             font='(font-spec :family "DejaVu Sans Mono" :size 14)')
