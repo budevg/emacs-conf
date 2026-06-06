@@ -2168,7 +2168,7 @@ STATE one of the `:invisible', `:block', `:blinking-block',
 (defun eat--t-set-cursor-style (style)
   "Set cursor state as described by STYLE."
   (when (<= 0 style 6)
-    (let ((state (aref [ :blinking-block :blinking-block :block
+    (let ((state (aref [ :block :blinking-block :block
                          :blinking-underline :underline
                          :blinking-bar :bar]
                        style)))
@@ -4947,6 +4947,11 @@ return \"eat-color\", otherwise return \"eat-mono\"."
 
 (defvar eat--cursor-blink-mode)
 
+(defun eat--redisplay-cursor ()
+  "Request redisplay after changing the buffer-local cursor."
+  (when (display-graphic-p)
+    (force-window-update (current-buffer))))
+
 (defun eat--flip-cursor-blink-state ()
   "Flip the state of slowly blinking text."
   (when (and eat--cursor-blink-mode
@@ -4955,10 +4960,7 @@ return \"eat-color\", otherwise return \"eat-mono\"."
                                 (caddr eat--cursor-blink-type)
                               (car eat--cursor-blink-type)))
     (setq eat--cursor-blink-state (not eat--cursor-blink-state))
-    ;; REVIEW: This is expensive, and some causes flickering.  Any
-    ;; better way?
-    (when-let* ((window (get-buffer-window nil 'visible)))
-      (redraw-frame (window-frame window)))))
+    (eat--redisplay-cursor)))
 
 (defun eat--cursor-blink-stop-timers ()
   "Stop blinking timers."
