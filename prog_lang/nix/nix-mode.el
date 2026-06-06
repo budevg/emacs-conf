@@ -2,9 +2,9 @@
 
 ;; Maintainer: Matthew Bauer <mjbauer95@gmail.com>
 ;; Homepage: https://github.com/NixOS/nix-mode
-;; Version: 1.4.4
+;; Version: 1.5.0
 ;; Keywords: nix, languages, tools, unix
-;; Package-Requires: ((emacs "25.1"))
+;; Package-Requires: ((emacs "25.1") magit-section (transient "0.3"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -25,7 +25,7 @@
 (eval-when-compile (require 'subr-x))
 
 (defgroup nix-mode nil
-  "Nix mode customizations"
+  "Nix mode customizations."
   :group 'nix)
 
 (defcustom nix-indent-function 'smie-indent-line
@@ -79,6 +79,20 @@ very large Nix files (all-packages.nix)."
 (defface nix-antiquote-face
   '((t :inherit font-lock-preprocessor-face))
   "Face used to highlight Nix antiquotes."
+  :group 'nix-faces)
+
+(defface nix-store-path-face nil
+  "Face used to highlight Nix store paths."
+  :group 'nix-faces)
+
+(defface nix-store-path-realised-face
+  '((t :inherit 'nix-store-path-face))
+  "Face used to highlight realised Nix store paths."
+  :group 'nix-faces)
+
+(defface nix-store-path-unrealised-face
+  '((t :inherit 'nix-store-path-face))
+  "Face used to highlight unrealised Nix store paths."
   :group 'nix-faces)
 
 ;;; Constants
@@ -244,9 +258,21 @@ STRING-TYPE type of string based off of Emacs syntax table types"
         (setq start (+ 2 start)))
       (when (equal (mod (- end start) 3) 2)
         (let ((str-peek (buffer-substring end (min (point-max) (+ 2 end)))))
-          (if (member str-peek '("${" "\\n" "\\r" "\\t"))
-              (goto-char (+ 2 end))
-            (nix--mark-string (1- end) ?\')))))))
+          (cond
+           ((member str-peek '("${" "\\n" "\\r" "\\t"))
+            (goto-char (+ 2 end)))
+           ((string-prefix-p "$" str-peek)
+            (goto-char (1+ end)))
+           (t
+            (nix--mark-string (1- end) ?\'))))))))
+
+(defun nix--escaped-dollar-sign-antiquote-sq-style ()
+  "Hande Nix escaped dollar sign antiquote sq style."
+  (let* ((start (match-beginning 0))
+         (ps (nix--get-parse-state start))
+	 (string-type (nix--get-string-type ps)))
+    (when (equal string-type ?\")
+      (nix--antiquote-open-at (+ start 2) ?\"))))
 
 (defun nix--escaped-antiquote-dq-style ()
   "Handle Nix escaped antiquote dq style."
@@ -344,6 +370,10 @@ STRING-TYPE type of string based off of Emacs syntax table types"
      (0 nil))
     ("\\\\\""
      (0 nil))
+    ("\\$\\$"
+     (0 nil))
+    ("\\\\\\$\\${"
+     (0 (ignore (nix--escaped-dollar-sign-antiquote-sq-style))))
     ("\\\\\\${"
      (0 (ignore (nix--escaped-antiquote-dq-style))))
     ("'\\{2,\\}"
@@ -531,7 +561,7 @@ STRING-TYPE type of string based off of Emacs syntax table types"
 (defconst nix-smie--path-chars "a-zA-Z0-9-+_.:/~")
 
 (defun nix-smie--skip-angle-path-forward ()
-  "Skip forward a path enclosed in angle brackets, e.g <nixpkgs>"
+  "Skip forward a path enclosed in angle brackets, e.g <nixpkgs>."
   (let ((start (point)))
     (when (eq (char-after) ?<)
       (forward-char)
@@ -543,7 +573,7 @@ STRING-TYPE type of string based off of Emacs syntax table types"
         (ignore (goto-char start))))))
 
 (defun nix-smie--skip-angle-path-backward ()
-  "Skip backward a path enclosed in angle brackets, e.g <nixpkgs>"
+  "Skip backward a path enclosed in angle brackets, e.g <nixpkgs>."
   (let ((start (point)))
     (when (eq (char-before) ?>)
       (backward-char)
@@ -733,8 +763,8 @@ not to any other arguments."
                                 (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
                                   ;; Then regex-match strings at the end of the line to detect if we need to indent the line after.
                                   ;; We could probably add more things to look for here in the future.
-                                  (if (or (string-match "let$" line)
-                                          (string-match "import$" line)
+                                  (if (or (string-match "\\blet$" line)
+                                          (string-match "\\bimport$" line)
                                           (string-match "\\[$" line)
                                           (string-match "=$" line)
                                           (string-match "\($" line)
@@ -913,11 +943,9 @@ location of STR. If `nix-instantiate' has a nonzero exit code,
 don’t do anything"
   (when (and (string-match nix-re-bracket-path str)
              (executable-find nix-instantiate-executable))
-    (with-temp-buffer
-      (when (eq (call-process nix-instantiate-executable nil (current-buffer)
-                              nil "--eval" "-E" str) 0)
-        ;; Remove trailing newline
-        (substring (buffer-string) 0 (- (buffer-size) 1))))))
+    (let ((nix-executable nix-instantiate-executable))
+      (ignore-errors
+	(nix--process-string "--eval" "-E" str)))))
 
 ;; Key maps
 
@@ -960,8 +988,7 @@ The following commands may be useful:
 
 The hook `nix-mode-hook' is run when Nix mode is started.
 
-\\{nix-mode-map}
-"
+\\{nix-mode-map}"
   :group 'nix-mode
   :syntax-table nix-mode-syntax-table
   :abbrev-table nix-mode-abbrev-table
@@ -1021,7 +1048,7 @@ The hook `nix-mode-hook' is run when Nix mode is started.
 
   ;; Find file at point
   (push '(nix-mode . nix-mode-ffap-nixpkgs-path) ffap-alist)
-  (push '(nix-mode "--:\\\\${}<>+@-Z_[:alpha:]~*?" "@" "@;.,!:")
+  (push '(nix-mode "--:\\\\$<>+@-Z_[:alpha:]~*?" "@" "@;.,!:")
         ffap-string-at-point-mode-alist))
 
 ;;;###autoload

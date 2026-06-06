@@ -17,9 +17,12 @@
 ;;; Code:
 
 (require 'pcomplete)
+(require 'json)
+(eval-when-compile
+  (require 'let-alist))
 
 (defgroup nix nil
-  "Nix-related customizations"
+  "Nix-related customizations."
   :group 'languages)
 
 (defcustom nix-executable "nix"
@@ -33,12 +36,12 @@
   :type 'string)
 
 (defcustom nix-instantiate-executable "nix-instantiate"
-  "Nix executable location."
+  "Nix-instantiate executable location."
   :group 'nix
   :type 'string)
 
 (defcustom nix-store-executable "nix-store"
-  "Nix executable location."
+  "Nix-store executable location."
   :group 'nix
   :type 'string)
 
@@ -50,35 +53,31 @@
 (defcustom nix-store-dir "/nix/store"
   "Nix store directory."
   :group 'nix
-  :type 'string)
+  :type 'directory)
 
 (defcustom nix-state-dir "/nix/var"
-  "Nix store directory."
+  "Nix state directory."
   :group 'nix
-  :type 'string)
+  :type 'directory)
 
 (defun nix-system ()
   "Get the current system tuple."
-  (let ((stdout (generate-new-buffer "nix eval"))
-        result)
-    (call-process nix-executable nil (list stdout nil) nil
-		  "eval" "--raw" "(builtins.currentSystem)")
-    (with-current-buffer stdout (setq result (buffer-string)))
-    (kill-buffer stdout)
-    result))
+  (nix--process-string "eval"
+    "--raw"
+    (if (nix-is-24) "--impure" )
+    (if (nix-is-24) "--expr" )
+    "(builtins.currentSystem)"))
 
 (defvar nix-version nil)
 (defun nix-version ()
-  "Get the version of Nix"
-  (if nix-version nix-version
-    (let ((stdout (generate-new-buffer "nix eval"))
-          result)
-      (call-process nix-executable nil (list stdout nil) nil "--version")
-      (with-current-buffer stdout (setq result (buffer-string)))
-      (kill-buffer stdout)
-      result)))
+  "Get the version of Nix."
+  (or nix-version (nix--process-string "--version")))
 
-(defvar nix-commands
+(defun nix-show-config ()
+  "Show nix config."
+  (nix--process-json "show-config" "--json"))
+
+(defconst nix-commands
   '("add-to-store"
     "build"
     "cat-nar"
@@ -109,7 +108,7 @@
     "verify"
     "why-depends"))
 
-(defvar nix-toplevel-options
+(defconst nix-toplevel-options
   '("-v"
     "--verbose"
     "-h"
@@ -119,7 +118,7 @@
     "--option"
     "--version"))
 
-(defvar nix-config-options
+(defconst nix-config-options
   '("allowed-uris"
     "allow-import-from-derivation"
     "allow-new-priveleges"
@@ -187,10 +186,27 @@ OPTIONS a list of options to accept."
        ((or (string= "-s" last-arg) (string= "--substituter" last-arg))
         (pcomplete-here))))))
 
+(defun nix-is-24 ()
+  "Whether Nix is a version with Flakes support."
+  (let ((version (nix-version)))
+    (save-match-data
+      (when (string-match (rx bol "nix (Nix) " (group (+ digit) (?  "." (+ digit))))
+                          version)
+        (version<= "2.4" (match-string 1 version))))))
+
+(defun nix-has-flakes ()
+  "Whether Nix is a version with Flakes support."
+  ;; earlier versions reported as 3, now it’s just nix-2.4
+  (and (nix-is-24)
+       (let-alist (nix-show-config)
+	 (or
+	  (seq-contains-p .experimental-features.value 2)
+	  (seq-contains-p .experimental-features.value "flakes")))))
+
 ;;;###autoload
 (defun pcomplete/nix ()
   "Completion for the nix command."
-  (if (string-prefix-p "nix (Nix) 3" (nix-version))
+  (if (nix-is-24)
       (let ((stdout (generate-new-buffer "nix-completions"))
             (process-environment
              (cons (format "NIX_GET_COMPLETIONS=%s" (1- (length pcomplete-args)))
@@ -204,7 +220,7 @@ OPTIONS a list of options to accept."
               completions)
           (dolist (val (cdr lines))
             (unless (string= val "")
-              (setq completions (cons val completions))))
+              (setq completions (cons (car (split-string val "\t")) completions))))
           (dolist (val (cddr pcomplete-args))
             (pcomplete-here))
           (pcomplete-here completions nil t)))
@@ -314,6 +330,39 @@ OPTIONS a list of options to accept."
                                          "-f" "--file" "-I" "--include"))))
         (_ (nix--pcomplete-flags nix-toplevel-options)))
       (pcomplete-here (pcomplete-entries)))))
+
+(defun nix--process (&rest args)
+  (with-temp-buffer
+    (let* ((tmpfile  (make-temp-file "nix--process-stderr"))
+	 (cleaned-args (seq-filter #'stringp args))
+	 (exitcode (apply #'call-process `(,nix-executable nil (t ,tmpfile) nil ,@cleaned-args )))
+	 (stderr (with-temp-buffer
+		   (insert-file-contents tmpfile)
+		   (buffer-string))))
+      (delete-file tmpfile)
+      (list (buffer-string) stderr exitcode))))
+
+(defun nix--process-string (&rest args)
+  (cl-multiple-value-bind (stdout stderr exitcode) (apply #'nix--process args)
+    (if (not (eq exitcode 0))
+      (error stderr))
+    ;; cut-off the trailing newline
+    (string-trim-right stdout)))
+
+(defun nix--process-json (&rest args)
+  (json-read-from-string
+    (apply #'nix--process-string args)))
+
+(defun nix--process-lines (&rest args)
+  (seq-filter (lambda (el) (not (string= "" el)))
+    (split-string
+      (apply #'nix--process-string args) "\n")))
+
+(defun nix--process-json-nocheck (&rest args)
+  ;; No checking of exitcode is possible here until
+  ;; https://github.com/NixOS/nix/issues/2474 is resolved
+  (let ((result (apply #'nix--process args)))
+    (json-read-from-string (car result))))
 
 (provide 'nix)
 ;;; nix.el ends here
