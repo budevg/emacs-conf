@@ -41,7 +41,7 @@
 (declare-function agent-shell--dwim "agent-shell")
 
 (defcustom agent-shell-hermes-acp-command
-  '(hermes acp)
+  '("hermes" "acp")
   "Command and parameters for the Hermes agent client.
 
 The first element is the command name, and the rest are command parameters."
@@ -55,6 +55,23 @@ The first element is the command name, and the rest are command parameters."
 This should be a list of environment variables to be used when
 starting the Hermes agent process."
   :type '(repeat string)
+  :group 'agent-shell)
+
+(defcustom agent-shell-hermes-default-session-mode-id nil
+  "Default ACP session mode for the Hermes agent.
+
+Controls edit approval behavior (file patch/write permission prompts).
+
+Possible values are one of:
+
+nil               Don't set a mode; let Hermes use its own default.
+                  (Default.)
+\\='accept_edits'  Auto-approve workspace and /tmp edits; prompt only for
+                  sensitive paths like .git/.ssh/.env.
+\\='dont_ask'      Auto-approve all non-sensitive edits for the entire session."
+  :type '(choice (const :tag "Ask every time" nil)
+                 (const :tag "Accept edits (workspace+tmp)" "accept_edits")
+                 (const :tag "Don't ask (session-wide)" "dont_ask"))
   :group 'agent-shell)
 
 (defun agent-shell-hermes-make-agent-config ()
@@ -71,6 +88,7 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
    :welcome-function #'agent-shell-hermes--welcome-message
    :client-maker (lambda (buffer)
                    (agent-shell-hermes-make-client :buffer buffer))
+   :default-session-mode-id (lambda () agent-shell-hermes-default-session-mode-id)
    :install-instructions
    "Defaults to running 'hermes acp' locally.
 Customize \\\\[customize-variable] `agent-shell-hermes-acp-command' for remote setups (e.g., via SSH)."))
@@ -100,17 +118,22 @@ Customize \\\\[customize-variable] `agent-shell-hermes-acp-command' for remote s
             message)))
 
 (defun agent-shell-hermes--ascii-art ()
-  "Hermes ASCII art (banner font)."
+  "Hermes ASCII art (pyfiglet ansi_shadow font)."
   (let* ((is-dark (eq (frame-parameter nil 'background-mode) 'dark))
-         ;; pyfiglet banner font, width=60, HERMES in # characters
          (text (string-trim "
-#     # ####### ######  #     # #######  #####
-#     # #       #     # ##   ## #       #     #
-#     # #       #     # # # # # #       #
-####### #####   ######  #  #  # #####    #####
-#     # #       #   #   #     # #             #
-#     # #       #    #  #     # #       #     #
-#     # ####### #     # #     # #######  ##### " "\n")))
+██╗  ██╗ ███████╗ ██████╗  ███╗   ███╗ ███████╗ ███████╗
+██║  ██║ ██╔════╝ ██╔══██╗ ████╗ ████║ ██╔════╝ ██╔════╝
+███████║ █████╗   ██████╔╝ ██╔████╔██║ █████╗   ███████╗
+██╔══██║ ██╔══╝   ██╔══██╗ ██║╚██╔╝██║ ██╔══╝   ╚════██║
+██║  ██║ ███████╗ ██║  ██║ ██║ ╚═╝ ██║ ███████╗ ███████║
+╚═╝  ╚═╝ ╚══════╝ ╚═╝  ╚═╝ ╚═╝     ╚═╝ ╚══════╝ ╚══════╝
+ █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗
+██╔══██╗ ██╔════╝  ██╔════╝ ████╗  ██║ ╚══██╔══╝
+███████║ ██║  ███╗ █████╗   ██╔██╗ ██║    ██║
+██╔══██║ ██║   ██║ ██╔══╝   ██║╚██╗██║    ██║
+██║  ██║ ╚██████╔╝ ███████╗ ██║ ╚████║    ██║
+╚═╝  ╚═╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═══╝    ╚═╝
+" "\n")))
     (propertize text 'font-lock-face (if is-dark
                                          '(:foreground "#e0a050" :inherit fixed-pitch)
                                        '(:foreground "#b07830" :inherit fixed-pitch)))))

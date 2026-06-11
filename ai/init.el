@@ -171,7 +171,7 @@ combinations."
         agent-shell-transcript-file-path-function nil
         agent-shell-show-config-icons nil
         agent-shell-header-style 'text
-        markdown-overlays--table-zebra-stripe nil
+        agent-shell-markdown-table-zebra-stripe nil
         agent-shell-confirm-interrupt nil
         agent-shell-goose-authentication (agent-shell-make-goose-authentication :none t)
         agent-shell-goose-acp-command (cons "goose-acp" (cdr agent-shell-goose-acp-command))

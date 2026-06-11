@@ -79,7 +79,7 @@ Stores normalized options at both top-level :config-options and inside
 the :session alist for consistency."
   (let ((normalized-options (agent-shell--normalize-config-options acp-config-options)))
     (setf (map-elt state :config-options) normalized-options)
-    (when-let ((session (map-elt state :session)))
+    (when-let* ((session (map-elt state :session)))
       (setf (map-elt session :config-options) normalized-options)
       (setf (map-elt state :session) session))))
 

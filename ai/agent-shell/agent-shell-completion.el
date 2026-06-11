@@ -82,8 +82,8 @@ buffer.  Returns nil if the override is set but its buffer is dead."
 
 (defun agent-shell--file-completion-at-point ()
   "Complete project files after @."
-  (when-let ((source (agent-shell-completion--source-buffer))
-             (bounds (agent-shell--completion-bounds "[:alnum:]/_.-" ?@)))
+  (when-let* ((source (agent-shell-completion--source-buffer))
+              (bounds (agent-shell--completion-bounds "[:alnum:]/_.-" ?@)))
     (with-current-buffer source
       (unless agent-shell--project-files-cache
         (setq agent-shell--project-files-cache (agent-shell--project-files))
