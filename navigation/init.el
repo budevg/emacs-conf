@@ -148,9 +148,9 @@ Fall back to `completing-read' otherwise."
 
 (defun app-open-file-at-point ()
   (interactive)
-  (let* ((file-path (or (ffap-file-at-point)
-                        (and (derived-mode-p 'dired-mode)
-                             (ignore-errors (dired-get-file-for-visit)))))
+  (let* ((file-path (or (and (derived-mode-p 'dired-mode)
+                             (ignore-errors (dired-get-file-for-visit)))
+                        (ffap-file-at-point)))
          (open-exec (or (executable-find "xdg-open")
                         (executable-find "gnome-open")
                         (executable-find "nautilus")
@@ -159,10 +159,10 @@ Fall back to `completing-read' otherwise."
          (url-path (ffap-url-at-point)))
     (cond
      (url-path (browse-url url-path))
-     (file-path (call-process-shell-command
-                 (format "%s '%s'" open-exec (expand-file-name file-path))
-                 nil
-                 0))
+     ((and file-path open-exec)
+      (start-process "app-open-file-at-point" nil
+                     open-exec (expand-file-name file-path)))
+     (file-path (user-error "No external file opener found"))
      )))
 
 (define-key ctl-x-map "a" 'app-open-file-at-point)
