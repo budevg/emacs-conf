@@ -46,7 +46,9 @@
    `(cursor ((t (:foreground ,monokai-magenta))))
    `(hl-line ((t (:background ,monokai-gray-darkest))))
    `(minibuffer-prompt ((t (:foreground ,monokai-yellow-dark))))
-   `(modeline ((t (:background ,monokai-gray-lightest :foreground ,monokai-gray-light))))
+   '(mode-line ((t :box (:line-width -1 :style released-button) :background "grey75" :foreground "black")))
+   '(mode-line-active ((t :inherit mode-line)))
+   '(mode-line-inactive ((t :weight light :box (:line-width -1 :color "grey40" :style nil) :foreground "grey80" :background "grey30")))
    `(region ((t (:background ,monokai-gray-darker))))
    `(show-paren-match-face ((t (:background ,monokai-gray-darker))))
    ;; Main
