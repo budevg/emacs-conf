@@ -208,9 +208,12 @@ class ConfigBuilder(object):
 ''' % self._frame())
         self._data.append('''
 (add-hook 'window-setup-hook (lambda ()
-  (set-frame-font %(font)s)
-  (add-to-list 'default-frame-alist
-               `(font . ,%(font)s))
+  (let* ((font %(font)s)
+         (font-name (font-xlfd-name font)))
+    (when (and font-name (find-font font))
+      (set-frame-font font-name)
+      (add-to-list 'default-frame-alist
+                   `(font . ,font-name))))
 ; (maximize-frame)
   ))''' % self._frame())
         self._data.append('''
