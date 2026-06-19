@@ -1,6 +1,9 @@
 (setq initial-scratch-message
       (format ";;\n;; The time is %s\n;; Welcome root !!!\n;;\n"
               (format-time-string "%Y-%m-%d, %T")))
+
+(defun display-startup-echo-area-message () (message ""))
+
 (setq frame-title-format
   '((:eval (if (buffer-file-name)
                 (abbreviate-file-name (buffer-file-name))
@@ -101,7 +104,7 @@ Operates on the current paragraph if no region is active."
 (setq auto-coding-alist (append auto-coding-alist '(("\\.xml\\'" . no-conversion))))
 
 ;; ignore logging warnings when copy too much to the buffer
-(setq warning-suppress-log-types '((undo discard-info)))
+(add-to-list 'warning-suppress-log-types '(undo discard-info))
 
 (setq ispell-program-name "aspell")
 

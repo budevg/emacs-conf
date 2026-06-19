@@ -53,6 +53,7 @@ class ConfigBuilder(object):
             self._set_load_early_init()
             self._optimize_startup_time()
             self._native_compilation_flags()
+            self._supress_warnings()
             self._newline()
             self._gen_config_path()
             self._newline()
@@ -71,7 +72,15 @@ class ConfigBuilder(object):
 
     def _native_compilation_flags(self):
         self._data.append('''
-(setq comp-enable-subr-trampolines nil)''')
+(setq comp-enable-subr-trampolines nil)'''.lstrip())
+
+    def _supress_warnings(self):
+        self._data.append('''
+(setq warning-suppress-log-types '((files missing-lexbind-cookie)))
+(put 'if-let 'byte-obsolete-info nil)
+(put 'when-let 'byte-obsolete-info nil)
+(setq byte-compile-warnings '(not obsolete))
+        '''.lstrip())
 
     def _set_load_early_init(self):
         self._data.append('''
