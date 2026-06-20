@@ -62,7 +62,7 @@ Fall back to `completing-read' otherwise."
   :after vertico
   :custom
   (completion-styles '(orderless basic))
-  (completion-category-overrides '((file (styles partial-completion))))
+  (completion-category-overrides '((file (styles basic partial-completion))))
   (completion-pcm-leading-wildcard t)
   )
 

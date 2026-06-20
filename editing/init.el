@@ -153,8 +153,9 @@ Operates on the current paragraph if no region is active."
               (interactive)
               (join-line -1)))
 
-;; don't use lame windows key bindings
-(setq cua-enable-cua-keys nil)
+
+(setq cua-enable-cua-keys nil ;; don't use lame windows key bindings
+      cua-delete-copy-to-register-0 nil)
 ;; Edit text rectangles in emacs
 (cua-mode)
 
