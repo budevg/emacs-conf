@@ -79,10 +79,10 @@
   :type 'hook)
 
 (defcustom magit-log-remove-graph-args '("--follow" "-G" "-S" "-L")
-  "The log arguments that cause the `--graph' argument to be dropped.
+  "The log arguments that cause the \"--graph\" argument to be dropped.
 
 The default value lists the arguments that are incompatible with
-`--graph' and therefore must be dropped when that is used.  You
+\"--graph\" and therefore must be dropped when that is used.  You
 can add additional arguments that are available in `magit-log',
 but I recommend that you don't do that.  Nowadays I would define
 this as a constant, but I am preserving it as an option, in case
@@ -209,7 +209,7 @@ because the latter may make use of Imenu's outdated cache."
 
 (defcustom magit-log-color-graph-limit 256
   "Number of commits over which log graphs are not colored.
-When showing more commits than specified, then the `--color'
+When showing more commits than specified, then the \"--color\"
 argument is silently dropped.  This is necessary because the
 `ansi-color' library, which is used to turn control sequences
 into faces, is just too slow."
@@ -220,7 +220,7 @@ into faces, is just too slow."
 (defcustom magit-log-show-signatures-limit 256
   "Number of commits over which signatures are not verified.
 When showing more commits than specified by this option, then the
-`--show-signature' argument, if specified, is silently dropped.
+\"--show-signature\" argument, if specified, is silently dropped.
 This is necessary because checking the signature of a large
 number of commits is just too slow."
   :package-version '(magit . "4.0.0")
@@ -373,6 +373,12 @@ commits before and half after."
   :package-version '(magit . "3.3.0")
   :group 'magit-log
   :type 'integer)
+
+;;; Variables
+
+(defvar-local magit-buffer-log-revisions nil)
+(defvar-local magit-buffer-log-args nil)
+(defvar-local magit-buffer-log-files nil)
 
 ;;; Arguments
 ;;;; Prefix Classes
@@ -772,14 +778,14 @@ completion candidates."
 ;;;###autoload
 (defun magit-log-buffer-file (&optional follow beg end)
   "Show log for the blob or file visited in the current buffer.
-With a prefix argument or when `--follow' is an active log
+With a prefix argument or when \"--follow\" is an active log
 argument, then follow renames.  When the region is active,
 restrict the log to the lines that the region touches."
   (interactive (cons current-prefix-arg (magit-file-region-line-numbers)))
   (require 'magit)
   (if-let ((file (magit-file-relative-name)))
       (magit-log-setup-buffer
-       (list (or magit-buffer-refname
+       (list (or magit-buffer-revision
                  (magit-get-current-branch)
                  "HEAD"))
        (let ((args (car (magit-log-arguments))))
@@ -802,7 +808,7 @@ restrict the log to the lines that the region touches."
                          (user-error "Buffer isn't visiting a file"))
                      (or (funcall magit-log-trace-definition-function)
                          (user-error "No function at point found"))
-                     (or magit-buffer-refname
+                     (or magit-buffer-revision
                          (magit-get-current-branch)
                          "HEAD")))
   (require 'magit)
@@ -872,7 +878,7 @@ https://github.com/mhagger/git-when-merged."
                  (to (if (<= to 0)
                          branch
                        (format "%s~%s" branch to))))
-            (unless (magit-rev-verify-commit from)
+            (unless (magit-commit-p from)
               (setq from (magit-git-string "rev-list" "--max-parents=0"
                                            commit)))
             (magit-log-setup-buffer (list (concat from ".." to))
@@ -885,7 +891,7 @@ https://github.com/mhagger/git-when-merged."
 (defun magit-delete-shelved-branch (branch)
   "Delete the shelved BRANCH.
 Delete a ref created by `magit-branch-shelve'."
-  (interactive (list (magit-read-shelved-branch "Log shelved branch")))
+  (interactive (list (magit-read-shelved-branch "Delete shelved branch")))
   (magit-run-git "update-ref" "-d" (concat "refs/shelved/" branch)))
 
 ;;;; Limit Commands
@@ -1131,7 +1137,7 @@ Type \\[magit-reset] to reset `HEAD' to the commit at point.
   (require 'magit)
   (with-current-buffer
       (magit-setup-buffer #'magit-log-mode locked
-        (magit-buffer-revisions revs)
+        (magit-buffer-log-revisions revs)
         (magit-buffer-log-args args)
         (magit-buffer-log-files files))
     (when (if focus
@@ -1141,7 +1147,7 @@ Type \\[magit-reset] to reset `HEAD' to the commit at point.
     (current-buffer)))
 
 (defun magit-log-refresh-buffer ()
-  (let ((revs  magit-buffer-revisions)
+  (let ((revs  magit-buffer-log-revisions)
         (args  magit-buffer-log-args)
         (files magit-buffer-log-files)
         (limit (magit-log-get-commit-limit)))
@@ -1181,24 +1187,24 @@ Type \\[magit-reset] to reset `HEAD' to the commit at point.
 (defvar-local magit-log--color-graph nil)
 
 (defun magit-log--maybe-drop-color-graph (args limit)
-  (if (member "--color" args)
-      (if (cond ((not (member "--graph" args)))
-                ((not magit-log-color-graph-limit) nil)
-                ((not limit)
-                 (message "Dropping --color because -n isn't set (see %s)"
-                          'magit-log-color-graph-limit))
-                ((> limit magit-log-color-graph-limit)
-                 (message "Dropping --color because -n is larger than %s"
-                          'magit-log-color-graph-limit)))
-          (progn (setq args (remove "--color" args))
-                 (setq magit-log--color-graph nil))
-        (setq magit-log--color-graph t))
-    (setq magit-log--color-graph nil))
+  (cond ((not (member "--color" args))
+         (setq magit-log--color-graph nil))
+        ((cond ((not (member "--graph" args)) t)
+               ((not magit-log-color-graph-limit) nil)
+               ((not limit)
+                (message "Dropping --color because -n isn't set (see %s)"
+                         'magit-log-color-graph-limit))
+               ((> limit magit-log-color-graph-limit)
+                (message "Dropping --color because -n is larger than %s"
+                         'magit-log-color-graph-limit)))
+         (setq args (remove "--color" args))
+         (setq magit-log--color-graph nil))
+        ((setq magit-log--color-graph t)))
   args)
 
 (cl-defmethod magit-buffer-value (&context (major-mode magit-log-mode))
-  (append magit-buffer-revisions
-          (if (and magit-buffer-revisions magit-buffer-log-files)
+  (append magit-buffer-log-revisions
+          (if (and magit-buffer-log-revisions magit-buffer-log-files)
               (cons "--" magit-buffer-log-files)
             magit-buffer-log-files)))
 
@@ -1410,7 +1416,7 @@ Do not add this to a hook variable."
 
 (cl-defun magit-log-wash-rev (style abbrev)
   (when (derived-mode-p 'magit-log-mode 'magit-reflog-mode)
-    (cl-incf magit-log-count))
+    (incf magit-log-count))
   (looking-at (pcase style
                 ('log        magit-log-heading-re)
                 ('cherry     magit-log-cherry-re)
@@ -1540,17 +1546,17 @@ Do not add this to a hook variable."
               (delete-char (if (looking-at "\n") 1 4))
               (magit-diff-wash-diffs (list "--stat") limit))
           (when align
-            (setq align (make-string (1+ abbrev) ? )))
+            (setq align (make-string (1+ abbrev) ?\s)))
           (when (and (not (eobp)) (not (looking-at non-graph-re)))
             (when align
-              (setq align (make-string (1+ abbrev) ? )))
+              (setq align (make-string (1+ abbrev) ?\s)))
             (while (and (not (eobp)) (not (looking-at non-graph-re)))
               (when align
                 (save-excursion (insert align)))
               (forward-line)
               (magit-make-margin-overlay))
-            ;; When `--format' is used and its value isn't one of the
-            ;; predefined formats, then `git-log' does not insert a
+            ;; When "--format" is used and its value isn't one of the
+            ;; predefined formats, then "git log" does not insert a
             ;; separator line.
             (save-excursion
               (forward-line -1)
@@ -1584,6 +1590,7 @@ exists mostly for backward compatibility reasons."
     (magit-section-forward)))
 
 (add-hook 'magit-section-movement-hook #'magit-log-maybe-show-more-commits)
+(add-hook 'magit-mouse-set-point-hook  #'magit-log-maybe-show-more-commits)
 
 (defvar magit--update-revision-buffer nil)
 
@@ -1595,6 +1602,7 @@ See also info node `(magit)Section Movement'."
     (magit--maybe-update-revision-buffer)))
 
 (add-hook 'magit-section-movement-hook #'magit-log-maybe-update-revision-buffer)
+(add-hook 'magit-mouse-set-point-hook  #'magit-log-maybe-update-revision-buffer)
 
 (defun magit--maybe-update-revision-buffer ()
   (when-let* ((commit (magit-section-value-if 'commit))
@@ -1779,20 +1787,20 @@ Type \\[magit-log-select-quit] to abort without selecting a commit."
 
 (defun magit-log-select-setup-buffer (revs args)
   (magit-setup-buffer #'magit-log-select-mode nil
-    (magit-buffer-revisions revs)
+    (magit-buffer-log-revisions revs)
     (magit-buffer-log-args args)))
 
 (defun magit-log-select-refresh-buffer ()
   (setq magit-section-inhibit-markers t)
   (setq magit-section-insert-in-reverse t)
   (magit-insert-section (logbuf)
-    (magit--insert-log t magit-buffer-revisions
+    (magit--insert-log t magit-buffer-log-revisions
       (magit-log--maybe-drop-color-graph
        magit-buffer-log-args
        (magit-log-get-commit-limit)))))
 
 (cl-defmethod magit-buffer-value (&context (major-mode magit-log-select-mode))
-  magit-buffer-revisions)
+  magit-buffer-log-revisions)
 
 (defvar-local magit-log-select-pick-function nil)
 (defvar-local magit-log-select-quit-function nil)
@@ -1881,11 +1889,14 @@ Type \\[magit-cherry-pick] to apply the commit at point.
   (magit-hack-dir-local-variables)
   (setq magit--imenu-group-types 'cherries))
 
+(defvar-local magit-buffer-cherry-upstream nil)
+(defvar-local magit-buffer-cherry-range nil)
+
 (defun magit-cherry-setup-buffer (head upstream)
   (magit-setup-buffer #'magit-cherry-mode nil
     (magit-buffer-refname head)
-    (magit-buffer-upstream upstream)
-    (magit-buffer-range (concat upstream ".." head))))
+    (magit-buffer-cherry-upstream upstream)
+    (magit-buffer-cherry-range (concat upstream ".." head))))
 
 (defun magit-cherry-refresh-buffer ()
   (setq magit-section-insert-in-reverse t)
@@ -1893,7 +1904,7 @@ Type \\[magit-cherry-pick] to apply the commit at point.
     (magit-run-section-hook 'magit-cherry-sections-hook)))
 
 (cl-defmethod magit-buffer-value (&context (major-mode magit-cherry-mode))
-  magit-buffer-range)
+  magit-buffer-cherry-range)
 
 ;;;###autoload
 (defun magit-cherry (head upstream)
@@ -1907,12 +1918,8 @@ Type \\[magit-cherry-pick] to apply the commit at point.
 
 (defun magit-insert-cherry-headers ()
   "Insert headers appropriate for `magit-cherry-mode' buffers."
-  (let ((branch (propertize magit-buffer-refname
-                            'font-lock-face 'magit-branch-local))
-        (upstream (propertize magit-buffer-upstream 'font-lock-face
-                              (if (magit-local-branch-p magit-buffer-upstream)
-                                  'magit-branch-local
-                                'magit-branch-remote))))
+  (let ((branch   (magit-branch-set-face magit-buffer-refname))
+        (upstream (magit-branch-set-face magit-buffer-cherry-upstream)))
     (magit-insert-head-branch-header branch)
     (magit-insert-upstream-branch-header branch upstream "Upstream: ")
     (insert ?\n)))
@@ -1923,7 +1930,7 @@ Type \\[magit-cherry-pick] to apply the commit at point.
     (magit-insert-heading t "Cherry commits")
     (magit-git-wash (apply-partially #'magit-log-wash-log 'cherry)
       "cherry" "-v" "--abbrev"
-      magit-buffer-upstream
+      magit-buffer-cherry-upstream
       magit-buffer-refname)))
 
 ;;; Log Sections
@@ -2111,10 +2118,15 @@ all others with \"-\"."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

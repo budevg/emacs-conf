@@ -8,11 +8,11 @@
 ;; Homepage: https://github.com/magit/magit
 ;; Keywords: tools
 
-;; Package-Version: 4.5.0
+;; Package-Version: 4.6.0
 ;; Package-Requires: (
 ;;     (emacs   "28.1")
-;;     (compat  "30.1")
-;;     (cond-let "0.2")
+;;     (compat  "31.0")
+;;     (cond-let "1.1")
 ;;     (llama    "1.0")
 ;;     (seq      "2.24"))
 
@@ -50,15 +50,10 @@
 (require 'llama) ; For (##these ...) see M-x describe-function RET # # RET.
 (require 'subr-x)
 
-;; For older Emacs releases we depend on an updated `seq' release from GNU
-;; ELPA, for `seq-keep'.  Unfortunately something else may require `seq'
-;; before `package' had a chance to put this version on the `load-path'.
-(when (and (featurep 'seq)
-           (not (fboundp 'seq-keep)))
-  (unload-feature 'seq 'force))
-(require 'seq)
-;; Furthermore, by default `package' just silently refuses to upgrade.
-(defconst magit--core-upgrade-instructions "\
+(defun magit--display-core-upgrade-instructions (package version)
+  (display-warning 'magit
+                   (substitute-command-keys
+                    (format "\
 Magit requires `%s' >= %s,
 but due to bad defaults, Emacs' package manager, refuses to
 upgrade this and other built-in packages to higher releases
@@ -86,12 +81,28 @@ reinstalling Magit.
 
 If you don't use the `package' package manager but still get
 this warning, then your chosen package manager likely has a
-similar defect.")
-(unless (fboundp 'seq-keep)
-  (display-warning 'magit (substitute-command-keys
-                           (format magit--core-upgrade-instructions
-                                   'seq "2.24" 'seq 'seq 'seq 'seq))
+similar defect."
+                            package version package package package package))
                    :emergency))
+
+;; For older Emacs releases we depend on an updated `seq' release from GNU
+;; ELPA, for `seq-keep'.  Unfortunately something else may require `seq'
+;; before `package' had a chance to put this version on the `load-path'.
+(when (and (featurep 'seq)
+           (not (fboundp 'seq-keep)))
+  (unload-feature 'seq 'force))
+(require 'seq)
+;; Furthermore, by default `package' just silently refuses to upgrade.
+(unless (fboundp 'seq-keep)
+  (magit--display-core-upgrade-instructions 'seq "2.24"))
+
+;; Likewise, we require a recent `transient'.
+(when (and (featurep 'transient)
+           (not (fboundp 'transient--advise-this-command)))
+  (unload-feature 'transient 'force))
+(require 'transient)
+(unless (fboundp 'transient--advise-this-command)
+  (magit--display-core-upgrade-instructions 'transient "0.13"))
 
 (require 'cursor-sensor)
 (require 'format-spec)
@@ -114,6 +125,9 @@ similar defect.")
   "Hook run by `magit-section-goto'.
 That function in turn is used by all section movement commands.
 See also info node `(magit)Section Movement'.")
+
+(defvar magit-mouse-set-point-hook nil
+  "Hook run by `magit-mouse-set-point-hook'.")
 
 (defvar magit-section-set-visibility-hook
   (list #'magit-section-cached-visibility)
@@ -877,18 +891,18 @@ If there is no previous sibling section, then move to the parent."
     ((magit-section-backward))))
 
 (defun magit-mouse-set-point (event &optional promote-to-region)
-  "Like `mouse-set-point' but also call `magit-section-movement-hook'."
+  "Like `mouse-set-point' but also call `magit-mouse-set-point-hook'."
   (interactive "e\np")
   (mouse-set-point event promote-to-region)
-  (run-hook-with-args 'magit-section-movement-hook (magit-current-section)))
+  (run-hook-with-args 'magit-mouse-set-point-hook (magit-current-section)))
 
 (defun magit-section-goto (arg)
   "Run `magit-section-movement-hook'.
 See info node `(magit)Section Movement'."
-  (if (integerp arg)
-      (progn (forward-line arg)
-             (setq arg (magit-current-section)))
-    (goto-char (oref arg start)))
+  (cond ((integerp arg)
+         (forward-line arg)
+         (setq arg (magit-current-section)))
+        ((goto-char (oref arg start))))
   (run-hook-with-args 'magit-section-movement-hook arg))
 
 (defun magit-section-set-window-start (section)
@@ -936,8 +950,8 @@ With a prefix argument also expand it." heading)
   (oset section hidden nil)
   (magit-section--opportunistic-wash section)
   (magit-section--opportunistic-paint section)
-  (when-let ((beg (oref section content)))
-    (remove-overlays beg (oref section end) 'invisible t))
+  (when$ (oref section content)
+    (remove-overlays $ (oref section end) 'invisible t))
   (magit-section-maybe-update-visibility-indicator section)
   (magit-section-maybe-cache-visibility section)
   (dolist (child (oref section children))
@@ -1104,7 +1118,7 @@ sections."
       (cl-do* ((s section
                   (oref s parent))
                (i (1- (length (magit-section-ident s)))
-                  (cl-decf i)))
+                  (decf i)))
           ((cond ((< i level) (magit-section-show-children s (- level i 1)) t)
                  ((= i level) (magit-section-hide s) t))
            (magit-section-goto s))))))
@@ -2238,8 +2252,8 @@ forms CONDITION can take."
                            (setq siblings nil)))
                        (setq sections (nreverse sections))
                        (and (or (not condition)
-                                (seq-every-p (##magit-section-match condition %)
-                                             sections))
+                                (all (##magit-section-match condition %)
+                                     sections))
                             sections))))))))
 
 (defun magit-map-sections (function &optional section)
@@ -2674,10 +2688,15 @@ with the variables' values as arguments, which were recorded by
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

@@ -22,7 +22,7 @@
 
 ;;; Commentary:
 
-;; This library provides an interface to the `git sparse-checkout'
+;; This library provides an interface to the "git sparse-checkout"
 ;; command (operating in cone mode).
 
 ;;; Code:
@@ -46,7 +46,7 @@
 
 (defun magit-sparse-checkout-directories ()
   "Return directories that are recursively included in the sparse checkout.
-See the `git sparse-checkout' manpage for details about
+See the \"git sparse-checkout\" manpage for details about
 \"recursive\" versus \"parent\" directories in cone mode."
   (and (magit-get-boolean "core.sparsecheckoutcone")
        (mapcar #'file-name-as-directory
@@ -150,10 +150,15 @@ This header is not inserted by default.  To enable it, add it to
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

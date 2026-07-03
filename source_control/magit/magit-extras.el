@@ -125,7 +125,7 @@ alternative commands."
 
 ;;;###autoload
 (defun magit-run-git-gui-blame (commit filename &optional linenum)
-  "Run `git gui blame' on the given FILENAME and COMMIT.
+  "Run \"git gui blame\" on the given FILENAME and COMMIT.
 Interactively run it for the current file and the `HEAD', with a
 prefix or when the current file cannot be determined let the user
 choose.  When the current buffer is visiting FILENAME instruct
@@ -165,7 +165,7 @@ blame to center around the line point is on."
 
 ;;;###autoload
 (defun magit-run-git-gui ()
-  "Run `git gui' for the current git repository."
+  "Run \"git gui\" for the current git repository."
   (interactive)
   (magit-with-toplevel (magit-process-git 0 "gui")))
 
@@ -353,8 +353,8 @@ on a position in a file-visiting buffer."
   "Edit the commit that added the current line.
 
 With a prefix argument edit the commit that removes the line,
-if any.  The commit is determined using `git blame' and made
-editable using `git rebase --interactive' if it is reachable
+if any.  The commit is determined using \"git blame\" and made
+editable using \"git rebase --interactive\" if it is reachable
 from `HEAD', or by checking out the commit (or a branch that
 points at it) otherwise."
   (interactive (list (and current-prefix-arg 'removal)))
@@ -493,7 +493,7 @@ list returned by `magit-rebase-arguments'."
                            (and (not magit-reshelve-since-committer-only)
                                 (format "export GIT_AUTHOR_DATE=\"%s\"; " date))
                            (format "export GIT_COMMITTER_DATE=\"%s\";;" date))
-                        (cl-incf date 60)))
+                        (incf date 60)))
                     (magit-git-lines "rev-list" "--reverse" range)
                     " "))
                   (and keyid
@@ -543,7 +543,7 @@ should contain \"%N\", which is replaced with the number that was
 determined in the previous step.
 
 Both formats, if non-nil and after removing %N, are then expanded
-using `git show --format=FORMAT ...' inside TOPLEVEL.
+using \"git show --format=FORMAT ...\" inside TOPLEVEL.
 
 The expansion of POINT-FORMAT is inserted at point, and the
 expansion of EOB-FORMAT is inserted at the end of the buffer (if
@@ -616,32 +616,24 @@ the minibuffer too."
           (pnt-args nil)
           (eob-args nil))
       (when (listp pnt-format)
-        (setq pnt-args (cdr pnt-format))
-        (setq pnt-format (car pnt-format)))
+        (pcase-setq `(,pnt-format . ,pnt-args) pnt-format))
       (when (listp eob-format)
-        (setq eob-args (cdr eob-format))
-        (setq eob-format (car eob-format)))
+        (pcase-setq `(,eob-format . ,eob-args) eob-format))
       (when pnt-format
         (when idx-format
           (setq pnt-format (string-replace "%N" idx pnt-format)))
+        (when (and (bolp) comment-start (looking-at comment-start))
+          (save-excursion (insert ?\n)))
         (magit-rev-insert-format pnt-format rev pnt-args)
         (delete-char -1))
       (when eob-format
         (when idx-format
           (setq eob-format (string-replace "%N" idx eob-format)))
-        (save-excursion
-          (goto-char (point-max))
-          (skip-syntax-backward ">-")
-          (beginning-of-line)
-          (if (and comment-start (looking-at comment-start))
-              (while (looking-at comment-start)
-                (forward-line -1))
-            (forward-line)
-            (unless (= (current-column) 0)
-              (insert ?\n)))
-          (insert ?\n)
-          (magit-rev-insert-format eob-format rev eob-args)
-          (delete-char -1))))))
+        (git-commit--insert-trailer-1
+         (with-temp-buffer
+           (magit-rev-insert-format eob-format rev eob-args)
+           (string-trim (buffer-string)))
+         t)))))
 
 ;;;###autoload
 (defun magit-copy-section-value (arg)
@@ -737,9 +729,9 @@ abbreviated revision to the `kill-ring' and the
               (cl-case major-mode
                 (magit-diff-mode
                  (if (string-match "\\.\\.\\.?\\(.+\\)"
-                                   magit-buffer-range)
-                     (match-str 1 magit-buffer-range)
-                   magit-buffer-range))
+                                   magit-buffer-diff-range)
+                     (match-str 1 magit-buffer-diff-range)
+                   magit-buffer-diff-range))
                 (magit-status-mode "HEAD")))]
      [_(magit-commit-p rev)]
      (setq rev (magit-rev-parse
@@ -830,10 +822,15 @@ In Magit diffs, also skip over - and + at the beginning of the line."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

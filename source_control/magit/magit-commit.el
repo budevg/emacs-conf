@@ -102,40 +102,14 @@ Also see https://github.com/magit/magit/issues/4132."
 (defvar magit-common-git-post-commit-functions nil
   "Hook run by Git hooks `post-commit', `post-merge' and `post-rewrite'.
 
-This hook is run if `magit-overriding-githook-directory' is non-nil.
-The functions are called with the same arguments as the Git hook.
+There is not a single Git hook, which is called after a commit is
+created; to achieve that, all of these Git hooks have to be used.
 
-This hook is still experimental.")
-
-(defvar magit-git-post-commit-functions nil
-  "Hook run by Git hook `post-commit'.
-
-This hook is run if `magit-overriding-githook-directory' is non-nil.
-The functions are called with the same arguments as the Git hook.
-
-See also `magit-common-git-post-commit-functions'.
-
-This hook is still experimental.")
-
-(defvar magit-git-post-merge-functions nil
-  "Hook run by Git hook `post-merge'.
-
-This hook is run if `magit-overriding-githook-directory' is non-nil.
-The functions are called with the same arguments as the Git hook.
-
-See also `magit-common-git-post-commit-functions'.
-
-This hook is still experimental.")
-
-(defvar magit-git-post-rewrite-functions nil
-  "Hook run by Git hook `post-rewrite'.
-
-This hook is run if `magit-overriding-githook-directory' is non-nil.
-The functions are called with the same arguments as the Git hook.
-
-See also `magit-common-git-post-commit-functions'.
-
-This hook is still experimental.")
+Git hooks are documented in the githooks(5) manpage.  This Lisp hook
+is only run if `magit-run-hooks-from-githooks' is non-nil, and Magit
+runs Git asynchronously and on the local machine.  The hook functions
+are called with the same arguments as the Git hook; see the mentioned
+manpage for details.")
 
 ;;; Popup
 
@@ -144,6 +118,7 @@ This hook is still experimental.")
   "Create a new commit or replace an existing commit."
   :info-manual "(magit)Initiating a Commit"
   :man-page "git-commit"
+  :value '("--verbose")
   ["Arguments"
    ("-a" "Stage all modified and deleted files"   ("-a" "--all"))
    ("-e" "Allow empty commit"                     "--allow-empty")
@@ -375,7 +350,7 @@ the user explicitly select a commit, in a buffer dedicated to that task.
 
 Leave the original commit message of the targeted commit untouched.
 
-Like `magit-commit-fixup' but also run a `--autofixup' rebase."
+Like `magit-commit-fixup' but also run a \"--autofixup\" rebase."
   (interactive (list (magit-commit-at-point)
                      (magit-commit-arguments)))
   (magit-commit-squash-internal "--fixup=" commit args nil nil 'rebase))
@@ -392,7 +367,7 @@ Turing the rebase phase, when the two commits are being squashed, ask
 the user to author the final commit message, based on the original
 message of the targeted commit.
 
-Like `magit-commit-squash' but also run a `--autofixup' rebase."
+Like `magit-commit-squash' but also run a \"--autofixup\" rebase."
   (interactive (list (magit-commit-at-point)
                      (magit-commit-arguments)))
   (magit-commit-squash-internal "--squash=" commit args nil nil 'rebase))
@@ -548,20 +523,19 @@ is updated:
       (user-error "There are no modified modules that could be absorbed"))
     (when commit
       (setq commit (magit-rebase-interactive-assert commit t)))
-    (if (and commit (eq phase 'run))
-        (progn
-          (dolist (module modules)
-            (when-let ((msg (magit-git-string
-                             "log" "-1" "--format=%s"
-                             (concat commit "..") "--" module)))
-              (magit-git "commit" "-m" (concat "fixup! " msg)
-                         "--only" "--" module)))
-          (magit-refresh)
-          t)
-      (magit-log-select
-        (lambda (commit)
-          (magit-commit-absorb-modules 'run commit))
-        nil nil nil nil commit))))
+    (cond ((and commit (eq phase 'run))
+           (dolist (module modules)
+             (when-let ((msg (magit-git-string
+                              "log" "-1" "--format=%s"
+                              (concat commit "..") "--" module)))
+               (magit-git "commit" "-m" (concat "fixup! " msg)
+                          "--only" "--" module)))
+           (magit-refresh)
+           t)
+          ((magit-log-select
+             (lambda (commit)
+               (magit-commit-absorb-modules 'run commit))
+             nil nil nil nil commit)))))
 
 ;;;###autoload(autoload 'magit-commit-absorb "magit-commit" nil t)
 (transient-define-prefix magit-commit-absorb (phase commit args)
@@ -669,18 +643,25 @@ an alternative implementation."
                                   'magit-commit--rebase
                                 last-command))
   (when (and git-commit-mode magit-commit-show-diff)
-    (when-let ((diff-buffer (magit-get-mode-buffer 'magit-diff-mode)))
-      ;; This window just started displaying the commit message
-      ;; buffer.  Without this that buffer would immediately be
-      ;; replaced with the diff buffer.  See #2632.
+    (when-let ((diff-buffer
+                ;; This signals an error if not inside a Git repository,
+                ;; but the user may be visiting COMMIT_EDITMSG using a
+                ;; tool other than git, which can be used outside a Git
+                ;; repository.  See #5527.
+                (ignore-error magit-outside-git-repo
+                  (magit-get-mode-buffer 'magit-diff-mode))))
+      ;; This window just started displaying the commit message buffer.
+      ;; Without unrecording that buffer would immediately be replaced
+      ;; with the diff buffer.  See #2632.
       (unrecord-window-buffer nil diff-buffer))
     (message "Diffing changes to be committed (C-g to abort diffing)")
     (let ((inhibit-quit nil))
       (condition-case nil
-          (magit-commit-diff-1)
+          (with-demoted-errors "Error showing commit diff: %S"
+            (magit-commit-diff--show))
         (quit)))))
 
-(defun magit-commit-diff-1 ()
+(defun magit-commit-diff--args ()
   (let ((rev nil)
         (arg "--cached")
         (command (magit-repository-local-get 'this-commit-command))
@@ -695,6 +676,9 @@ an alternative implementation."
                   (and (file-exists-p f) (length (magit-file-lines f)))))
         (noalt nil))
     (pcase (list staged unstaged command)
+      ((guard (not (magit-commit-p "HEAD^")))
+       (setq rev "HEAD")
+       (setq arg nil))
       ((and `(,_ ,_ magit-commit--rebase)
             (guard (integerp squash)))
        (setq rev (format "HEAD~%s" squash)))
@@ -716,20 +700,23 @@ an alternative implementation."
        (setq arg nil)))
     (cond
       ((not
-        (and (eq this-command 'magit-diff-while-committing)
-             (and-let ((buf (magit-get-mode-buffer
-                             'magit-diff-mode nil 'selected)))
-               (and (equal rev (buffer-local-value 'magit-buffer-range buf))
-                    (equal arg (buffer-local-value 'magit-buffer-typearg buf)))))))
+        (and-let*
+            ((_(eq this-command 'magit-diff-while-committing))
+             (buf (magit-get-mode-buffer 'magit-diff-mode nil 'selected))
+             (_(equal rev (buffer-local-value 'magit-buffer-diff-range buf)))
+             (_(equal arg (buffer-local-value 'magit-buffer-diff-typearg buf)))))))
       ((eq command 'magit-commit-amend)
        (setq rev nil))
       ((or squash
            (file-exists-p (expand-file-name "rebase-merge/amend" (magit-gitdir))))
        (setq rev "HEAD^"))
-      (t
-       (message "No alternative diff while committing")
-       (setq noalt t)))
-    (unless noalt
+      ((setq noalt t)))
+    (list rev arg noalt)))
+
+(defun magit-commit-diff--show ()
+  (pcase-let ((`(,rev ,arg ,noalt) (magit-commit-diff--args)))
+    (if noalt
+        (message "No alternative diff while committing")
       (let ((magit-inhibit-save-previous-winconf 'unset)
             (magit-display-buffer-noselect t)
             (display-buffer-overriding-action
@@ -789,7 +776,8 @@ actually insert the entry."
   (with-current-buffer buffer
     (undo-boundary)
     (goto-char (point-max))
-    (while (re-search-backward (concat "^" comment-start) nil t))
+    (git-commit--goto-insert-position nil)
+    (while (re-search-backward (git-commit--trailer-regexp) nil t))
     (save-restriction
       (narrow-to-region (point-min) (point))
       (cond ((re-search-backward (format "* %s\\(?: (\\([^)]+\\))\\)?: " file)
@@ -855,10 +843,15 @@ Also see `git-commit-post-finish-hook'."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

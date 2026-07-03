@@ -190,7 +190,7 @@ and also setting this variable to t will lead to tears."
   ())
 
 (cl-defmethod transient-format-description ((obj magit--git-submodule-suffix))
-  (let ((value (delq nil (mapcar #'transient-infix-value transient--suffixes))))
+  (let ((value (seq-filter #'transient-infix-value transient--suffixes)))
     (replace-regexp-in-string
      "\\[--[^]]+\\]"
      (lambda (match)
@@ -463,7 +463,7 @@ whether they are wrapped in an additional section."
 ;;;###autoload
 (defun magit-insert-modules-overview ()
   "Insert sections for all modules.
-For each section insert the path and the output of `git describe --tags',
+For each section insert the path and the output of \"git describe --tags\",
 or, failing that, the abbreviated HEAD commit hash."
   (when-let ((modules (magit-list-module-paths)))
     (magit-insert-section (modules nil t)
@@ -717,10 +717,15 @@ These sections can be expanded to show the respective commits."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

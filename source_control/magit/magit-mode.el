@@ -51,6 +51,8 @@
 (declare-function magit-wip-get-ref "magit-wip" ())
 (declare-function magit-wip-commit-worktree "magit-wip" (ref files msg))
 
+(declare-function magit--blob-cache-zap "magit-files" ())
+
 ;;; Options
 
 (defcustom magit-mode-hook nil
@@ -578,35 +580,41 @@ Magit is documented in info node `(magit)'."
 
 ;;; Local Variables
 
-(defvar-local magit-buffer-arguments nil)
-(defvar-local magit-buffer-diff-type nil)
-(defvar-local magit-buffer-diff-args nil)
-(defvar-local magit-buffer-diff-files nil)
-(defvar-local magit-buffer-diff-files-suspended nil)
-(defvar-local magit-buffer-file-name nil)
-(defvar-local magit-buffer-files nil)
-(defvar-local magit-buffer-log-args nil)
-(defvar-local magit-buffer-log-files nil)
-(defvar-local magit-buffer-range nil)
-(defvar-local magit-buffer-range-hashed nil)
-(defvar-local magit-buffer-refname nil)
+(defvaralias 'magit-buffer-refname 'magit-buffer-revision)
 (defvar-local magit-buffer-revision nil)
-(defvar-local magit-buffer-revision-hash nil)
-(defvar-local magit-buffer-revisions nil)
-(defvar-local magit-buffer-typearg nil)
-(defvar-local magit-buffer-upstream nil)
+(defvar-local magit-buffer-revision-oid nil)
+(defvar-local magit-buffer-blob-oid nil)
+(defvar-local magit-buffer-file-name nil)
 
-;; These variables are also used in file-visiting buffers.
-;; Because the user may change the major-mode, they have
-;; to be permanent buffer-local.
-(put 'magit-buffer-file-name 'permanent-local t)
-(put 'magit-buffer-refname 'permanent-local t)
+;; Preserve when major-mode is changed in file-visiting buffers.
 (put 'magit-buffer-revision 'permanent-local t)
-(put 'magit-buffer-revision-hash 'permanent-local t)
+(put 'magit-buffer-revision-oid 'permanent-local t)
+(put 'magit-buffer-blob-oid 'permanent-local t)
+(put 'magit-buffer-file-name 'permanent-local t)
 
-;; `magit-status' re-enables mode function but its refresher
-;; function does not reinstate this.
-(put 'magit-buffer-diff-files-suspended 'permanent-local t)
+(eval-and-compile
+  (defvar magit-define-aliases-for:magit-buffer-* t)
+  (when magit-define-aliases-for:magit-buffer-*
+    ;; Unfortunately defvar-local can only be used at top-level,
+    ;; so instead we have to use make-variable-buffer-local below.
+    (defvar magit-buffer-arguments nil)
+    (make-obsolete-variable 'magit-buffer-arguments
+      "use a mode- or package-specific `magit-buffer-{*}-args' instead"
+      "magit 4.6.0")
+    (defvar magit-buffer-upstream nil)
+    (make-obsolete-variable 'magit-buffer-upstream
+      "use a mode- or package-specific `magit-buffer-{*}-upstream' instead"
+      "magit 4.6.0")
+    (define-obsolete-variable-alias 'magit-buffer-range-hashed
+      'magit-buffer-diff-range-oids "magit 4.6.0")
+    (define-obsolete-variable-alias 'magit-buffer-revisions
+      'magit-buffer-log-revisions "magit 4.6.0")
+    (define-obsolete-variable-alias 'magit-buffer-revision-hash
+      'magit-buffer-revision-oid "magit 4.6.0")
+    (define-obsolete-variable-alias 'magit-buffer-typearg
+      'magit-buffer-diff-typearg "magit 4.6.0")))
+(make-variable-buffer-local 'magit-buffer-arguments)
+(make-variable-buffer-local 'magit-buffer-upstream)
 
 (defun magit-buffer-file-name ()
   "Return `magit-buffer-file-name' or if that is nil `buffer-file-name'.
@@ -617,6 +625,7 @@ In an indirect buffer get the value for its base buffer."
 (defun magit-buffer-revision ()
   "Return `magit-buffer-revision' or if that is nil \"{worktree}\".
 If not visiting a blob or file, or the file isn't being tracked,
+return nil.  If visiting a blob but `magit-buffer-revision' is nil,
 return nil."
   (or magit-buffer-revision
       (and buffer-file-name
@@ -657,8 +666,7 @@ INITIAL-SECTION SELECT-SECTION &rest BINDINGS)"
       &key buffer directory initial-section select-section)
   (let* ((value   (and locked
                        (with-temp-buffer
-                         (pcase-dolist (`(,var ,val) bindings)
-                           (set (make-local-variable var) val))
+                         (mapc (##apply #'set-local %) bindings)
                          (let ((major-mode mode))
                            (magit-buffer-value)))))
          (buffer  (if buffer
@@ -674,8 +682,7 @@ INITIAL-SECTION SELECT-SECTION &rest BINDINGS)"
         (setq default-directory directory))
       (funcall mode)
       (magit-xref-setup #'magit-setup-buffer-internal bindings)
-      (pcase-dolist (`(,var ,val) bindings)
-        (set (make-local-variable var) val))
+      (mapc (##apply #'set-local %) bindings)
       (when created
         (run-hooks 'magit-create-buffer-hook)))
     (magit-display-buffer buffer)
@@ -1179,7 +1186,21 @@ The arguments are for internal use."
       ;; for the wrong buffer.  Originally reported in #4196 and
       ;; fixed with 482c25a3204468a4f6c2fe12ff061666b61f5f4d.
       (let ((magit-section-movement-hook nil))
-        (magit-section-goto-successor section line char)))))
+        (magit-section-goto-successor section line char)
+        ;; To store the point value for the selected window, it isn't
+        ;; enough for it to be current, the window has to "display" it.
+        ;; The effect of `goto-char', used by the above function, is not
+        ;; preserved, and using just `set-window-point' would affect the
+        ;; wrong buffer.
+        (unless (eq (window-dedicated-p) t)
+          (let ((restore (window-buffer))
+                (window-scroll-functions nil)
+                (window-configuration-change-hook nil))
+            (unwind-protect
+                (progn
+                  (set-window-buffer nil (current-buffer) t)
+                  (set-window-point nil (point)))
+              (set-window-buffer nil restore t))))))))
 
 (defun magit-revert-buffer (_ignore-auto _noconfirm)
   "Wrapper around `magit-refresh-buffer' suitable as `revert-buffer-function'."
@@ -1539,16 +1560,18 @@ repositories."
   "Zap caches for the current repository.
 
 Remove the repository's entry from `magit-repository-local-cache',
-remove the host's entry from `magit--host-git-version-cache', and
-set `magit-section-visibility-cache' to nil for all Magit buffers
-of the repository.
+remove the host's entry from `magit--host-git-version-cache', set
+`magit-section-visibility-cache' to nil for all Magit buffers of
+the repository, and empty the `magit--blob-cache'.
 
 With a prefix argument or if optional ALL is non-nil, discard the
 mentioned caches completely."
   (interactive)
+  (magit--blob-cache-zap)
   (cond (all
          (setq magit-repository-local-cache nil)
          (setq magit--host-git-version-cache nil)
+         (setq magit-githook-directory nil)
          (dolist (buffer (buffer-list))
            (with-current-buffer buffer
              (when (derived-mode-p 'magit-mode)
@@ -1594,7 +1617,7 @@ The additional output can be found in the *Messages* buffer."
 (defun magit-file-region-line-numbers ()
   "Return the bounds of the region as line numbers.
 The returned value has the form (BEGINNING-LINE END-LINE).  If
-the region end at the beginning of a line, do not include that
+the region ends at the beginning of a line, do not include that
 line.  Avoid including the line after the end of the file."
   (and (magit-buffer-file-name)
        (region-active-p)
@@ -1612,10 +1635,15 @@ line.  Avoid including the line after the end of the file."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

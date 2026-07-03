@@ -95,8 +95,10 @@ the user inspect the result.  With a prefix argument pretend the
 merge failed to give the user the opportunity to inspect the
 merge.
 
+To create an octopus-merge, separate branches with commas.
+
 \(git merge --no-edit|--no-commit [ARGS] REV)"
-  (interactive (list (magit-read-other-branch-or-commit "Merge")
+  (interactive (list (magit-read-other-branches-or-commits "Merge")
                      (magit-merge-arguments)
                      current-prefix-arg))
   (magit-merge-assert)
@@ -105,24 +107,30 @@ merge.
 ;;;###autoload
 (defun magit-merge-editmsg (rev &optional args)
   "Merge commit REV into the current branch; and edit message.
+
 Perform the merge and prepare a commit message but let the user
 edit it.
-\n(git merge --edit --no-ff [ARGS] REV)"
-  (interactive (list (magit-read-other-branch-or-commit "Merge")
+
+To create an octopus-merge, separate branches with commas.
+
+\(git merge --edit --no-ff [ARGS] REV)"
+  (interactive (list (magit-read-other-branches-or-commits "Merge")
                      (magit-merge-arguments)))
   (magit-merge-assert)
   (cl-pushnew "--no-ff" args :test #'equal)
-  (apply #'magit-run-git-with-editor "merge" "--edit"
-         (append (delete "--ff-only" args)
-                 (list rev))))
+  (magit-run-git-with-editor "merge" "--edit" (delete "--ff-only" args) rev))
 
 ;;;###autoload
 (defun magit-merge-nocommit (rev &optional args)
   "Merge commit REV into the current branch; pretending it failed.
+
 Pretend the merge failed to give the user the opportunity to
 inspect the merge and change the commit message.
-\n(git merge --no-commit --no-ff [ARGS] REV)"
-  (interactive (list (magit-read-other-branch-or-commit "Merge")
+
+To create an octopus-merge, separate branches with commas.
+
+\(git merge --no-commit --no-ff [ARGS] REV)"
+  (interactive (list (magit-read-other-branches-or-commits "Merge")
                      (magit-merge-arguments)))
   (magit-merge-assert)
   (cl-pushnew "--no-ff" args :test #'equal)
@@ -314,10 +322,15 @@ If no merge is in progress, do nothing."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

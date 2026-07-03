@@ -43,15 +43,6 @@
 (require 'llama) ; For (##these ...) see M-x describe-function RET # # RET.
 (require 'subr-x)
 
-;; For older Emacs releases we depend on an updated `seq' release from
-;; GNU ELPA, for `seq-keep'.  Unfortunately something else may already
-;; have required `seq', before `package' had a chance to put the more
-;; recent version earlier on the `load-path'.
-(when (and (featurep 'seq)
-           (not (fboundp 'seq-keep)))
-  (unload-feature 'seq 'force))
-(require 'seq)
-
 (require 'crm)
 
 (require 'magit-section)
@@ -494,7 +485,7 @@ and delay of your graphical environment or operating system."
 (defclass magit-hunk-section (magit-diff-section)
   ((keymap      :initform 'magit-hunk-section-map)
    (painted     :initform nil)
-   (fontified   :initform nil) ;TODO
+   (fontified   :initform nil)
    (refined     :initform nil)
    (combined    :initform nil :initarg :combined)
    (from-range  :initform nil :initarg :from-range)
@@ -503,6 +494,9 @@ and delay of your graphical environment or operating system."
    (about       :initform nil :initarg :about)
    (heading-highlight-face :initform 'magit-diff-hunk-heading-highlight)
    (heading-selection-face :initform 'magit-diff-hunk-heading-selection)))
+
+(defun magit--meta-hunk-p (section)
+  (not (cdr (oref section value))))
 
 (setf (alist-get 'file   magit--section-type-alist) 'magit-file-section)
 (setf (alist-get 'module magit--section-type-alist) 'magit-module-section)
@@ -824,13 +818,13 @@ ACTION is a member of option `magit-slow-confirm'."
   (or (cond ((and (not (eq action t))
                   (or (eq magit-no-confirm t)
                       (memq action magit-no-confirm)
-                      (cl-member-if (pcase-lambda (`(,key ,var . ,sub))
-                                      (and (memq key magit-no-confirm)
-                                           (memq action sub)
-                                           (or (not var)
-                                               (and (boundp var)
-                                                    (symbol-value var)))))
-                                    magit--no-confirm-alist)))
+                      (any (pcase-lambda (`(,key ,var . ,sub))
+                             (and (memq key magit-no-confirm)
+                                  (memq action sub)
+                                  (or (not var)
+                                      (and (boundp var)
+                                           (symbol-value var)))))
+                           magit--no-confirm-alist)))
              (or (not sitems) items))
             ((not sitems)
              (magit-y-or-n-p prompt action))
@@ -917,7 +911,7 @@ match was against a string, then that has to be provided as STRING."
     `(let* ((,s ,string)
             ,@(save-match-data
                 (seq-keep (lambda (sym)
-                            (cl-incf i)
+                            (incf i)
                             (and (not (eq (aref (symbol-name sym) 0) ?_))
                                  `(,sym (match-str ,i ,s))))
                           varlist)))
@@ -1013,6 +1007,18 @@ This function should be named `version>' and be part of Emacs."
 This function should be named `version>=' and be part of Emacs."
   (version-list-<= (version-to-list v2) (version-to-list v1)))
 
+(defun magit--delete-text-properties (string &optional props)
+  "Delete text properties PROPS from STRING and return it.
+If PROPS is nil, remove all properties.  To leave STRING unchanged
+and return a new string, instead use `magit--remove-text-properties'."
+  (set-text-properties 0 (length string) props string)
+  string)
+
+(defun magit--remove-text-properties (string &optional props)
+  "Return a copy of STRING with text properties PROPS removed.
+If PROPS is nil, remove all properties."
+  (magit--delete-text-properties (copy-sequence string) props))
+
 ;;; Kludges for Emacs Bugs
 
 (defun magit-which-function ()
@@ -1023,6 +1029,20 @@ Imenu's potentially outdated and therefore unreliable cache by
 setting `imenu--index-alist' to nil before calling that function."
   (setq imenu--index-alist nil)
   (which-function))
+
+(static-when (version< emacs-version "31.1")
+  (define-advice dabbrev-capf (:around (fn) git-commit)
+    "Backport bugfix from debbug#80645 / a7d05207214 / 31.1.
+See #5551, #5556 and #5558 (I wish I had not rushed this)."
+    (pcase-let ((`(,beg ,end ,table . ,rest) (funcall fn)))
+      `( ,beg ,end
+         ,(lambda (&rest args)
+            (condition-case err
+                (apply table args)
+              (user-error
+               (unless (string-prefix-p "No dynamic expansion" (cadr err))
+                 (signal (car err) (cdr err))))))
+         ,@rest))))
 
 ;;; Kludges for Custom
 
@@ -1187,15 +1207,31 @@ Like `message', except that `message-log-max' is bound to nil."
       (push char quoted))
     (concat (nreverse quoted))))
 
+(defun magit--find-buffer (&rest plist)
+  "Like `find-buffer' but take multiple VARIABLE-VALUE pairs."
+  (seq-find (lambda (buf)
+              (let ((plist plist))
+                (while (and plist
+                            (equal (buffer-local-value (car plist) buf)
+                                   (cadr plist)))
+                  (setq plist (cddr plist)))
+                (not plist)))
+            (buffer-list)))
+
 ;;; _
 (provide 'magit-base)
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

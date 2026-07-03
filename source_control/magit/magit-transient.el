@@ -38,7 +38,8 @@
 (defclass magit--git-variable (transient-variable)
   ((scope       :initarg :scope)
    (global      :initarg :global      :initform nil)
-   (default     :initarg :default     :initform nil)))
+   (default     :initarg :default     :initform nil)
+   (accessible-format                 :initform "%i%k %d is %v")))
 
 (defclass magit--git-variable:choices (magit--git-variable)
   ((choices     :initarg :choices)
@@ -75,7 +76,10 @@
                           (oref obj scope)))
         (arg (if (oref obj global) "--global" "--local")))
     (oset obj variable variable)
-    (oset obj value (if (magit-get-boolean arg variable) "true" "false"))))
+    (oset obj value
+          (with-temp-buffer
+            (and (zerop (magit-process-git t "config" "--bool" arg variable))
+                 (buffer-substring (point-min) (1- (point-max))))))))
 
 ;;;; Read
 
@@ -93,15 +97,18 @@
     (when (functionp choices)
       (setq choices (funcall choices)))
     (cond-let
-      (current-prefix-arg
+      ((or transient-prefer-reading-value current-prefix-arg)
        (pcase-let*
-           ((`(,fallback . ,choices)
+           ((`(,unset . ,choices)
              (magit--git-variable-list-choices obj))
+            (unset (or unset "(unset)"))
             (choice (magit-completing-read
                      (format "Set `%s' to" (oref obj variable))
-                     (if fallback (nconc choices (list fallback)) choices)
+                     (nconc (mapcar #'magit--delete-text-properties choices)
+                            (list (propertize unset 'face
+                                              'transient-inactive-value)))
                      nil t)))
-         (if (equal choice fallback) nil choice)))
+         (if (equal choice unset) nil choice)))
       ([value (oref obj value)]
        (cadr (member value choices)))
       ((car choices)))))
@@ -167,36 +174,36 @@
                    'face 'transient-value)))
     ([default (oref obj default)]
      [default (if (functionp default) (funcall default) default)]
-     (concat (propertize "default:" 'face 'transient-inactive-value)
-             (propertize default 'face 'transient-value)))
+     (if transient-prefer-reading-value
+         (format "unset, using default, which is %s"
+                 (propertize default 'face 'transient-value))
+       (concat (propertize "default:" 'face 'transient-inactive-value)
+               (propertize default 'face 'transient-value))))
     ((propertize "unset" 'face 'transient-inactive-value))))
 
 (cl-defmethod transient-format-value ((obj magit--git-variable:choices))
-  (pcase-let ((`(,fallback . ,choices) (magit--git-variable-list-choices obj)))
-    (concat
-     (propertize "[" 'face 'transient-inactive-value)
-     (mapconcat #'identity choices
-                (propertize "|" 'face 'transient-inactive-value))
-     (and fallback (propertize "|" 'face 'transient-inactive-value))
-     fallback
-     (propertize "]" 'face 'transient-inactive-value))))
+  (if transient-prefer-reading-value
+      (cl-call-next-method)
+    (pcase-let ((`(,fallback . ,choices) (magit--git-variable-list-choices obj)))
+      (concat
+       (propertize "[" 'face 'transient-inactive-value)
+       (string-join choices (propertize "|" 'face 'transient-inactive-value))
+       (and fallback (propertize "|" 'face 'transient-inactive-value))
+       fallback
+       (propertize "]" 'face 'transient-inactive-value)))))
 
 (defun magit--git-variable-list-choices (obj)
   (let* ((variable (oref obj variable))
          (choices  (oref obj choices))
-         (globalp  (oref obj global))
-         (value    nil)
-         (global   (magit-git-string "config" "--global" variable))
+         (value    (oref obj value))
+         (global   (and (not (oref obj global))
+                        (magit-git-string "config" "--global" variable)))
          (defaultp (oref obj default))
          (default  (if (functionp defaultp) (funcall defaultp obj) defaultp))
          (fallback (oref obj fallback))
          (fallback (and fallback
                         (and$ (magit-get fallback)
                               (concat fallback ":" $)))))
-    (if (not globalp)
-        (setq value (magit-git-string "config" "--local"  variable))
-      (setq value global)
-      (setq global nil))
     (when (functionp choices)
       (setq choices (funcall choices)))
     (cons (cond (global
@@ -233,10 +240,15 @@
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

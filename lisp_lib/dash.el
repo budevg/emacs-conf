@@ -1,6 +1,6 @@
 ;;; dash.el --- A modern list library for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2012-2025 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2026 Free Software Foundation, Inc.
 
 ;; Author: Magnar Sveen <magnars@gmail.com>
 ;; Maintainer: Basil L. Contovounesios <basil@contovou.net>
@@ -26,7 +26,19 @@
 
 ;; A modern list API for Emacs.
 ;;
-;; See its overview at https://github.com/magnars/dash.el#functions.
+;; Dash is a utility library that affords functional programming
+;; patterns inspired by Clojure, particularly in the realm of list
+;; manipulation.  Examples include higher-order functions (map, reduce,
+;; filter) and derivatives (drop, flatten, sum); function combinators
+;; (partial application, argument flipping, composition); and threading
+;; and anaphoric macros with destructuring support.
+;;
+;; Dash is particularly useful in providing a broad and consistent API
+;; across many Emacs versions.
+;;
+;; Documentation and examples are in the manual at Info node `(dash) Top'
+;; and on the web at https://elpa.gnu.org/packages/doc/dash.html, as well
+;; as in the project’s README.md file.
 
 ;;; Code:
 
@@ -1881,7 +1893,7 @@ LISTS, it is generally recommended to use `-unzip-lists' instead."
   "Return an infinite circular copy of LIST.
 The returned list cycles through the elements of LIST and repeats
 from the beginning."
-  (declare (pure t) (side-effect-free t))
+  (declare (side-effect-free t))
   ;; Also works with sequences that aren't lists.
   (let ((newlist (append list ())))
     (nconc newlist newlist)))

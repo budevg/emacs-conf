@@ -289,8 +289,8 @@ the process manually."
     (unless (magit-branch-p dst)
       (let ((magit-process-raise-error t))
         (magit-call-git "branch" dst start-point))
-      (when-let ((upstream (magit-get-indirect-upstream-branch start-point)))
-        (magit-call-git "branch" "--set-upstream-to" upstream dst)))
+      (when$ (magit-get-indirect-upstream-branch start-point)
+        (magit-call-git "branch" "--set-upstream-to" $ dst)))
     (unless (equal dst current)
       (let ((magit-process-raise-error t))
         (magit-call-git "checkout" dst)))
@@ -718,7 +718,7 @@ START has to be selected from a list of recent commits."
                    ;; merely to add new commits *after* it.  Try not to
                    ;; ask users whether they really want to edit public
                    ;; commits, when they don't actually intend to do so.
-                   (not (seq-every-p (##magit-rev-equal % commit) branches))))
+                   (not (all (##magit-rev-equal % commit) branches))))
       (let ((m1 "Some of these commits have already been published to ")
             (m2 ".\nDo you really want to modify them"))
         (magit-confirm (or magit--rebase-published-symbol 'rebase-published)
@@ -932,8 +932,9 @@ If no such sequence is in progress, do nothing."
              patch commit)
         (while (and patches (>= i cur))
           (setq patch (pop patches))
-          (setq commit (magit-commit-p
-                        (cadr (split-string (magit-file-line patch)))))
+          (setq commit
+                (magit-commit-oid (cadr (split-string (magit-file-line patch)))
+                                  t))
           (cond ((and commit (= i cur))
                  (magit-sequence-insert-commit
                   "stop" commit 'magit-sequence-stop))
@@ -945,7 +946,7 @@ If no such sequence is in progress, do nothing."
                   "pick" commit 'magit-sequence-pick))
                 ((magit-sequence-insert-am-patch
                   "pick" patch 'magit-sequence-pick)))
-          (cl-decf i)))
+          (decf i)))
       (magit-sequence-insert-sequence nil "ORIG_HEAD")
       (insert ?\n))))
 
@@ -988,8 +989,8 @@ If no such sequence is in progress, do nothing."
 
 (defun magit-rebase--todo ()
   "Return `git-rebase-action' instances for remaining rebase actions.
-These are ordered in that the same way they'll be sorted in the
-status buffer (i.e., the reverse of how they will be applied)."
+These are ordered the same way they'll be sorted in the status
+buffer (i.e., the reverse of how they will be applied)."
   (let ((comment-start (or (magit-get "core.commentChar") "#"))
         (commits ())
         (actions ()))
@@ -1141,10 +1142,15 @@ status buffer (i.e., the reverse of how they will be applied)."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

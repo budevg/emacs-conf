@@ -110,6 +110,7 @@
 (require 'transient)
 (require 'with-editor)
 
+(defvar dabbrev--abbrev-char-regexp)
 (defvar diff-default-read-only)
 (defvar flyspell-generic-check-word-predicate)
 (defvar font-lock-beg)
@@ -117,6 +118,12 @@
 (defvar recentf-exclude)
 
 (defvar git-commit-need-summary-line)
+
+(declare-function dabbrev--reset-global-variables "dabbrev" ())
+(declare-function dabbrev-capf "dabbrev" ())
+(declare-function magit-commit-diff--args "magit-commit" ())
+(declare-function magit-diff--modified-defuns "magit-diff" ())
+(declare-function magit-diff-arguments "magit-diff" (&optional mode))
 
 (define-obsolete-variable-alias
   'git-commit-known-pseudo-headers
@@ -131,42 +138,6 @@
   :prefix "git-commit-"
   :link '(info-link "(magit)Editing Commit Messages")
   :group 'tools)
-
-(define-minor-mode global-git-commit-mode
-  "Edit Git commit messages.
-
-This global mode arranges for `git-commit-setup' to be called
-when a Git commit message file is opened.  That usually happens
-when Git uses the Emacsclient as $GIT_EDITOR to have the user
-provide such a commit message.
-
-Loading the library `git-commit' by default enables this mode,
-but the library is not automatically loaded because doing that
-would pull in many dependencies and increase startup time too
-much.  You can either rely on `magit' loading this library or
-you can load it explicitly.  Autoloading is not an alternative
-because in this case autoloading would immediately trigger
-full loading."
-  :group 'git-commit
-  :type 'boolean
-  :global t
-  :init-value t
-  :initialize
-  (lambda (symbol exp)
-    (custom-initialize-default symbol exp)
-    (when global-git-commit-mode
-      (add-hook 'find-file-hook #'git-commit-setup-check-buffer)
-      (remove-hook 'after-change-major-mode-hook
-                   #'git-commit-setup-font-lock-in-buffer)))
-  (cond
-    (global-git-commit-mode
-     (add-hook 'find-file-hook #'git-commit-setup-check-buffer)
-     (add-hook 'after-change-major-mode-hook
-               #'git-commit-setup-font-lock-in-buffer))
-    (t
-     (remove-hook 'find-file-hook #'git-commit-setup-check-buffer)
-     (remove-hook 'after-change-major-mode-hook
-                  #'git-commit-setup-font-lock-in-buffer))))
 
 (defcustom git-commit-major-mode #'text-mode
   "Major mode used to edit Git commit messages.
@@ -198,9 +169,11 @@ Also note that `git-commit-mode' (which see) is not a major-mode.")
 (defcustom git-commit-setup-hook
   (list #'git-commit-ensure-comment-gap
         #'git-commit-save-message
+        #'git-commit-setup-capf
         #'git-commit-setup-changelog-support
-        #'git-commit-turn-on-auto-fill
+        #'git-commit-setup-auto-fill
         #'git-commit-propertize-diff
+        #'git-commit-collapse-diff
         #'bug-reference-mode)
   "Hook run at the end of `git-commit-setup'."
   :group 'git-commit
@@ -208,12 +181,14 @@ Also note that `git-commit-mode' (which see) is not a major-mode.")
   :get #'magit-hook-custom-get
   :options '(git-commit-ensure-comment-gap
              git-commit-save-message
+             git-commit-setup-capf
              git-commit-setup-changelog-support
              magit-generate-changelog
-             git-commit-turn-on-auto-fill
-             git-commit-turn-on-orglink
-             git-commit-turn-on-flyspell
+             git-commit-setup-auto-fill
+             git-commit-setup-orglink
+             git-commit-setup-flyspell
              git-commit-propertize-diff
+             git-commit-collapse-diff
              bug-reference-mode))
 
 (defcustom git-commit-finish-query-functions
@@ -272,7 +247,7 @@ See also manpage git-interpret-trailer(1).  This package does
 not use that Git command, but the initial description still
 serves as a good introduction."
   :group 'git-commit
-  :safe (##and (listp %) (seq-every-p #'stringp %))
+  :safe (##and (listp %) (all #'stringp %))
   :type '(repeat string))
 
 (defcustom git-commit-use-local-message-ring nil
@@ -363,6 +338,11 @@ In this context a \"keyword\" is text surrounded by brackets."
   "Face used for headings in commit message comments."
   :group 'git-commit-faces)
 
+(defface git-commit-comment-button
+  '((t :inherit git-commit-comment-heading :underline t))
+  "Face used for buttons in commit message comments."
+  :group 'git-commit-faces)
+
 (defface git-commit-comment-file
   '((t :inherit git-commit-trailer-value))
   "Face used for file names in commit message comments."
@@ -437,7 +417,43 @@ the redundant bindings, then set this to nil, before loading
     ["Cancel" with-editor-cancel t]
     ["Commit" with-editor-finish t]))
 
-;;; Hooks
+;;; Global Mode
+
+(define-minor-mode global-git-commit-mode
+  "Edit Git commit messages.
+
+This global mode arranges for `git-commit-setup' to be called
+when a Git commit message file is opened.  That usually happens
+when Git uses the Emacsclient as $GIT_EDITOR to have the user
+provide such a commit message.
+
+Loading the library `git-commit' by default enables this mode,
+but the library is not automatically loaded because doing that
+would pull in many dependencies and increase startup time too
+much.  You can either rely on `magit' loading this library or
+you can load it explicitly.  Autoloading is not an alternative
+because in this case autoloading would immediately trigger
+full loading."
+  :group 'git-commit
+  :type 'boolean
+  :global t
+  :init-value t
+  :initialize
+  (lambda (symbol exp)
+    (custom-initialize-default symbol exp)
+    (when global-git-commit-mode
+      (add-hook 'find-file-hook #'git-commit-setup-check-buffer)
+      (remove-hook 'after-change-major-mode-hook
+                   #'git-commit-setup-font-lock-in-buffer)))
+  (cond
+    (global-git-commit-mode
+     (add-hook 'find-file-hook #'git-commit-setup-check-buffer)
+     (add-hook 'after-change-major-mode-hook
+               #'git-commit-setup-font-lock-in-buffer))
+    (t
+     (remove-hook 'find-file-hook #'git-commit-setup-check-buffer)
+     (remove-hook 'after-change-major-mode-hook
+                  #'git-commit-setup-font-lock-in-buffer))))
 
 (defconst git-commit-filename-regexp "/\\(\
 \\(\\(COMMIT\\|NOTES\\|PULLREQ\\|MERGEREQ\\|TAG\\)_EDIT\\|MERGE_\\|\\)MSG\
@@ -458,8 +474,6 @@ the redundant bindings, then set this to nil, before loading
              (string-match-p git-commit-filename-regexp buffer-file-name))
     (git-commit-setup)))
 
-(defvar git-commit-mode)
-
 (defun git-commit-file-not-found ()
   ;; cygwin git will pass a cygwin path (/cygdrive/c/foo/.git/...),
   ;; try to handle this in window-nt Emacs.
@@ -479,6 +493,10 @@ the redundant bindings, then set this to nil, before loading
 
 (when (eq system-type 'windows-nt)
   (add-hook 'find-file-not-found-functions #'git-commit-file-not-found))
+
+;;; Local Mode
+
+(defvar git-commit-mode)
 
 (defconst git-commit-default-usage-message "\
 Type \\[with-editor-finish] to finish, \
@@ -504,6 +522,12 @@ Used as the local value of `header-line-format', in buffer using
   (setq git-commit-usage-message nil) ; show a shorter message")
 
 (defun git-commit-setup ()
+  ;; If an error occurs when `emacsclient' is used, and it turns out
+  ;; to not be triggered by something in this function, then another
+  ;; likely source are functions on `server-switch-hook'.  Debugging
+  ;; is suppressed while running that hook, so it may be necessary to
+  ;; force debugging by modifying those functions directly.  Enabling
+  ;; `magit-process-record-invocations' may also help.
   (let ((gitdir default-directory)
         (cd (and git-commit-cd-to-toplevel
                  (or (car (rassoc default-directory magit--separated-gitdirs))
@@ -568,9 +592,9 @@ Used as the local value of `header-line-format', in buffer using
   (with-demoted-errors "Error running git-commit-setup-hook: %S"
     (run-hooks 'git-commit-setup-hook))
   (set-buffer-modified-p nil)
-  (when-let ((format git-commit-header-line-format))
+  (when$ git-commit-header-line-format
     (setq header-line-format
-          (if (stringp format) (substitute-command-keys format) format)))
+          (if (stringp $) (substitute-command-keys $) $)))
   (when git-commit-usage-message
     (setq with-editor-usage-message git-commit-usage-message))
   (with-editor-usage-message))
@@ -585,6 +609,8 @@ used."
 
 (put 'git-commit-mode 'permanent-local t)
 
+;;; Setup
+
 (defun git-commit-ensure-comment-gap ()
   "Separate initial empty line from initial comment.
 If the buffer begins with an empty line followed by a comment, insert
@@ -595,25 +621,36 @@ the input isn't tacked to the comment."
     (when (looking-at (format "\\`\n%s" comment-start))
       (open-line 1))))
 
+(defun git-commit-setup-capf ()
+  "Teach `complete-symbol' about `dabbrev-capf'.
+When \"git commit\"'s \"--verbose\" argument is used, this allows
+completing modified symbols and other text appearing in the diff."
+  (require 'dabbrev)
+  (unless dabbrev--abbrev-char-regexp
+    ;; Initialize (not "reset") variables.  See #5545.
+    (dabbrev--reset-global-variables))
+  (add-hook 'completion-at-point-functions #'dabbrev-capf -90 t))
+
 (defun git-commit-setup-changelog-support ()
   "Treat ChangeLog entries as unindented paragraphs."
   (setq-local fill-paragraph-function #'log-edit-fill-entry)
   (setq-local fill-indent-according-to-mode t)
   (setq-local paragraph-start (concat paragraph-start "\\|\\*\\|(")))
 
-(defun git-commit-turn-on-auto-fill ()
+(defun git-commit-setup-auto-fill ()
   "Unconditionally turn on Auto Fill mode.
 Ensure auto filling happens everywhere, except in the summary line."
   (auto-fill-mode 1)
   (setq-local comment-auto-fill-only-comments nil)
   (when git-commit-need-summary-line
-    (setq-local auto-fill-function #'git-commit-auto-fill-except-summary)))
+    (setq-local auto-fill-function #'git-commit--auto-fill-except-summary)))
 
-(defun git-commit-auto-fill-except-summary ()
+(defun git-commit--auto-fill-except-summary ()
+  "Do not fill summary line."
   (unless (eq (line-beginning-position) 1)
     (do-auto-fill)))
 
-(defun git-commit-turn-on-orglink ()
+(defun git-commit-setup-orglink ()
   "Turn on Orglink mode if it is available.
 If `git-commit-major-mode' is `org-mode', then silently forgo
 turning on `orglink-mode'."
@@ -623,15 +660,14 @@ turning on `orglink-mode'."
     (setq-local orglink-match-anywhere t)
     (orglink-mode 1)))
 
-(defun git-commit-turn-on-flyspell ()
+(defun git-commit-setup-flyspell ()
   "Unconditionally turn on Flyspell mode.
 Also check text that is already in the buffer, while avoiding to check
 most text that Git will strip from the final message, such as the last
 comment and anything below the cut line (\"--- >8 ---\")."
   (require 'flyspell)
   (flyspell-mode 1)
-  (setq flyspell-generic-check-word-predicate
-        #'git-commit-flyspell-verify)
+  (setq flyspell-generic-check-word-predicate #'git-commit--flyspell-verify)
   (let ((end nil)
         ;; The "cut line" is defined in "git/wt-status.c".  It appears
         ;; in the commit message when `commit.verbose' is set to true.
@@ -647,9 +683,36 @@ comment and anything below the cut line (\"--- >8 ---\")."
       (setq end (point)))
     (flyspell-region (point-min) end)))
 
-(defun git-commit-flyspell-verify ()
+(defun git-commit--flyspell-verify ()
+  "Do not check spelling in comments."
   (not (= (char-after (line-beginning-position))
           (aref comment-start 0))))
+
+(defun git-commit-collapse-diff ()
+  "Collapse inline diff and add button to allow expanding it."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward (format "%s -+ >8 -+" comment-start) nil t)
+      (let ((elt '(git-commit-diff t)))
+        (add-to-invisibility-spec elt)
+        (make-button (line-beginning-position) (point)
+                     'face 'git-commit-comment-button
+                     'keymap (define-keymap :parent button-map
+                               "<return>" #'push-button
+                               "<tab>" #'push-button)
+                     'action (lambda (_)
+                               (if (memq elt buffer-invisibility-spec)
+                                   (remove-from-invisibility-spec elt)
+                                 (add-to-invisibility-spec elt))
+                               ;; KLUDGE Force "redisplay".
+                               (when-let ((w1 (selected-window))
+                                          (w2 (next-window)))
+                                 (select-window w2)
+                                 (select-window w1)))))
+      (let ((ov (make-overlay (point) (point-max))))
+        (overlay-put ov 'invisible 'git-commit-diff)))))
+
+;;; Finish
 
 (defun git-commit-finish-query-functions (force)
   (run-hook-with-args-until-failure
@@ -697,7 +760,7 @@ With a numeric prefix ARG, go back ARG messages."
       (when-let* ((message (git-commit-buffer-message))
                   (_(not (ring-member log-edit-comment-ring message))))
         (ring-insert log-edit-comment-ring message)
-        (cl-incf arg)
+        (incf arg)
         (setq len (ring-length log-edit-comment-ring)))
       ;; Delete the message but not the instructions at the end.
       (save-restriction
@@ -784,6 +847,55 @@ Save current message first."
              (setq str (replace-match "\n" t t str)))
            str))))
 
+;;; Changelog
+
+(defun git-commit--modified-defuns ()
+  (if (save-excursion
+        (goto-char (point-min))
+        (re-search-forward "^diff --git" nil t))
+      (magit-diff--modified-defuns)
+    (with-temp-buffer
+      (pcase-let ((`(,rev ,arg) (magit-commit-diff--args)))
+        (save-excursion
+          (magit-git-insert "diff" "-p" arg (car (magit-diff-arguments)) rev)))
+      (magit-diff--modified-defuns))))
+
+;;;###autoload
+(defun git-commit-insert-changelog-gnu ()
+  "Insert a GNU-style changelog at point while authorig a commit message.
+
+The modified definitions are extracted from the diff in the message
+buffer, which is only available if \"git commit\" was invoked with
+\"--verbose\"."
+  (interactive)
+  (unless git-commit-mode
+    (user-error "Not in a commit message buffer"))
+  ;; Like `change-log-insert-entries'.
+  (pcase-dolist (`(,file . ,defuns) (git-commit--modified-defuns))
+    (if (not defuns)
+        (insert "* " file ":\n")
+      (insert "* " file " ")
+      (dolist (def defuns)
+        (insert "(" def "):\n")))))
+
+;;;###autoload
+(defun git-commit-insert-changelog-plain ()
+  "Insert a simple changelog at point while authorig a commit message.
+
+Defuns are slightly indented and quoted like in elisp docstrings.
+The exact format is still subject to change.
+
+The modified definitions are extracted from the diff in the message
+buffer, which is only available if \"git commit\" was invoked with
+\"--verbose\"."
+  (interactive)
+  (unless git-commit-mode
+    (user-error "Not in a commit message buffer"))
+  (pcase-dolist (`(,file . ,defuns) (git-commit--modified-defuns))
+    (insert file ":\n")
+    (dolist (def defuns)
+      (insert "  `" def "'\n"))))
+
 ;;; Trailers
 
 (transient-define-prefix git-commit-insert-trailer ()
@@ -793,19 +905,22 @@ See also manpage git-interpret-trailer(1).  This command does
 not use that Git command, but the initial description still
 serves as a good introduction."
   [[:description (##cond (prefix-arg
-                          "Insert ... by someone ")
-                         ("Insert ... by yourself"))
+                          "Insert trailer ... by someone ")
+                         ("Insert trailer ... by yourself"))
     ("a"   "Ack"          git-commit-ack)
     ("m"   "Modified"     git-commit-modified)
     ("r"   "Reviewed"     git-commit-review)
     ("s"   "Signed-off"   git-commit-signoff)
     ("t"   "Tested"       git-commit-test)]
-   ["Insert ... by someone"
+   ["Insert trailer ... by someone"
     ("C-c" "Cc"           git-commit-cc)
     ("C-r" "Reported"     git-commit-reported)
     ("C-i" "Suggested"    git-commit-suggested)
     ("C-a" "Co-authored"  git-commit-co-authored)
-    ("C-d" "Co-developed" git-commit-co-developed)]])
+    ("C-d" "Co-developed" git-commit-co-developed)]]
+  ["Insert changelog"
+   ("l g" "GNU-style"     git-commit-insert-changelog-gnu)
+   ("l p" "plain"         git-commit-insert-changelog-plain)])
 
 (defun git-commit-ack (name mail)
   "Insert a trailer acknowledging that you have looked at the commit."
@@ -905,32 +1020,48 @@ completion candidates.  The input must have the form \"NAME <EMAIL>\"."
   (git-commit--insert-trailer trailer (format "%s <%s>" name email)))
 
 (defun git-commit--insert-trailer (trailer value)
+  (git-commit--insert-trailer-1 (format "%s: %s\n" trailer value)))
+
+(defun git-commit--insert-trailer-1 (string &optional before-trailers)
   (save-excursion
-    (let ((string (format "%s: %s" trailer value))
-          (leading-comment-end nil))
-      ;; Make sure we skip forward past any leading comments.
+    (goto-char (point-min))
+    (while (looking-at comment-start)
+      (forward-line))
+    (when (or (eobp) (looking-at "diff --git"))
       (goto-char (point-min))
-      (while (looking-at comment-start)
-        (forward-line))
-      (setq leading-comment-end (point))
+      (save-excursion (insert ?\n)))
+    (let ((bound (and (not (or (bobp) (eobp))) (point))))
       (goto-char (point-max))
-      (cond
-        ;; Look backwards for existing trailers.
-        ((re-search-backward (git-commit--trailer-regexp) nil t)
-         (end-of-line)
-         (insert ?\n string)
-         (unless (= (char-after) ?\n)
-           (insert ?\n)))
-        ;; Or place the new trailer right before the first non-leading
-        ;; comments.
-        (t
-         (while (re-search-backward (concat "^" comment-start)
-                                    leading-comment-end t))
-         (unless (looking-back "\n\n" nil)
-           (insert ?\n))
-         (insert string ?\n))))
-    (unless (or (eobp) (= (char-after) ?\n))
-      (insert ?\n))))
+      (unless (or (bobp) (= (char-before) ?\n))
+        (insert ?\n))
+      (cond (before-trailers
+             (git-commit--goto-insert-position bound)
+             (while (re-search-backward (git-commit--trailer-regexp) nil t))
+             (unless (looking-back "\n\n" nil)
+               (insert ?\n)))
+            ((re-search-backward (git-commit--trailer-regexp) nil t)
+             (goto-char (match-end 0))
+             (if (eobp) (insert ?\n) (forward-char)))
+            (t
+             (git-commit--goto-insert-position bound)
+             (unless (looking-back "\n\n" nil)
+               (insert ?\n)))))
+    (insert string)
+    (unless (ignore-errors (= (char-before) ?\n)) (insert ?\n))
+    (unless (ignore-errors (= (char-after)  ?\n)) (insert ?\n))))
+
+(defun git-commit--goto-insert-position (bound)
+  (let ((match (point)))
+    (cond ((re-search-backward (format "^%s -+ >8 -+" comment-start) nil t))
+          ((and (eobp) (bolp))
+           (forward-line -1)))
+    (while (and (or (looking-at comment-start)
+                    (looking-at "[\s\t]*$"))
+                (or (not bound) (> (point) bound))
+                (not (bobp)))
+      (setq match (point))
+      (forward-line -1))
+    (goto-char match)))
 
 ;;; Font-Lock
 
@@ -1225,14 +1356,32 @@ commit, then the hook is not run at all."
  'git-commit-trailer-token
  "git-commit 4.0.0")
 
+(define-obsolete-function-alias
+  'git-commit-turn-on-auto-fill
+  'git-commit-setup-auto-fill
+  "git-commit 4.6.0")
+(define-obsolete-function-alias
+  'git-commit-turn-on-flyspell
+  'git-commit-setup-flyspell
+  "git-commit 4.6.0")
+(define-obsolete-function-alias
+  'git-commit-turn-on-orglink
+  'git-commit-setup-orglink
+  "git-commit 4.6.0")
+
 (provide 'git-commit)
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

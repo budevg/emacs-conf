@@ -247,7 +247,7 @@ If it contains \"%s\" then the directory is substituted for that."
       (let ((default-directory
              (file-name-as-directory (expand-file-name repo base))))
         (if msg
-            (let ((msg (concat (format "(%s/%s) " (cl-incf i) len)
+            (let ((msg (concat (format "(%s/%s) " (incf i) len)
                                (format msg default-directory))))
               (message msg)
               (funcall fn)
@@ -535,7 +535,9 @@ instead."
                 (magit-list-repos-uniquify
                  (mapcar (lambda (v)
                            (cons (concat
-                                  key "\\"
+                                  key
+                                  (or (bound-and-true-p uniquify-separator)
+                                      "\\")
                                   (file-name-nondirectory
                                    (directory-file-name
                                     (substring v 0 (- (1+ (length key)))))))
@@ -554,10 +556,15 @@ instead."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

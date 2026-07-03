@@ -2,14 +2,14 @@
 
 ;; Copyright (C) 2020-2026 Jonas Bernoulli
 
-;; Authors: Jonas Bernoulli <emacs.llama@jonas.bernoulli.dev>
+;; Author: Jonas Bernoulli <emacs.llama@jonas.bernoulli.dev>
 ;; Homepage: https://github.com/tarsius/llama
 ;; Keywords: extensions
 
-;; Package-Version: 1.0.3
+;; Package-Version: 1.0.5
 ;; Package-Requires: (
 ;;     (emacs  "26.1")
-;;     (compat "30.1"))
+;;     (compat "31.0"))
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -354,13 +354,14 @@ expansion, and the looks of this face should hint at that.")
            (prog1 t
              (save-excursion
                (goto-char (match-beginning 0))
-               (when-let ((_(save-match-data (not (nth 8 (syntax-ppss)))))
-                          (expr (ignore-errors
-                                  (read-positioning-symbols (current-buffer)))))
+               (when-let*
+                   ((_(save-match-data (not (nth 8 (syntax-ppss)))))
+                    (expr (ignore-errors
+                            (read-positioning-symbols (current-buffer)))))
                  (put-text-property (match-beginning 0) (point)
                                     'font-lock-multiline t)
                  (llama--fontify (cdr expr) nil nil t)))))
-    (list re end))) ; Silence compiler.
+    (progn re end nil))) ; Silence compiler.
 
 (defun llama--fontify (expr &optional fnpos backquoted top)
   (static-if (fboundp 'bare-symbol)
@@ -417,7 +418,7 @@ expansion, and the looks of this face should hint at that.")
                  (throw t nil))))
            (when expr
              (llama--fontify expr fnpos))))))
-  (list expr fnpos backquoted top)) ; Silence compiler.
+  (and expr fnpos backquoted top nil)) ; Silence compiler.
 
 (defvar llama-fontify-mode-lighter nil)
 

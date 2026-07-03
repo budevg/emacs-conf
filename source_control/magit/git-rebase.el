@@ -894,12 +894,11 @@ except for the \"pick\" command."
 
 (defun git-rebase--insert-descriptions (alist)
   (pcase-dolist (`(,cmd . ,desc) alist)
-    (insert (format (propertize "%s %s %s\n"
-                                'font-lock-face 'font-lock-comment-face)
-                    comment-start
-                    (string-pad
-                     (substitute-command-keys (format "\\[%s]" cmd)) 8)
-                    (replace-regexp-in-string "#" comment-start desc)))))
+    (insert
+     (format (propertize "%s %s %s\n" 'font-lock-face 'font-lock-comment-face)
+             comment-start
+             (string-pad (substitute-command-keys (format "\\[%s]" cmd)) 8)
+             (string-replace "#" comment-start desc)))))
 
 (add-hook 'git-rebase-mode-hook #'git-rebase-mode-show-keybindings t)
 
@@ -945,10 +944,15 @@ is used as a value for `imenu-extract-index-name-function'."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

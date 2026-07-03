@@ -17,16 +17,16 @@
 ;; Homepage: https://github.com/magit/magit
 ;; Keywords: git tools vc
 
-;; Package-Version: 4.5.0
+;; Package-Version: 4.6.0
 ;; Package-Requires: (
 ;;     (emacs        "28.1")
-;;     (compat       "30.1")
-;;     (cond-let      "0.2")
+;;     (compat       "31.0")
+;;     (cond-let      "1.1")
 ;;     (llama         "1.0")
-;;     (magit-section "4.5")
+;;     (magit-section "4.6")
 ;;     (seq           "2.24")
-;;     (transient     "0.12")
-;;     (with-editor   "3.4"))
+;;     (transient     "0.13")
+;;     (with-editor   "3.5"))
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -78,7 +78,7 @@
 (defcustom magit-openpgp-default-signing-key nil
   "Fingerprint of your default Openpgp key used for signing.
 If the specified primary key has signing capacity then it is used
-as the value of the `--gpg-sign' argument without prompting, even
+as the value of the \"--gpg-sign\" argument without prompting, even
 when other such keys exist.  To be able to select another key you
 must then use a prefix argument."
   :package-version '(magit . "4.0.0")
@@ -550,9 +550,8 @@ is run in the top-level directory of the current working tree."
   (magit-read-gpg-secret-key
    prompt initial-input history
    (lambda (cert)
-     (cl-some (lambda (key)
-                (memq 'sign (epg-sub-key-capability key)))
-              (epg-key-sub-key-list cert)))
+     (seq-some (##memq 'sign (epg-sub-key-capability %))
+               (epg-key-sub-key-list cert)))
    magit-openpgp-default-signing-key))
 
 ;;; Font-Lock Keywords
@@ -801,10 +800,15 @@ For X11 something like ~/.xinitrc should work.\n"
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

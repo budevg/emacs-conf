@@ -261,7 +261,7 @@ Also see option `magit-blame-styles'."
   (or (and (not (and type (not (eq type magit-blame-type))))
            (magit-blame-chunk-at (point)))
       (and type
-           (let ((rev  (or magit-buffer-refname magit-buffer-revision))
+           (let ((rev magit-buffer-revision)
                  (file (and (not (derived-mode-p 'dired-mode))
                             (magit-file-relative-name
                              nil (not magit-buffer-file-name))))
@@ -345,7 +345,8 @@ in `magit-blame-read-only-mode-map' instead."
            (setq magit-blame--style (car magit-blame-styles)))
          (setq magit-blame--make-margin-overlays
                (and (cl-find-if (##assq 'margin-format (cdr %))
-                                magit-blame-styles)))
+                                magit-blame-styles)
+                    t))
          (magit-blame--update-margin 'enable))
         (t
          (when (process-live-p magit-blame-process)
@@ -418,8 +419,8 @@ modes is toggled, then this mode also gets toggled automatically.
       (magit-blame-mode 1))
     (message "Blaming...")
     (magit-blame-run-process
-     (and$ (or magit-buffer-refname magit-buffer-revision)
-           (and (not (equal $ "{index}")) $))
+     (and (not (equal magit-buffer-revision "{index}"))
+          magit-buffer-revision)
      (magit-file-relative-name nil (not magit-buffer-file-name))
      (if (memq magit-blame-type '(final removal))
          (cons "--reverse" args)
@@ -558,8 +559,8 @@ modes is toggled, then this mode also gets toggled automatically.
                             (oref chunk orig-rev)))
             (setq beg (magit-blame--line-beginning-position
                        (oset chunk final-line (oref before final-line))))
-            (cl-incf (oref chunk num-lines)
-                     (oref before num-lines)))
+            (incf (oref chunk num-lines)
+                  (oref before num-lines)))
           (magit-blame--remove-overlays beg end)
           (when magit-blame--make-margin-overlays
             (magit-blame--make-margin-overlays chunk revinfo beg end))
@@ -579,7 +580,7 @@ modes is toggled, then this mode also gets toggled automatically.
       (while (< (point) end)
         (magit-blame--make-margin-overlay chunk revinfo line)
         (forward-line)
-        (cl-incf line)))))
+        (incf line)))))
 
 (defun magit-blame--make-margin-overlay (chunk revinfo line)
   (let* ((end (line-end-position))
@@ -702,11 +703,11 @@ modes is toggled, then this mode also gets toggled automatically.
                               (cdr (assoc k1 revinfo))
                               (cdr (assoc k2 revinfo)))
                              f)))
-              `((?H . ,(p0 rev         'magit-blame-hash))
+              `((?H . ,(p0 rev                             'magit-blame-hash))
                 (?h . ,(p0 (magit-blame--abbrev-hash rev)  'magit-blame-hash))
-                (?s . ,(p1 "summary"   'magit-blame-summary))
-                (?a . ,(p1 "author"    'magit-blame-name))
-                (?c . ,(p1 "committer" 'magit-blame-name))
+                (?s . ,(p1 "summary"                       'magit-blame-summary))
+                (?a . ,(p1 "author"                        'magit-blame-name))
+                (?c . ,(p1 "committer"                     'magit-blame-name))
                 (?A . ,(p2 "author-time"    "author-tz"    'magit-blame-date))
                 (?C . ,(p2 "committer-time" "committer-tz" 'magit-blame-date))
                 (?f . "")))))))
@@ -1003,10 +1004,15 @@ instead of the hash, like `kill-ring-save' would."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))

@@ -73,7 +73,8 @@ has to be used to view and change remote related variables."
    ("U" magit-remote.<remote>.fetch)
    ("s" magit-remote.<remote>.pushurl)
    ("S" magit-remote.<remote>.push)
-   ("O" magit-remote.<remote>.tagopt)]
+   ("O" magit-remote.<remote>.tagopt)
+   ("h" magit-remote.<remote>.followremotehead)]
   ["Arguments for add"
    ("-f" "Fetch after add" "-f")]
   ["Actions"
@@ -107,15 +108,15 @@ has to be used to view and change remote related variables."
                   (string-match "\\([^:/]+\\)/[^/]+\\(\\.git\\)?\\'" origin)
                   (replace-match remote t t origin 1)))
             (transient-args 'magit-remote))))
-  (if (pcase (list magit-remote-add-set-remote.pushDefault
-                   (magit-get "remote.pushDefault"))
-        (`(,(pred stringp) ,_) t)
-        ((or `(ask ,_) '(ask-if-unset nil))
-         (y-or-n-p (format "Set `remote.pushDefault' to \"%s\"? " remote))))
-      (progn (magit-call-git "remote" "add" args remote url)
-             (setf (magit-get "remote.pushDefault") remote)
-             (magit-refresh))
-    (magit-run-git-async "remote" "add" args remote url)))
+  (cond ((pcase (list magit-remote-add-set-remote.pushDefault
+                      (magit-get "remote.pushDefault"))
+           (`(,(pred stringp) ,_) t)
+           ((or `(ask ,_) '(ask-if-unset nil))
+            (y-or-n-p (format "Set `remote.pushDefault' to \"%s\"? " remote))))
+         (magit-call-git "remote" "add" args remote url)
+         (setf (magit-get "remote.pushDefault") remote)
+         (magit-refresh))
+        ((magit-run-git-async "remote" "add" args remote url))))
 
 ;;;###autoload
 (defun magit-remote-rename (old new)
@@ -316,7 +317,8 @@ refspec."
    ("U" magit-remote.<remote>.fetch)
    ("s" magit-remote.<remote>.pushurl)
    ("S" magit-remote.<remote>.push)
-   ("O" magit-remote.<remote>.tagopt)]
+   ("O" magit-remote.<remote>.tagopt)
+   ("h" magit-remote.<remote>.followremotehead)]
   (interactive
     (list (or (and (not current-prefix-arg)
                    (not (and magit-remote-direct-configure
@@ -364,6 +366,27 @@ refspec."
   :variable "remote.%s.tagOpt"
   :choices '("--no-tags" "--tags"))
 
+(transient-define-infix magit-remote.<remote>.followremotehead ()
+  "How \"git fetch\" handles updates to \"remotes/<remote>/HEAD\".
+
+This command sets the local value of the Git variable
+`remote.<remote>.followRemoteHEAD', where <remote> is a stand-in for
+the actual remote, as displayed in the menu, from which this command
+is invoked.  This variable is documented in (man \"git-config(1)\").
+
+Unfortunately Git does not provide a variable to set a default for
+all remotes of all repositories, but you can set the global value for
+a remote name used in multiple repository, which will then be used as
+the default for that remote in all repositories.  You should consider
+using \"always\" for remotes named \"origin\".
+
+  git config set --global remote.origin.followRemoteHEAD always"
+  :class 'magit--git-variable:choices
+  :scope #'magit--read-remote-scope
+  :variable "remote.%s.followRemoteHEAD"
+  :choices '("create" "always" "warn")
+  :default "create")
+
 ;;; Transfer Utilities
 
 (defun magit--push-remote-variable (&optional branch short)
@@ -396,10 +419,15 @@ refspec."
 ;; Local Variables:
 ;; read-symbol-shorthands: (
 ;;   ("and$"         . "cond-let--and$")
-;;   ("and>"         . "cond-let--and>")
+;;   ("thread$"      . "cond-let--thread$")
+;;   ("when$"        . "cond-let--when$")
+;;   ("and-let*"     . "cond-let--and-let*")
 ;;   ("and-let"      . "cond-let--and-let")
+;;   ("if-let*"      . "cond-let--if-let*")
 ;;   ("if-let"       . "cond-let--if-let")
+;;   ("when-let*"    . "cond-let--when-let*")
 ;;   ("when-let"     . "cond-let--when-let")
+;;   ("while-let*"   . "cond-let--while-let*")
 ;;   ("while-let"    . "cond-let--while-let")
 ;;   ("match-string" . "match-string")
 ;;   ("match-str"    . "match-string-no-properties"))
