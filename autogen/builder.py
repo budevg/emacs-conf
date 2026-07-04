@@ -77,9 +77,19 @@ class ConfigBuilder(object):
     def _supress_warnings(self):
         self._data.append('''
 (setq warning-suppress-log-types '((files missing-lexbind-cookie)))
-(put 'if-let 'byte-obsolete-info nil)
-(put 'when-let 'byte-obsolete-info nil)
 (setq byte-compile-warnings '(not obsolete))
+
+(defun my-suppress-selected-obsolete-byte-warnings ()
+  (dolist (sym '(if-let when-let incf decf))
+    (put sym 'byte-obsolete-info nil)))
+
+(my-suppress-selected-obsolete-byte-warnings)
+(with-eval-after-load 'cl
+  (my-suppress-selected-obsolete-byte-warnings))
+(with-eval-after-load 'cl-lib
+  (my-suppress-selected-obsolete-byte-warnings))
+(with-eval-after-load 'subr-x
+  (my-suppress-selected-obsolete-byte-warnings))
         '''.lstrip())
 
     def _set_load_early_init(self):

@@ -1,6 +1,6 @@
 ;;; compat-30.el --- Functionality added in Emacs 30 -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2026 Free Software Foundation, Inc.
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -24,12 +24,20 @@
 (eval-when-compile (load "compat-macs.el" nil t t))
 (compat-require compat-29 "29.1")
 
-;; TODO Update to 30.1 as soon as the Emacs emacs-30 branch version bumped
-(compat-version "30.0.50")
+(compat-version "29.3")
+(compat-defvar untrusted-content nil ;; <compat-tests:untrusted-content>
+  "Non-nil means that current buffer originated from an untrusted source.
+Email clients and some other modes may set this non-nil to mark the
+buffer contents as untrusted.
+
+This variable might be subject to change without notice."
+  :local permanent)
+
+(compat-version "30.1")
 
 ;;;; Defined in lread.c
 
-(compat-defun obarray-clear (ob) ;; <compat-tests:obarray>
+(compat-defun obarray-clear (ob) ;; <compat-tests:obarray-clear>
   "Remove all symbols from obarray OB."
   (fillarray ob 0))
 
@@ -50,27 +58,94 @@ See also `find-buffer-visiting'."
 
 ;;;; Defined in files.el
 
+(compat-defvar trusted-content nil ;; <compat-tests:trusted-content>
+  "List of files and directories whose content we trust.
+Be extra careful here since trusting means that Emacs might execute the
+code contained within those files and directories without an explicit
+request by the user.
+One important case when this might happen is when `flymake-mode' is
+enabled (for example, when it is added to a mode hook).
+Each element of the list should be a string:
+- If it ends in \"/\", it is considered as a directory name and means that
+  Emacs should trust all the files whose name has this directory as a prefix.
+- else it is considered as a file name.
+Use abbreviated file names.  For example, an entry \"~/mycode\" means
+that Emacs will trust all the files in your directory \"mycode\".
+This variable can also be set to `:all', in which case Emacs will trust
+all files, which opens a gaping security hole."
+  :risky t)
+
+(compat-defun trusted-content-p () ;; <compat-tests:trusted-content-p>
+  "Return non-nil if we trust the contents of the current buffer.
+Here, \"trust\" means that we are willing to run code found inside of it.
+See also `trusted-content'."
+  (and (not untrusted-content)
+       (or
+        (eq trusted-content :all)
+        (and
+         buffer-file-truename
+         (with-demoted-errors "trusted-content-p: %S"
+           (let ((exists (file-exists-p buffer-file-truename)))
+             (or
+              (if (and exists user-init-file)
+                  (file-equal-p buffer-file-truename user-init-file)
+                (equal buffer-file-truename user-init-file))
+              (let ((file (abbreviate-file-name buffer-file-truename))
+                    (trusted nil))
+                (dolist (tf trusted-content)
+                  (when (or (if exists (file-equal-p tf file) (equal tf file))
+                            (and (string-suffix-p "/" tf)
+                                 (string-prefix-p tf file)))
+                    (setq trusted t)))
+                trusted))))))))
+
 (compat-defun require-with-check (feature &optional filename noerror) ;; <compat-tests:require-with-check>
   "If FEATURE is not already loaded, load it from FILENAME.
 This is like `require' except if FEATURE is already a member of the list
-`features’, then we check if this was provided by a different file than the
-one that we would load now (presumably because `load-path' has been
-changed since the file was loaded).
-If it's the case, we either signal an error (the default), or forcibly reload
-the new file (if NOERROR is equal to `reload'), or otherwise emit a warning."
+`features’, then check if it was provided by a different file than the
+one that is about to be loaded now (presumably because `load-path' has
+been changed since FILENAME was loaded).  If that is the case, either
+signal an error (the default), or forcibly reload the new file (if
+NOERROR is equal to `reload'), or otherwise emit a warning."
   (let ((lh load-history)
         (res (require feature filename (if (eq noerror 'reload) nil noerror))))
     ;; If the `feature' was not yet provided, `require' just loaded the right
     ;; file, so we're done.
-    (when (eq lh load-history)
+    (when (and res (eq lh load-history))
       ;; If `require' did nothing, we need to make sure that was warranted.
-      (let ((fn (locate-file (or filename (symbol-name feature))
-                             load-path (get-load-suffixes))))
+      (let* ((fn (locate-file (or filename (symbol-name feature))
+                              load-path (get-load-suffixes) nil
+                              )) ;; load-prefer-newer
+             ;; We used to look for `fn' in `load-history' with `assoc'
+             ;; which works in most cases, but in some cases (e.g. when
+             ;; `load-prefer-newer' is set) `locate-file' can return a
+             ;; different file than the file that `require' would load,
+             ;; so the file won't be found in `load-history' even though
+             ;; we did load "it".  (bug#74040)
+             ;; So use a "permissive" search which doesn't pay attention to
+             ;; differences between file extensions.
+             (prefix (if (string-match
+                          (concat (regexp-opt (get-load-suffixes)) "\\'") fn)
+                         (concat (substring fn 0 (match-beginning 0)) ".")
+                       fn))
+             (lh load-history))
+        (while (and lh (let ((file (car-safe (car lh))))
+                         (not (and file (string-prefix-p prefix file)))))
+          (setq lh (cdr lh)))
         (cond
-         ((assoc fn load-history) nil)  ;We loaded the right file.
+         (lh nil)                       ;We loaded the right file.
          ((eq noerror 'reload) (load fn nil 'nomessage))
-         (t (funcall (if noerror #'warn #'error)
-                     "Feature provided by other file: %S" feature)))))
+         ((and fn (memq feature features))
+          (funcall (if noerror #'warn #'error)
+                   "Feature `%S' is now provided by a different file %s"
+                   feature fn))
+         (fn
+          (funcall (if noerror #'warn #'error)
+                   "Could not load file %s" fn))
+         (t
+          (funcall (if noerror #'warn #'error)
+                   "Could not locate file %s in load path"
+                   (or filename (symbol-name feature)))))))
     res))
 
 ;;;; Defined in minibuffer.el
@@ -139,6 +214,50 @@ details."
   (if (and completion-lazy-hilit completion-lazy-hilit-fn)
       (funcall completion-lazy-hilit-fn (copy-sequence str))
     str))
+
+;;;; Defined in color.el
+
+(compat-defun color-oklab-to-xyz (l a b) ;; <compat-tests:color-oklab-to-xyz>
+  "Convert the OkLab color represented by L A B to CIE XYZ.
+Oklab is a perceptual color space created by Björn Ottosson
+<https://bottosson.github.io/posts/oklab/>.  It has the property that
+changes in the hue and saturation of a color can be made while maintaining
+the same perceived lightness."
+  :feature color
+  (let ((ll (expt (+ (* 1.0 l) (* 0.39633779 a) (* 0.21580376 b)) 3))
+        (mm (expt (+ (* 1.00000001 l) (* -0.10556134 a) (* -0.06385417 b)) 3))
+        (ss (expt (+ (* 1.00000005 l) (* -0.08948418 a) (* -1.29148554 b)) 3)))
+    (list (+ (* ll 1.22701385) (* mm -0.55779998) (* ss 0.28125615))
+          (+ (* ll -0.04058018) (* mm 1.11225687) (* ss -0.07167668))
+          (+ (* ll -0.07638128) (* mm -0.42148198) (* ss 1.58616322)))))
+
+(compat-defun color-xyz-to-oklab (x y z) ;; <compat-tests:color-xyz-to-oklab>
+  "Convert the CIE XYZ color represented by X Y Z to Oklab."
+  :feature color
+  (let ((ll (+ (* x 0.8189330101) (* y 0.3618667424) (* z -0.1288597137)))
+        (mm (+ (* x 0.0329845436) (* y 0.9293118715) (* z 0.0361456387)))
+        (ss (+ (* x 0.0482003018) (* y 0.2643662691) (* z 0.6338517070))))
+    (let*
+        ((cube-root (lambda (f)
+                      (if (< f 0)
+                          (- (expt (- f) (/ 1.0 3.0)))
+                        (expt f (/ 1.0 3.0)))))
+         (lll (funcall cube-root ll))
+         (mmm (funcall cube-root mm))
+         (sss (funcall cube-root ss)))
+      (list (+ (* lll 0.2104542553) (* mmm 0.7936177850) (* sss -0.0040720468))
+            (+ (* lll 1.9779984951) (* mmm -2.4285922050) (* sss 0.4505937099))
+            (+ (* lll 0.0259040371) (* mmm 0.7827717662) (* sss -0.8086757660))))))
+
+(compat-defun color-oklab-to-srgb (l a b) ;; <compat-tests:color-oklab-to-srgb>
+  "Convert the Oklab color represented by L A B to sRGB."
+  :feature color
+  (apply #'color-xyz-to-srgb (color-oklab-to-xyz l a b)))
+
+(compat-defun color-srgb-to-oklab (r g b) ;; <compat-tests:color-srgb-to-oklab>
+  "Convert the sRGB color R G B to Oklab."
+  :feature color
+  (apply #'color-xyz-to-oklab (color-srgb-to-xyz r g b)))
 
 ;;;; Defined in subr.el
 
@@ -312,7 +431,7 @@ The following arguments are defined:
 For compatibility, the calling convention (sort SEQ LESSP) can also be used;
 in this case, sorting is always done in-place."
   :extended t
-  (let ((in-place t) (reverse nil) (orig-seq seq))
+  (let ((in-place t) (reverse nil))
     (when (or (not lessp) rest)
       (setq
        rest (if lessp (cons lessp rest) rest)
@@ -323,24 +442,10 @@ in this case, sorting is always done in-place."
                (if key
                  (lambda (a b) (funcall < (funcall key a) (funcall key b)))
                  <))
-       seq (if (or (and (eval-when-compile (< emacs-major-version 25)) (vectorp orig-seq))
-                   in-place)
-               seq
-             (copy-sequence seq))))
-    ;; Emacs 24 does not support vectors. Convert to list.
-    (when (and (eval-when-compile (< emacs-major-version 25)) (vectorp orig-seq))
-      (setq seq (append seq nil)))
-    (setq seq (if reverse
-                  (nreverse (sort (nreverse seq) lessp))
-                (sort seq lessp)))
-    ;; Emacs 24: Convert back to vector.
-    (if (and (eval-when-compile (< emacs-major-version 25)) (vectorp orig-seq))
-        (if in-place
-            (cl-loop for i from 0 for x in seq
-                     do (aset orig-seq i x)
-                     finally return orig-seq)
-          (apply #'vector seq))
-      seq)))
+       seq (if in-place seq (copy-sequence seq))))
+    (if reverse
+        (nreverse (sort (nreverse seq) lessp))
+      (sort seq lessp))))
 
 ;;;; Defined in mule-cmds.el
 
