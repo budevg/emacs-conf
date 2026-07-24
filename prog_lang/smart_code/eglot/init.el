@@ -11,7 +11,9 @@
         eglot-stay-out-of '(eldoc flymake company imenu)
         eglot-extend-to-xref t
         eglot-events-buffer-size 0
-        eglot-ignored-server-capabilities '(:completionProvider :inlayHintProvider)
+        eglot-ignored-server-capabilities '(:completionProvider
+                                            :inlayHintProvider
+                                            :semanticTokensProvider)
         )
   (add-to-list 'eglot-server-programs
                '(java-mode . ("java-language-server")))
