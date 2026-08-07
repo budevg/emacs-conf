@@ -117,10 +117,9 @@ combinations."
     :endpoint "/v1/chat/completions"
     :key 'gptel-api-key
     :stream t
-    :models '(moonshotai/Kimi-K2.6
-              zai-org/GLM-5.1
+    :models '(moonshotai/Kimi-K2.7-Code
               zai-org/GLM-5.2
-              MiniMaxAI/MiniMax-M2.5))
+              MiniMaxAI/MiniMax-M3))
 
   ;; ~/.authinfo
   ;; machine api.perplexity.ai login apikey password <KEY>
@@ -132,7 +131,7 @@ combinations."
 
   (setq gptel-backend (cdr (assoc "nebius" gptel--known-backends #'equal))
         gptel-include-reasoning nil
-        gptel-model 'MiniMaxAI/MiniMax-M2.5
+        gptel-model 'MiniMaxAI/MiniMax-M3
         gptel-directives
         (let* ((suffix " Also, use only plain text. Do not use Markdown, bullet points, numbering, bold, italics, or any other formatting. Output should be simple unformatted text only. Use only code blocks when necessary")
                (directives
