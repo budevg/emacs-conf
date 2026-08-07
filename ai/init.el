@@ -154,6 +154,19 @@ combinations."
           ))
   )
 
+(defun run-ai-agent (binary)
+  "Open an eat buffer named *BINARY* in the parent of the directory containing it and run BINARY."
+  (interactive (list (read-string "Binary: ")))
+  (unless (executable-find binary)
+    (let ((default-directory (expand-file-name "ai" (getenv "TMPDIR"))))
+      (nix-env-load-or-reset)))
+  (let* ((bin (or (executable-find binary)
+                  (user-error "%s binary not found in PATH" binary)))
+         (default-directory
+          (expand-file-name ".." (file-name-directory bin)))
+         (eat-buffer-name (format "*%s*" binary)))
+    (eat binary '(4))))
+
 (use-package agent-shell
   :commands (agent-shell
              agent-shell-openai-start-codex
@@ -194,10 +207,10 @@ combinations."
   "ai"
   ("g" (call-interactively #'gptel) "gptel" :color blue)
   ("s" (agent-shell '(4)) "agent-shell" :color blue)
-  ("x" agent-shell-openai-start-codex "codex" :color blue)
-  ("c" agent-shell-anthropic-start-claude-code "claude" :color blue)
-  ("p" agent-shell-pi-start-agent "pi" :color blue)
-  ("o" agent-shell-opencode-start-agent "opencode" :color blue)
+  ("x" (lambda () (interactive) (run-ai-agent "codex")) "codex" :color blue)
+  ("c" (lambda () (interactive) (run-ai-agent "claude")) "claude" :color blue)
+  ("p" (lambda () (interactive) (run-ai-agent "pi")) "pi" :color blue)
+  ("o" (lambda () (interactive) (run-ai-agent "opencode")) "opencode" :color blue)
   ("q" nil "cancel" :color blue))
 
 (global-set-key (kbd "C-f i") #'hydra-ai/body)
