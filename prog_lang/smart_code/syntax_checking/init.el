@@ -1,14 +1,11 @@
 (use-package flycheck
   :config
   (setq flycheck-python-pylint-executable "pylint")
-  :bind (("C-c o" . flycheck-mode))
-  )
-
-(use-package flycheck-eglot
-  :after eglot
-  :bind
-  (:map eglot-mode-map
-        ("C-c e o" . flycheck-eglot-mode))
+  :bind (("C-c o" . flycheck-mode)
+         ("C-c e o" . flycheck-eglot-mode)
+         :map flycheck-command-map
+         ("a" . flycheck-annotate-mode)
+         )
   )
 
 (use-package format-all
