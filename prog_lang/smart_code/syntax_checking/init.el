@@ -14,7 +14,7 @@
   (setq-default format-all-formatters
                 '(("Python" black)
                   ("Go" goimports)
-                  ("Haskell" fourmolu)
+                  ("Haskell" ormolu)
                   ("C++" clang-format)
                   ("C" clang-format)
                   )))
