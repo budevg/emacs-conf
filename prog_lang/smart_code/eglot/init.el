@@ -10,8 +10,11 @@
   (setq eglot-autoshutdown t
         eglot-stay-out-of '(eldoc flymake company imenu)
         eglot-extend-to-xref t
-        eglot-events-buffer-size 0
+        eglot-events-buffer-config '(:size 0 :format short)
+        eglot-code-action-indications nil
         eglot-ignored-server-capabilities '(:completionProvider
+                                            :documentOnTypeFormattingProvider
+                                            :documentHighlightProvider
                                             :inlayHintProvider
                                             :semanticTokensProvider)
         )
