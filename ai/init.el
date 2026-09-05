@@ -153,11 +153,20 @@ combinations."
           ))
   )
 
+(defun ai-working-directory ()
+  "Return the working directory for AI agents."
+  (file-name-as-directory (expand-file-name "ai" (getenv "TMPDIR"))))
+
+(defun ai-tools-repo ()
+  "Return the absolute path to the AI tools repository."
+  (file-name-directory
+   (file-truename (expand-file-name "~/tools/bin/ai-init.sh"))))
+
 (defun run-ai-agent (binary)
   "Open an eat buffer named *BINARY* in the parent of the directory containing it and run BINARY."
   (interactive (list (read-string "Binary: ")))
   (unless (executable-find binary)
-    (let ((default-directory (expand-file-name "ai" (getenv "TMPDIR"))))
+    (let ((default-directory (ai-working-directory)))
       (nix-env-load-or-reset)))
   (let* ((bin (or (executable-find binary)
                   (user-error "%s binary not found in PATH" binary)))
@@ -165,6 +174,26 @@ combinations."
           (expand-file-name ".." (file-name-directory bin)))
          (eat-buffer-name (format "*%s*" binary)))
     (eat binary '(4))))
+
+(defun initialize-ai-agents ()
+  "Initialize and build the AI agents in `ai-working-directory'."
+  (interactive)
+  (let* ((default-directory (ai-working-directory))
+         (agents-directory (expand-file-name ".agents" default-directory))
+         (ai-script (expand-file-name "ai.sh" (ai-tools-repo))))
+    (make-directory default-directory t)
+    (unless (file-exists-p agents-directory)
+      (unless (zerop (call-process ai-script nil "*ai-agents*" t "init"))
+        (user-error "Failed to initialize AI agents")))
+    (unless (executable-find "ai.sh")
+      (nix-env-load-or-reset))
+    (compilation-start "ai.sh build codex claude pi")))
+
+(defun meld-ai-agents ()
+  "Compare the working AI agents with `ai-tools-repo' using Meld."
+  (interactive)
+  (let ((default-directory (ai-working-directory)))
+    (start-process "meld-ai-agents" nil "meld" ".agents" (ai-tools-repo))))
 
 (use-package agent-shell
   :commands (agent-shell
@@ -206,6 +235,8 @@ combinations."
   "ai"
   ("g" (call-interactively #'gptel) "gptel" :color blue)
   ("s" (agent-shell '(4)) "agent-shell" :color blue)
+  ("i" initialize-ai-agents "initialize agents" :color blue)
+  ("=" meld-ai-agents "compare agents" :color blue)
   ("x" (run-ai-agent "codex") "codex" :color blue)
   ("c" (run-ai-agent "claude") "claude" :color blue)
   ("p" (run-ai-agent "pi") "pi" :color blue)
