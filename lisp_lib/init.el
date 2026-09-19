@@ -1,5 +1,17 @@
 (require 'cl)
 
+(defun eln-compile (function)
+  "Asynchronously native-compile the file that defines FUNCTION."
+  (interactive
+   (progn
+     (require 'find-func)
+     (find-function-read)))
+  ;; ponytail: Let Emacs report unsupported sources itself.
+  (let ((file (buffer-file-name
+               (car (find-function-noselect function)))))
+    (native-compile-async file)
+    (message "Queued native compilation of %s" file)))
+
 (defun autoload-and-run (symbol file interactive callback)
   (autoload symbol file nil interactive)
   (eval-after-load (symbol-name symbol) callback))
