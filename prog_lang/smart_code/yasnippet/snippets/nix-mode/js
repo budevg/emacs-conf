@@ -9,8 +9,8 @@ stdenv.mkDerivation {
   buildInputs = [
     nodejs
     flow
-    nodePackages.typescript-language-server
-    nodePackages.typescript
-    nodePackages.prettier
+    typescript-language-server
+    typescript
+    prettier
   ];
 }
