@@ -630,6 +630,7 @@ Optionally, provide custom own URL."
   :group "Navigate"
   "s"   ("Search" yeetube-search)
   "M-n" ("Next page" yeetube-next-page)
+  "+"   ("Next page" yeetube-next-page)
   "c"   ("Channel videos" yeetube-channel-videos)
   "L"   ("Channel streams" yeetube-channel-streams)
   :group "Actions"
