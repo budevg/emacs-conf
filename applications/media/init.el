@@ -26,5 +26,6 @@
          ("w" . yeetube-copy-url)
          ("/" . yeetube-browse-youtube-url)
          ("]" . tabulated-list-sort)
+         ("<tab>" . yeetube-ui-next-column)
          )
   )

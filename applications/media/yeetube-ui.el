@@ -198,6 +198,17 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
          (date-b (yeetube-ui--parse-relative-date (aref (cadr b) idx) now)))
     (> date-a date-b)))
 
+(defun yeetube-ui-next-column ()
+  "Move to the next column, wrapping to the first column of this row."
+  (interactive)
+  (let ((old (point)))
+    (tabulated-list-next-column)
+    (unless (and (> (point) old)
+                 (get-text-property (point) 'tabulated-list-column-name))
+      (beginning-of-line)
+      (unless (get-text-property (point) 'tabulated-list-column-name)
+        (tabulated-list-next-column)))))
+
 ;;; Tabulated-list setup
 
 (defun yeetube-ui--tabulated-list-format ()
