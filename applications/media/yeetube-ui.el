@@ -80,18 +80,20 @@
 ;;; View count formatting
 
 (defun yeetube-ui--format-views (views-string)
-  "Format VIEWS-STRING by extracting digits and adding commas."
+  "Format VIEWS-STRING, preserving abbreviated channel counts."
   (let ((digits (replace-regexp-in-string "[^0-9]" "" views-string)))
-    (if (string-empty-p digits)
-        ""
-      (let ((len (length digits)))
-        (string-join
-         (nreverse
-          (cl-loop for i from 0 below len by 3
-                   collect (substring digits
-                                      (max 0 (- len i 3))
-                                      (- len i))))
-         ",")))))
+    (if (string-match-p "\\`[0-9.,]+[KMB]\\'" views-string)
+        views-string
+      (if (string-empty-p digits)
+          ""
+        (let ((len (length digits)))
+          (string-join
+           (nreverse
+            (cl-loop for i from 0 below len by 3
+                     collect (substring digits
+                                        (max 0 (- len i 3))
+                                        (- len i))))
+           ","))))))
 
 
 ;;; Column index helper
@@ -176,12 +178,16 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
 
 (defun yeetube-ui--sort-views (a b)
   "Sort entries A and B by view count."
-  (let* ((idx (yeetube-ui--column-index "views"))
-         (views-a (string-to-number
-                   (replace-regexp-in-string "," "" (aref (cadr a) idx))))
-         (views-b (string-to-number
-                   (replace-regexp-in-string "," "" (aref (cadr b) idx)))))
-    (< views-a views-b)))
+  (cl-flet ((count (entry)
+              (let* ((views (replace-regexp-in-string
+                             "," "" (aref (cadr entry)
+                                              (yeetube-ui--column-index "views"))))
+                     (unit (if (string-empty-p views) ?\s
+                             (aref views (1- (length views))))))
+                (* (string-to-number views)
+                   (pcase unit (?K 1000) (?M 1000000) (?B 1000000000)
+                          (_ 1))))))
+    (< (count a) (count b))))
 
 (defun yeetube-ui--sort-duration (a b)
   "Sort entries A and B by duration."

@@ -193,6 +193,9 @@ videos from.")
 (defvar-local yeetube--channel-id nil
   "Current channel ID.")
 
+(defvar-local yeetube--channel-name nil
+  "Name of the current channel page.")
+
 (defconst yeetube-rss-feed-url
   "https://www.youtube.com/feeds/videos.xml?channel_id="
   "Base URL for YouTube RSS feeds.")
@@ -436,6 +439,15 @@ Optionally, provide custom own URL."
             (when items
               (funcall pop-fn "*yeetube*")
               (yeetube-mode)
+              (setq-local yeetube--channel-name (plist-get result :channel))
+              (when yeetube--channel-name
+                (setq-local yeetube--channel-id (plist-get result :channel-id))
+                (dolist (item items)
+                  (plist-put item :channel yeetube--channel-name)
+                  (plist-put item :browse-id yeetube--channel-id)
+                  (plist-put item :channel-id
+                             (and yeetube--channel-id
+                                  (concat "/channel/" yeetube--channel-id)))))
               (setq yeetube-items items)
               (setq-local yeetube--continuation continuation)
               (setq-local yeetube--results-limit limit)
@@ -521,6 +533,13 @@ Optionally, provide custom own URL."
                  (continuation (plist-get result :continuation)))
             (when items
               (with-current-buffer "*yeetube*"
+                (when yeetube--channel-name
+                  (dolist (item items)
+                    (plist-put item :channel yeetube--channel-name)
+                    (plist-put item :browse-id yeetube--channel-id)
+                    (plist-put item :channel-id
+                               (and yeetube--channel-id
+                                    (concat "/channel/" yeetube--channel-id)))))
                 (setq yeetube-items (append yeetube-items items))
                 (setq-local yeetube--continuation continuation)
                 (yeetube-ui-append items)

@@ -133,9 +133,15 @@ Falls back to the predictable default.jpg URL pattern."
 			  (alist-get 'contentMetadataViewModel
 				     (alist-get 'metadata meta))))
          (texts (yeetube-scraper--metadata-part-texts rows))
-         (views (cl-find-if
-                 (lambda (text) (string-match-p "\\bviews?\\b" text))
-                 texts))
+         (views (or (cl-loop for row in rows
+                            thereis (cl-loop for part in (alist-get 'metadataParts row)
+                                             when (string-match-p
+                                                   "\\bviews?\\b"
+                                                   (or (alist-get 'accessibilityLabel part) ""))
+                                             return (alist-get 'content (alist-get 'text part))))
+                    (cl-find-if
+                     (lambda (text) (string-match-p "\\bviews?\\b" text))
+                     texts)))
          (date-raw (cl-find-if
                     (lambda (text)
                       (string-match-p "\\(ago\\|Streamed\\|Premiered\\)" text))
@@ -245,10 +251,14 @@ Return plist (:items ITEMS :continuation CONT)."
          (continuation (yeetube-scraper--extract-continuation sections)))
     (list :items items :continuation continuation)))
 
-(defun yeetube-scraper--parse-channel (contents)
-  "Parse channel page from CONTENTS alist.
+(defun yeetube-scraper--parse-channel (json)
+  "Parse channel page from JSON alist.
 Return plist (:items ITEMS :continuation CONT)."
-  (let* ((tabs (alist-get 'tabs
+  (let* ((contents (alist-get 'contents json))
+         (metadata (alist-get 'channelMetadataRenderer (alist-get 'metadata json)))
+         (channel (alist-get 'title metadata))
+         (channel-id (alist-get 'externalId metadata))
+         (tabs (alist-get 'tabs
 			  (alist-get 'twoColumnBrowseResultsRenderer contents)))
          (selected (cl-find-if
                     (lambda (tab)
@@ -263,7 +273,8 @@ Return plist (:items ITEMS :continuation CONT)."
             (alist-get 'contents)))
          (items (yeetube-scraper--extract-grid-items grid-contents))
          (continuation (yeetube-scraper--extract-continuation grid-contents)))
-    (list :items items :continuation continuation)))
+    (list :items items :continuation continuation
+          :channel channel :channel-id channel-id)))
 
 ;;; Top-level buffer parser
 
@@ -282,7 +293,7 @@ Point is restored after parsing."
        ((alist-get 'twoColumnSearchResultsRenderer contents)
         (yeetube-scraper--parse-search contents))
        ((alist-get 'twoColumnBrowseResultsRenderer contents)
-        (yeetube-scraper--parse-channel contents))
+        (yeetube-scraper--parse-channel json))
        (t (list :items nil :continuation nil))))))
 
 ;;; Continuation response parser
