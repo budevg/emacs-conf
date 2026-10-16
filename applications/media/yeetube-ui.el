@@ -178,7 +178,7 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
 
 (defun yeetube-ui--sort-views (a b)
   "Sort entries A and B by view count."
-  (cl-flet ((count (entry)
+  (cl-flet ((view-count (entry)
               (let* ((views (replace-regexp-in-string
                              "," "" (aref (cadr entry)
                                               (yeetube-ui--column-index "views"))))
@@ -187,7 +187,7 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
                 (* (string-to-number views)
                    (pcase unit (?K 1000) (?M 1000000) (?B 1000000000)
                           (_ 1))))))
-    (< (count a) (count b))))
+    (< (view-count a) (view-count b))))
 
 (defun yeetube-ui--sort-duration (a b)
   "Sort entries A and B by duration."
@@ -204,16 +204,19 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
          (date-b (yeetube-ui--parse-relative-date (aref (cadr b) idx) now)))
     (> date-a date-b)))
 
-(defun yeetube-ui-next-column ()
-  "Move to the next column, wrapping to the first column of this row."
+(defun yeetube-ui-cycle-column (&optional backward)
+  "Move to the next column, or the previous one if BACKWARD, wrapping in this row."
   (interactive)
-  (let ((old (point)))
-    (tabulated-list-next-column)
-    (unless (and (> (point) old)
-                 (get-text-property (point) 'tabulated-list-column-name))
-      (beginning-of-line)
-      (unless (get-text-property (point) 'tabulated-list-column-name)
-        (tabulated-list-next-column)))))
+  (let* ((column (get-text-property (point) 'tabulated-list-column-name))
+         (index (or (cl-position column tabulated-list-format
+                                 :key #'car :test #'equal)
+                    (if backward 0 -1)))
+         (target (mod (+ index (if backward -1 1))
+                      (length tabulated-list-format))))
+    (beginning-of-line)
+    (unless (get-text-property (point) 'tabulated-list-column-name)
+      (tabulated-list-next-column))
+    (tabulated-list-next-column target)))
 
 ;;; Tabulated-list setup
 
