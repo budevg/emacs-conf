@@ -152,22 +152,27 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
     (`(,s) s)
     (_ 0)))
 
-(defun yeetube-ui--parse-relative-date (date)
-  "Convert relative DATE like \"2 days ago\" to comparable seconds."
-  (let* ((split-date (split-string date " "))
-         (value (string-to-number (nth 0 split-date)))
-         (unit (nth 1 split-date))
-         (seconds-per-unit
-          (pcase unit
-            ((or "second" "seconds") 1)
-            ((or "minute" "minutes") 60)
-            ((or "hour" "hours")     3600)
-            ((or "day" "days")       86400)
-            ((or "week" "weeks")     604800)
-            ((or "month" "months")   2592000)
-            ((or "year" "years")     31536000)
-            (_ 0))))
-    (* value seconds-per-unit)))
+(defun yeetube-ui--parse-relative-date (date &optional now)
+  "Return DATE as a timestamp, or zero for an unknown date."
+  (cond
+   ((not (stringp date)) 0)
+   ((string-match "\\`[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T" date)
+    (float-time (date-to-time date)))
+   ((string-match
+     "\\b\\([0-9]+\\)\\s-*\\(seconds?\\|minutes?\\|hours?\\|days?\\|weeks?\\|months?\\|years?\\|mo\\|[smhdwy]\\)\\b"
+     date)
+    (let* ((value (string-to-number (match-string 1 date)))
+           (unit (match-string 2 date))
+           (seconds (cond ((member unit '("s" "second" "seconds")) 1)
+                          ((member unit '("m" "minute" "minutes")) 60)
+                          ((member unit '("h" "hour" "hours")) 3600)
+                          ((member unit '("d" "day" "days")) 86400)
+                          ((member unit '("w" "week" "weeks")) 604800)
+                          ((member unit '("mo" "month" "months")) 2592000)
+                          ((member unit '("y" "year" "years")) 31536000)
+                          (t 0))))
+      (- (or now (float-time)) (* value seconds))))
+   (t 0)))
 
 (defun yeetube-ui--sort-views (a b)
   "Sort entries A and B by view count."
@@ -188,10 +193,10 @@ The vector layout depends on `yeetube-display-thumbnails-p'."
 (defun yeetube-ui--sort-date (a b)
   "Sort entries A and B by relative date."
   (let* ((idx (yeetube-ui--column-index "date"))
-         (date-a (yeetube-ui--parse-relative-date (aref (cadr a) idx)))
-         (date-b (yeetube-ui--parse-relative-date (aref (cadr b) idx))))
-    (< date-a date-b)))
-
+         (now (float-time))
+         (date-a (yeetube-ui--parse-relative-date (aref (cadr a) idx) now))
+         (date-b (yeetube-ui--parse-relative-date (aref (cadr b) idx) now)))
+    (> date-a date-b)))
 
 ;;; Tabulated-list setup
 
