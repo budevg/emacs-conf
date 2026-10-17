@@ -301,8 +301,13 @@ Point is restored after parsing."
 (defun yeetube-scraper-parse-continuation-response (json)
   "Parse a continuation/pagination JSON response.
 Return (:items ... :continuation ...)."
-  (let* ((commands (alist-get 'onResponseReceivedCommands json))
-         (action (alist-get 'appendContinuationItemsAction (car commands)))
+  (let* ((commands (cl-loop for key in '(onResponseReceivedCommands
+                                        onResponseReceivedActions
+                                        onResponseReceivedEndpoints)
+                            append (alist-get key json)))
+         (action (cl-some (lambda (command)
+                            (alist-get 'appendContinuationItemsAction command))
+                          commands))
          (cont-items (alist-get 'continuationItems action)))
     (list :items (or (yeetube-scraper--extract-section-items cont-items)
                      (yeetube-scraper--extract-grid-items cont-items))
