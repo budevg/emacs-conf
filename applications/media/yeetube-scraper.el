@@ -54,13 +54,13 @@
 
 (defun yeetube-scraper--thumbnail-url (video-id thumbnails)
   "Build a small thumbnail URL for VIDEO-ID from THUMBNAILS list.
-Falls back to the predictable default.jpg URL pattern."
-  (or (and-let* ((url (alist-get 'url (car thumbnails)))
-                 (qmark (string-search "?" url))
-                 (base (substring url 0 qmark)))
-        ;; Use the smaller "default" variant instead of hq720
-        (string-replace "hq720" "default" base))
-      (format "https://i.ytimg.com/vi/%s/default.jpg" video-id)))
+Use default.jpg for standard hq720.jpg thumbnails or missing URLs.
+Preserve custom thumbnail URLs, including required query parameters."
+  (let ((url (alist-get 'url (car thumbnails))))
+    (if (or (null url)
+            (string-match-p "/hq720\\.jpg\\(?:\\?\\|\\'\\)" url))
+        (format "https://i.ytimg.com/vi/%s/default.jpg" video-id)
+      url)))
 
 ;;; Playlist extraction (lockupViewModel)
 
