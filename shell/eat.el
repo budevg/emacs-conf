@@ -1763,12 +1763,13 @@ character to actually show.")
                      ;; less expensive in terms of bytes needed to
                      ;; transfer than `us-ascii'.
                      ('dec-line-drawing
-                      (dotimes (i (length s))
-                        (when-let*
-                            ((r (gethash
-                                 (aref s i)
-                                 eat--t-dec-line-drawing-chars)))
-                          (aset s i r)))))
+                      ;; Emacs 31 forbids non-ASCII string mutation.
+                      (setq s
+                            (mapconcat
+                             (lambda (c)
+                               (char-to-string
+                                (gethash c eat--t-dec-line-drawing-chars c)))
+                             s ""))))
                    ;; Add face.
                    (put-text-property 0 (length s) 'face face s)
                    (put-text-property
