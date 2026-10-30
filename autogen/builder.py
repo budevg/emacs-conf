@@ -80,7 +80,7 @@ class ConfigBuilder(object):
 (setq byte-compile-warnings '(not obsolete))
 
 (defun my-suppress-selected-obsolete-byte-warnings ()
-  (dolist (sym '(if-let when-let incf decf))
+  (dolist (sym '(if-let when-let incf decf replace))
     (put sym 'byte-obsolete-info nil)))
 
 (my-suppress-selected-obsolete-byte-warnings)
