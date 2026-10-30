@@ -195,46 +195,9 @@ combinations."
   (let ((default-directory (ai-working-directory)))
     (start-process "meld-ai-agents" nil "meld" ".agents" (ai-tools-repo))))
 
-(use-package agent-shell
-  :commands (agent-shell
-             agent-shell-openai-start-codex
-             agent-shell-anthropic-start-claude-code
-             agent-shell-pi-start-agent
-             agent-shell-opencode-start-agent)
-  :bind (("S-<f1>" . (lambda () (interactive) (agent-shell t)))
-         :map agent-shell-mode-map
-         ("C-<tab>" . nil)
-         ("C-f G" . agent-shell-help-menu)
-         ("C-c C-l" . agent-shell-clear-buffer)
-         )
-  :config
-  (setq shell-maker-prompt-before-killing-buffer nil
-        agent-shell-session-strategy 'new
-        agent-shell-busy-indicator-frames 'wave
-        agent-shell-transcript-file-path-function nil
-        agent-shell-show-config-icons nil
-        agent-shell-header-style 'text
-        agent-shell-markdown-table-zebra-stripe nil
-        agent-shell-confirm-interrupt nil
-        agent-shell-goose-authentication (agent-shell-make-goose-authentication :none t)
-        agent-shell-goose-acp-command (cons "goose-acp" (cdr agent-shell-goose-acp-command))
-        agent-shell-google-authentication (agent-shell-google-make-authentication :none t)
-        agent-shell-google-gemini-acp-command (cons "gemini-acp" (cdr agent-shell-google-gemini-acp-command))
-        agent-shell-opencode-acp-command (cons "opencode-acp" (cdr agent-shell-opencode-acp-command))
-        agent-shell-agent-configs `(,(agent-shell-openai-make-codex-config)
-                                    ,(agent-shell-anthropic-make-claude-code-config)
-                                    ,(agent-shell-opencode-make-agent-config)
-                                    ,(agent-shell-pi-make-agent-config)
-                                    ,(agent-shell-google-make-gemini-config)
-                                    ,(agent-shell-goose-make-agent-config))
-        )
-  (defun shell-maker-welcome-message (config) "")
-)
-
 (defhydra hydra-ai ()
   "ai"
   ("g" (call-interactively #'gptel) "gptel" :color blue)
-  ("s" (agent-shell '(4)) "agent-shell" :color blue)
   ("i" initialize-ai-agents "initialize agents" :color blue)
   ("=" meld-ai-agents "compare agents" :color blue)
   ("x" (run-ai-agent "codex") "codex" :color blue)
