@@ -8,6 +8,13 @@
    (in-emacs-d "source_control/.gitconfig")
    "~/.gitconfig"))
 
+(use-package remoto
+  :commands (remoto-browse)
+  :bind (("C-f A" . remoto-browse)
+         :map remoto-mode-map
+         ("C-f a" . remoto-browse-url)
+         ("M-e" . remoto-copy-url)))
+
 (autoload 'browse-at-remote "browse-at-remote" nil t)
 (global-set-key (kbd "C-f a") 'browse-at-remote)
 

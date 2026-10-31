@@ -168,6 +168,8 @@ source_control = [Node(path = "source_control/magit/init.el",
                        msg = "load magit"),
                   Node(path = "source_control/ghub",
                        msg = "load ghub"),
+                  Node(path = "source_control/remoto",
+                       msg = "load remoto"),
                   Node(path = "source_control/init.el",
                        msg = "load git/svn support"),
                   ]

@@ -1,0 +1,7 @@
+(:name remoto
+       :description "Browse GitHub and Codeberg repositories without cloning"
+       :type github
+       :pkgname "agzam/remoto.el"
+       :depends (ghub)
+       :build `(,(concat "cp *.el "
+                         (in-emacs-d "source_control/remoto"))))
